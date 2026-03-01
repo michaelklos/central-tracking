@@ -1,0 +1,313 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useTaskContext } from '../context/TaskContext';
+import { useTimerContext } from '../context/TimerContext';
+import { formatDuration } from '../utils/time';
+import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
+import './TaskDetail.css';
+
+type DetailTab = 'details' | 'time' | 'comments';
+
+const STATUS_OPTIONS: TaskStatus[] = ['todo', 'in-progress', 'done', 'blocked'];
+const SOURCE_OPTIONS: TaskSource[] = ['ad-hoc', 'email', 'meeting-prep', 'plugin'];
+
+export function TaskDetail() {
+  const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories } = useTaskContext();
+  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
+
+  const [activeTab, setActiveTab] = useState<DetailTab>('details');
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [commentSyncable, setCommentSyncable] = useState(true);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [descDraft, setDescDraft] = useState('');
+
+  const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
+
+  const loadTimeEntries = useCallback(async () => {
+    if (!selectedTaskId) return;
+    const entries = await window.api.timeEntries.getByTask(selectedTaskId);
+    setTimeEntries(entries);
+  }, [selectedTaskId]);
+
+  const loadComments = useCallback(async () => {
+    if (!selectedTaskId) return;
+    const cmts = await window.api.comments.getByTask(selectedTaskId);
+    setComments(cmts);
+  }, [selectedTaskId]);
+
+  useEffect(() => {
+    if (task) {
+      setTitleDraft(task.title);
+      setDescDraft(task.description);
+    }
+    loadTimeEntries();
+    loadComments();
+  }, [task?.id, loadTimeEntries, loadComments]);
+
+  if (!task) return null;
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== task.title) {
+      await updateTask(task.id, { title: trimmed });
+    }
+    setEditingTitle(false);
+  };
+
+  const handleSaveDesc = async () => {
+    if (descDraft !== task.description) {
+      await updateTask(task.id, { description: descDraft });
+    }
+  };
+
+  const handleStatusChange = async (status: TaskStatus) => {
+    await updateTask(task.id, { status });
+  };
+
+  const handleCategoryToggle = async (catId: string) => {
+    const current = task.categoryIds;
+    const next = current.includes(catId)
+      ? current.filter((id) => id !== catId)
+      : [...current, catId];
+    await updateTask(task.id, { categoryIds: next });
+  };
+
+  const handleAddComment = async () => {
+    const body = newComment.trim();
+    if (!body) return;
+    await window.api.comments.create({ taskId: task.id, body, syncable: commentSyncable });
+    setNewComment('');
+    await loadComments();
+  };
+
+  const handleDeleteComment = async (id: string) => {
+    await window.api.comments.delete(id);
+    await loadComments();
+  };
+
+  const handleDeleteTimeEntry = async (id: string) => {
+    await window.api.timeEntries.delete(id);
+    await loadTimeEntries();
+  };
+
+  const handleTimerToggle = async () => {
+    if (isRunningForTask(task.id)) {
+      await stopTimer();
+    } else {
+      await startTimer(task.id);
+    }
+    await loadTimeEntries();
+  };
+
+  const running = isRunningForTask(task.id);
+  const todayDisplay = running ? task.todayTimeSeconds + elapsedSeconds : task.todayTimeSeconds;
+  const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
+
+  return (
+    <div className="task-detail">
+      <div className="task-detail__header">
+        <div className="task-detail__title-row">
+          {editingTitle ? (
+            <input
+              className="task-detail__title-input"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleSaveTitle}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+              autoFocus
+            />
+          ) : (
+            <h2 className="task-detail__title" onClick={() => setEditingTitle(true)}>
+              {task.title}
+            </h2>
+          )}
+          <button className="task-detail__close" onClick={() => selectTask(null)}>
+            &times;
+          </button>
+        </div>
+
+        <div className="task-detail__time-summary">
+          <div className="task-detail__time-block">
+            <span className="task-detail__time-label">Today</span>
+            <span className={`task-detail__time-value ${running ? 'task-detail__time-value--active' : ''}`}>
+              {formatDuration(todayDisplay)}
+            </span>
+          </div>
+          <div className="task-detail__time-block">
+            <span className="task-detail__time-label">Total</span>
+            <span className="task-detail__time-value">{formatDuration(totalDisplay)}</span>
+          </div>
+          <button
+            className={`task-detail__timer-btn ${running ? 'task-detail__timer-btn--active' : ''}`}
+            onClick={handleTimerToggle}
+          >
+            {running ? '■ Stop' : '▶ Start'}
+          </button>
+        </div>
+      </div>
+
+      <div className="task-detail__tabs">
+        {(['details', 'time', 'comments'] as DetailTab[]).map((tab) => (
+          <button
+            key={tab}
+            className={`task-detail__tab ${activeTab === tab ? 'task-detail__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === 'details' ? 'Details' : tab === 'time' ? `Time (${timeEntries.length})` : `Comments (${comments.length})`}
+          </button>
+        ))}
+      </div>
+
+      <div className="task-detail__body">
+        {activeTab === 'details' && (
+          <div className="task-detail__details">
+            <div className="task-detail__field">
+              <label>Status</label>
+              <select value={task.status} onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="task-detail__field">
+              <label>Source</label>
+              <span className="task-detail__source-badge">{task.source}</span>
+              {task.externalId && (
+                <span className="task-detail__external-id">#{task.externalId}</span>
+              )}
+            </div>
+
+            <div className="task-detail__field">
+              <label>Description</label>
+              <textarea
+                rows={4}
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                onBlur={handleSaveDesc}
+                placeholder="Add a description..."
+              />
+            </div>
+
+            <div className="task-detail__field">
+              <label>Categories</label>
+              <div className="task-detail__cat-list">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    className={`task-detail__cat-chip ${task.categoryIds.includes(cat.id) ? 'task-detail__cat-chip--active' : ''}`}
+                    style={{ '--cat-color': cat.color } as React.CSSProperties}
+                    onClick={() => handleCategoryToggle(cat.id)}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="task-detail__actions">
+              <button className="task-detail__delete-btn" onClick={() => deleteTask(task.id)}>
+                Delete Task
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'time' && (
+          <div className="task-detail__time-entries">
+            {timeEntries.length === 0 && (
+              <p className="task-detail__empty">No time entries yet. Start the timer to begin tracking.</p>
+            )}
+            {timeEntries.map((entry) => (
+              <div key={entry.id} className="time-entry">
+                <div className="time-entry__info">
+                  <span className="time-entry__date">
+                    {new Date(entry.startTime).toLocaleDateString()}
+                  </span>
+                  <span className="time-entry__range">
+                    {new Date(entry.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {entry.endTime
+                      ? ` - ${new Date(entry.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : ' - running'}
+                  </span>
+                  {entry.note && <span className="time-entry__note">{entry.note}</span>}
+                </div>
+                <div className="time-entry__right">
+                  <span className="time-entry__duration">
+                    {entry.durationSeconds != null
+                      ? formatDuration(entry.durationSeconds)
+                      : 'active'}
+                  </span>
+                  <button
+                    className="time-entry__delete"
+                    onClick={() => handleDeleteTimeEntry(entry.id)}
+                    title="Delete entry"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'comments' && (
+          <div className="task-detail__comments">
+            <div className="task-detail__comment-form">
+              <textarea
+                rows={3}
+                placeholder="Add a comment..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+              />
+              <div className="task-detail__comment-actions">
+                <label className="task-detail__sync-toggle">
+                  <input
+                    type="checkbox"
+                    checked={commentSyncable}
+                    onChange={(e) => setCommentSyncable(e.target.checked)}
+                  />
+                  Sync to source
+                </label>
+                <button className="task-detail__comment-submit" onClick={handleAddComment}>
+                  Add Comment
+                </button>
+              </div>
+            </div>
+
+            {comments.length === 0 && (
+              <p className="task-detail__empty">No comments yet.</p>
+            )}
+            {comments.map((comment) => (
+              <div key={comment.id} className="comment">
+                <div className="comment__header">
+                  <span className="comment__date">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </span>
+                  <div className="comment__badges">
+                    {comment.syncable ? (
+                      <span className={`comment__sync-badge ${comment.synced ? 'comment__sync-badge--synced' : ''}`}>
+                        {comment.synced ? 'synced' : 'will sync'}
+                      </span>
+                    ) : (
+                      <span className="comment__sync-badge comment__sync-badge--local">local only</span>
+                    )}
+                    <button
+                      className="comment__delete"
+                      onClick={() => handleDeleteComment(comment.id)}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+                <p className="comment__body">{comment.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

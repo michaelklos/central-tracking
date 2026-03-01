@@ -1,0 +1,69 @@
+.timer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 40px;
+}
+
+.timer-bar--active {
+  background: #0f2a1a;
+  border-bottom-color: #1a4d2e;
+}
+
+.timer-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timer-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timer-bar__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-timer-active);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.timer-bar__label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.timer-bar__task-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timer-bar__elapsed {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-timer-active);
+}
+
+.timer-bar__stop {
+  padding: 4px 12px;
+  background: var(--color-danger);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timer-bar__stop:hover {
+  opacity: 0.9;
+}
