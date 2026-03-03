@@ -13,3 +13,7 @@ Thumbs.db
 coverage/
 .vscode/
 !.vscode/settings.json
+*.tsbuildinfo
+.eslintcache
+*.swp
+*.swo
