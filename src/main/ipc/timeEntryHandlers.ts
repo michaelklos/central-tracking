@@ -44,14 +44,15 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
         .get() as TimeEntryRow | undefined;
 
       if (active) {
+        const stopNow = new Date().toISOString();
         const duration = Math.floor(
-          (Date.now() - new Date(active.start_time).getTime()) / 1000
+          (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
         );
         db.instance
           .prepare(
-            "UPDATE time_entries SET end_time = datetime('now'), duration_seconds = ? WHERE id = ?"
+            'UPDATE time_entries SET end_time = ?, duration_seconds = ? WHERE id = ?'
           )
-          .run(duration, active.id);
+          .run(stopNow, duration, active.id);
       }
     }
 
@@ -189,14 +190,15 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
 
     if (!active) return null;
 
+    const stopNow = new Date().toISOString();
     const duration = Math.floor(
-      (Date.now() - new Date(active.start_time).getTime()) / 1000
+      (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
     );
     db.instance
       .prepare(
-        "UPDATE time_entries SET end_time = datetime('now'), duration_seconds = ? WHERE id = ?"
+        'UPDATE time_entries SET end_time = ?, duration_seconds = ? WHERE id = ?'
       )
-      .run(duration, active.id);
+      .run(stopNow, duration, active.id);
 
     const row = db.instance.prepare('SELECT * FROM time_entries WHERE id = ?').get(active.id) as TimeEntryRow;
     return rowToTimeEntry(row);
