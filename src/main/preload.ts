@@ -5,6 +5,10 @@ const api = {
   tasks: {
     getAll: () => ipcRenderer.invoke('tasks:getAll'),
     getById: (id: string) => ipcRenderer.invoke('tasks:getById', id),
+    getActive: (params?: { offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('tasks:getActive', params),
+    getDone: (params?: { offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('tasks:getDone', params),
     create: (task: unknown) => ipcRenderer.invoke('tasks:create', task),
     update: (id: string, updates: unknown) => ipcRenderer.invoke('tasks:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('tasks:delete', id),
@@ -14,6 +18,8 @@ const api = {
   // Time entries
   timeEntries: {
     getByTask: (taskId: string) => ipcRenderer.invoke('timeEntries:getByTask', taskId),
+    getByTaskPaginated: (taskId: string, params?: { offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('timeEntries:getByTaskPaginated', taskId, params),
     create: (entry: unknown) => ipcRenderer.invoke('timeEntries:create', entry),
     update: (id: string, updates: unknown) => ipcRenderer.invoke('timeEntries:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('timeEntries:delete', id),

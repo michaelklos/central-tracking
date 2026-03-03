@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { TaskList } from './TaskList';
 import { TaskDetail } from './TaskDetail';
@@ -7,12 +7,60 @@ import { ReportView } from './ReportView';
 import { useTaskContext } from '../context/TaskContext';
 import './Layout.css';
 
+const STORAGE_KEY = 'central-tracking:detail-width';
+const DEFAULT_WIDTH = 500;
+const MIN_WIDTH = 350;
+const MAX_WIDTH_RATIO = 0.7;
+
+function getInitialWidth(): number {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed >= MIN_WIDTH) return parsed;
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_WIDTH;
+}
+
 interface LayoutProps {
   view?: 'tasks' | 'reports';
 }
 
 export function Layout({ view = 'tasks' }: LayoutProps) {
   const { selectedTaskId } = useTaskContext();
+  const [detailWidth, setDetailWidth] = useState(getInitialWidth);
+  const isResizing = useRef(false);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const maxWidth = window.innerWidth * MAX_WIDTH_RATIO;
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, window.innerWidth - moveEvent.clientX));
+      setDetailWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, String(Math.round(detailWidth)));
+    } catch { /* ignore */ }
+  }, [detailWidth]);
 
   return (
     <div className="layout">
@@ -25,7 +73,12 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
           ) : (
             <>
               <TaskList />
-              {selectedTaskId && <TaskDetail />}
+              {selectedTaskId && (
+                <div className="layout__detail" style={{ width: detailWidth }}>
+                  <div className="layout__resize-handle" onMouseDown={handleResizeStart} />
+                  <TaskDetail />
+                </div>
+              )}
             </>
           )}
         </div>

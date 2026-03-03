@@ -117,6 +117,21 @@ export interface UpdateCategoryInput {
   color?: string;
 }
 
+// ─── Pagination ─────────────────────────────────────────────────────────────
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface PaginationParams {
+  offset?: number;
+  limit?: number;
+}
+
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
 export interface TimeEntryReport {
@@ -155,6 +170,8 @@ export interface CentralTrackingAPI {
   tasks: {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
+    getActive(params?: PaginationParams): Promise<PaginatedResponse<Task>>;
+    getDone(params?: PaginationParams): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
     delete(id: string): Promise<void>;
@@ -162,6 +179,7 @@ export interface CentralTrackingAPI {
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;
+    getByTaskPaginated(taskId: string, params?: PaginationParams): Promise<PaginatedResponse<TimeEntry>>;
     create(input: CreateTimeEntryInput): Promise<TimeEntry>;
     update(id: string, input: UpdateTimeEntryInput): Promise<TimeEntry>;
     delete(id: string): Promise<void>;

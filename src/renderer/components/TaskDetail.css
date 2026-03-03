@@ -1,7 +1,5 @@
 .task-detail {
-  width: 400px;
-  min-width: 350px;
-  border-left: 1px solid var(--color-border);
+  width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -473,4 +471,34 @@
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* ─── Load more / scroll sentinel ────────────────────────────── */
+
+.task-detail__load-more {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.task-detail__load-more:hover {
+  text-decoration: underline;
+}
+
+.task-detail__loading {
+  padding: 8px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.scroll-sentinel {
+  height: 1px;
+  width: 100%;
 }

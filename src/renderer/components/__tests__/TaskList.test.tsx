@@ -6,6 +6,13 @@ import { TaskList } from '../TaskList';
 
 const mockTaskContext = {
   tasks: [] as Record<string, unknown>[],
+  activeTasks: [] as Record<string, unknown>[],
+  activeTasksTotal: 0,
+  activeTasksHasMore: false,
+  doneTasks: [] as Record<string, unknown>[],
+  doneTasksTotal: 0,
+  doneTasksHasMore: false,
+  doneTasksLoaded: false,
   categories: [],
   selectedTaskId: null,
   filter: {},
@@ -16,6 +23,10 @@ const mockTaskContext = {
   deleteTask: vi.fn(),
   reorderTasks: vi.fn(),
   refreshTasks: vi.fn(),
+  refreshActiveTasks: vi.fn(),
+  loadMoreActiveTasks: vi.fn(),
+  loadDoneTasks: vi.fn().mockResolvedValue(undefined),
+  loadMoreDoneTasks: vi.fn().mockResolvedValue(undefined),
   createCategory: vi.fn(),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
@@ -40,7 +51,10 @@ vi.mock('../../context/TimerContext', () => ({
 
 describe('TaskList', () => {
   beforeEach(() => {
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [];
     mockTaskContext.tasks = [];
+    mockTaskContext.doneTasksTotal = 0;
     mockTaskContext.createTask = vi.fn().mockResolvedValue({ id: 'new', title: 'New' });
   });
 
@@ -49,24 +63,25 @@ describe('TaskList', () => {
     expect(screen.getByText(/No tasks found/)).toBeInTheDocument();
   });
 
-  it('renders task items', () => {
-    mockTaskContext.tasks = [
-      {
-        id: '1',
-        title: 'Task 1',
-        description: '',
-        status: 'todo',
-        source: 'ad-hoc',
-        externalId: null,
-        pluginId: null,
-        sortOrder: 0,
-        totalTimeSeconds: 0,
-        todayTimeSeconds: 0,
-        categoryIds: [],
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-      },
-    ];
+  it('renders task items from activeTasks', () => {
+    const task = {
+      id: '1',
+      title: 'Task 1',
+      description: '',
+      status: 'todo',
+      source: 'ad-hoc',
+      externalId: null,
+      pluginId: null,
+      sortOrder: 0,
+      totalTimeSeconds: 0,
+      todayTimeSeconds: 0,
+      categoryIds: [],
+      notes: '',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+    };
+    mockTaskContext.activeTasks = [task];
+    mockTaskContext.tasks = [task];
 
     render(<TaskList />);
     expect(screen.getByText('Task 1')).toBeInTheDocument();

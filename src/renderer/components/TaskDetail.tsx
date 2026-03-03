@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
 import { TimeEntryEditor } from './TimeEntryEditor';
+import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import './TaskDetail.css';
 
@@ -11,12 +12,19 @@ type DetailTab = 'details' | 'time' | 'comments' | 'notes';
 const STATUS_OPTIONS: TaskStatus[] = ['todo', 'in-progress', 'done', 'blocked'];
 const SOURCE_OPTIONS: TaskSource[] = ['ad-hoc', 'email', 'meeting-prep', 'plugin'];
 
+const TIME_ENTRIES_LIMIT = 20;
+const AUTO_LOAD_MAX_BATCHES = 3;
+
 export function TaskDetail() {
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [timeEntriesTotal, setTimeEntriesTotal] = useState(0);
+  const [timeEntriesHasMore, setTimeEntriesHasMore] = useState(false);
+  const [timeEntryLoadCount, setTimeEntryLoadCount] = useState(0);
+  const [isLoadingEntries, setIsLoadingEntries] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentSyncable, setCommentSyncable] = useState(true);
@@ -27,13 +35,40 @@ export function TaskDetail() {
   const [defaultStartTime, setDefaultStartTime] = useState(new Date().toISOString());
   const defaultDurationSeconds = 1800;
 
+  // Track which task the entries are loaded for to prevent stale appends
+  const loadedForTaskRef = useRef<string | null>(null);
+
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   const loadTimeEntries = useCallback(async () => {
     if (!selectedTaskId) return;
-    const entries = await window.api.timeEntries.getByTask(selectedTaskId);
-    setTimeEntries(entries);
+    setIsLoadingEntries(true);
+    const res = await window.api.timeEntries.getByTaskPaginated(selectedTaskId, {
+      offset: 0,
+      limit: TIME_ENTRIES_LIMIT,
+    });
+    setTimeEntries(res.items);
+    setTimeEntriesTotal(res.total);
+    setTimeEntriesHasMore(res.hasMore);
+    setTimeEntryLoadCount(1);
+    loadedForTaskRef.current = selectedTaskId;
+    setIsLoadingEntries(false);
   }, [selectedTaskId]);
+
+  const loadMoreTimeEntries = useCallback(async () => {
+    if (!selectedTaskId || isLoadingEntries || !timeEntriesHasMore) return;
+    if (loadedForTaskRef.current !== selectedTaskId) return;
+    setIsLoadingEntries(true);
+    const res = await window.api.timeEntries.getByTaskPaginated(selectedTaskId, {
+      offset: timeEntries.length,
+      limit: TIME_ENTRIES_LIMIT,
+    });
+    setTimeEntries((prev) => [...prev, ...res.items]);
+    setTimeEntriesTotal(res.total);
+    setTimeEntriesHasMore(res.hasMore);
+    setTimeEntryLoadCount((prev) => prev + 1);
+    setIsLoadingEntries(false);
+  }, [selectedTaskId, isLoadingEntries, timeEntriesHasMore, timeEntries.length]);
 
   const loadComments = useCallback(async () => {
     if (!selectedTaskId) return;
@@ -129,19 +164,24 @@ export function TaskDetail() {
 
   const handleDeleteTimeEntry = async (id: string) => {
     await window.api.timeEntries.delete(id);
-    await loadTimeEntries();
+    // Inline removal
+    setTimeEntries((prev) => prev.filter((e) => e.id !== id));
+    setTimeEntriesTotal((prev) => prev - 1);
     await loadSmartDefaults();
   };
 
   const handleCreateEntry = async (startTime: string, endTime: string, note: string) => {
-    await window.api.timeEntries.create({ taskId: task.id, startTime, endTime, note });
-    await loadTimeEntries();
+    const entry = await window.api.timeEntries.create({ taskId: task.id, startTime, endTime, note });
+    // Inline prepend (newest first)
+    setTimeEntries((prev) => [entry, ...prev]);
+    setTimeEntriesTotal((prev) => prev + 1);
     await loadSmartDefaults();
   };
 
   const handleUpdateEntry = async (id: string, startTime: string, endTime: string, note: string) => {
-    await window.api.timeEntries.update(id, { startTime, endTime, note });
-    await loadTimeEntries();
+    const updated = await window.api.timeEntries.update(id, { startTime, endTime, note });
+    // Inline replace
+    setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     await loadSmartDefaults();
   };
 
@@ -159,6 +199,10 @@ export function TaskDetail() {
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
 
   const hasNotes = (task.notes ?? '').length > 0;
+
+  // Show scroll sentinel for auto-loading (first 3 batches), then "Load more" link
+  const showScrollSentinel = timeEntriesHasMore && timeEntryLoadCount < AUTO_LOAD_MAX_BATCHES && !isLoadingEntries;
+  const showLoadMoreLink = timeEntriesHasMore && timeEntryLoadCount >= AUTO_LOAD_MAX_BATCHES && !isLoadingEntries;
 
   return (
     <div className="task-detail">
@@ -232,7 +276,7 @@ export function TaskDetail() {
             {tab === 'details'
               ? 'Details'
               : tab === 'time'
-                ? `Time (${timeEntries.length})`
+                ? `Time (${timeEntriesTotal})`
                 : tab === 'comments'
                   ? `Comments (${comments.length})`
                   : hasNotes
@@ -309,7 +353,7 @@ export function TaskDetail() {
               defaultStartTime={defaultStartTime}
               defaultDurationSeconds={defaultDurationSeconds}
             />
-            {timeEntries.length === 0 && (
+            {timeEntries.length === 0 && !isLoadingEntries && (
               <p className="task-detail__empty">No time entries yet. Start the timer or add an entry above.</p>
             )}
             {timeEntries.map((entry) => (
@@ -322,6 +366,17 @@ export function TaskDetail() {
                 onDelete={handleDeleteTimeEntry}
               />
             ))}
+            {showScrollSentinel && (
+              <TimeEntryScrollSentinel onVisible={loadMoreTimeEntries} />
+            )}
+            {showLoadMoreLink && (
+              <button className="task-detail__load-more" onClick={loadMoreTimeEntries}>
+                Load more time entries...
+              </button>
+            )}
+            {isLoadingEntries && timeEntries.length > 0 && (
+              <div className="task-detail__loading">Loading...</div>
+            )}
           </div>
         )}
 

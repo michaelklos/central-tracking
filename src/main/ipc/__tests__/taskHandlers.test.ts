@@ -102,4 +102,88 @@ describe('Task IPC Handlers', () => {
     expect(task.totalTimeSeconds).toBe(0);
     expect(task.todayTimeSeconds).toBe(0);
   });
+
+  // ─── Paginated task handlers ──────────────────────────────────────────
+
+  describe('tasks:getActive', () => {
+    it('returns only non-done tasks', async () => {
+      await ipc.invoke('tasks:create', { title: 'Active 1' });
+      await ipc.invoke('tasks:create', { title: 'Active 2' });
+      const done = await ipc.invoke('tasks:create', { title: 'Done Task' });
+      await ipc.invoke('tasks:update', done.id, { status: 'done' });
+
+      const result = await ipc.invoke('tasks:getActive');
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.hasMore).toBe(false);
+      expect(result.items.every((t: { status: string }) => t.status !== 'done')).toBe(true);
+    });
+
+    it('paginates with offset and limit', async () => {
+      for (let i = 0; i < 5; i++) {
+        await ipc.invoke('tasks:create', { title: `Task ${i}` });
+      }
+
+      const page1 = await ipc.invoke('tasks:getActive', { offset: 0, limit: 2 });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.total).toBe(5);
+      expect(page1.hasMore).toBe(true);
+      expect(page1.offset).toBe(0);
+      expect(page1.limit).toBe(2);
+
+      const page2 = await ipc.invoke('tasks:getActive', { offset: 2, limit: 2 });
+      expect(page2.items).toHaveLength(2);
+      expect(page2.hasMore).toBe(true);
+
+      const page3 = await ipc.invoke('tasks:getActive', { offset: 4, limit: 2 });
+      expect(page3.items).toHaveLength(1);
+      expect(page3.hasMore).toBe(false);
+    });
+
+    it('defaults to limit 50 offset 0', async () => {
+      await ipc.invoke('tasks:create', { title: 'Task' });
+      const result = await ipc.invoke('tasks:getActive');
+      expect(result.offset).toBe(0);
+      expect(result.limit).toBe(50);
+    });
+  });
+
+  describe('tasks:getDone', () => {
+    it('returns only done tasks', async () => {
+      await ipc.invoke('tasks:create', { title: 'Active' });
+      const done1 = await ipc.invoke('tasks:create', { title: 'Done 1' });
+      await ipc.invoke('tasks:update', done1.id, { status: 'done' });
+      const done2 = await ipc.invoke('tasks:create', { title: 'Done 2' });
+      await ipc.invoke('tasks:update', done2.id, { status: 'done' });
+
+      const result = await ipc.invoke('tasks:getDone');
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.items.every((t: { status: string }) => t.status === 'done')).toBe(true);
+    });
+
+    it('paginates done tasks', async () => {
+      for (let i = 0; i < 3; i++) {
+        const t = await ipc.invoke('tasks:create', { title: `Done ${i}` });
+        await ipc.invoke('tasks:update', t.id, { status: 'done' });
+      }
+
+      const page1 = await ipc.invoke('tasks:getDone', { offset: 0, limit: 2 });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.hasMore).toBe(true);
+
+      const page2 = await ipc.invoke('tasks:getDone', { offset: 2, limit: 2 });
+      expect(page2.items).toHaveLength(1);
+      expect(page2.hasMore).toBe(false);
+    });
+
+    it('returns total count even with limit 0', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Done' });
+      await ipc.invoke('tasks:update', t.id, { status: 'done' });
+
+      const result = await ipc.invoke('tasks:getDone', { offset: 0, limit: 0 });
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(1);
+    });
+  });
 });

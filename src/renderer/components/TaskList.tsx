@@ -31,46 +31,71 @@ const STATUS_ORDER: Record<string, number> = {
 type GroupBy = 'none' | 'status' | 'source';
 
 export function TaskList() {
-  const { tasks, filter, selectedTaskId, selectTask, createTask, updateTask, reorderTasks, categories } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, activeEntry } = useTimerContext();
+  const {
+    activeTasks,
+    activeTasksHasMore,
+    doneTasks,
+    doneTasksTotal,
+    doneTasksHasMore,
+    doneTasksLoaded,
+    filter,
+    selectedTaskId,
+    selectTask,
+    createTask,
+    updateTask,
+    reorderTasks,
+    loadMoreActiveTasks,
+    loadDoneTasks,
+    loadMoreDoneTasks,
+    categories,
+  } = useTaskContext();
+  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('status');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(['Done']));
+  const [loadingDone, setLoadingDone] = useState(false);
+  const [loadingMoreActive, setLoadingMoreActive] = useState(false);
+  const [loadingMoreDone, setLoadingMoreDone] = useState(false);
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
 
-  // Apply filters
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (filter.status && task.status !== filter.status) return false;
-      if (filter.source && task.source !== filter.source) return false;
-      if (filter.categoryId && !task.categoryIds.includes(filter.categoryId)) return false;
-      if (filter.search) {
-        const q = filter.search.toLowerCase();
-        if (!task.title.toLowerCase().includes(q) && !task.description.toLowerCase().includes(q)) {
-          return false;
-        }
+  // Apply filters to active tasks
+  const applyFilter = (task: Task) => {
+    if (filter.status && task.status !== filter.status) return false;
+    if (filter.source && task.source !== filter.source) return false;
+    if (filter.categoryId && !task.categoryIds.includes(filter.categoryId)) return false;
+    if (filter.search) {
+      const q = filter.search.toLowerCase();
+      if (!task.title.toLowerCase().includes(q) && !task.description.toLowerCase().includes(q)) {
+        return false;
       }
-      return true;
-    });
-  }, [tasks, filter]);
-
-  // Group tasks
-  const groupedTasks = useMemo(() => {
-    if (groupBy === 'none') return { 'All Tasks': filteredTasks };
-
-    const groups: Record<string, Task[]> = {};
-    for (const task of filteredTasks) {
-      const key =
-        groupBy === 'status'
-          ? STATUS_LABELS[task.status] ?? task.status
-          : SOURCE_LABELS[task.source] ?? task.source;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(task);
     }
+    return true;
+  };
 
-    // Sort group keys so "Done" is last when grouping by status
+  const filteredActiveTasks = useMemo(() => activeTasks.filter(applyFilter), [activeTasks, filter]);
+  const filteredDoneTasks = useMemo(() => doneTasks.filter(applyFilter), [doneTasks, filter]);
+
+  // For non-grouped and source-grouped views, combine active + done
+  const allFilteredTasks = useMemo(
+    () => [...filteredActiveTasks, ...filteredDoneTasks],
+    [filteredActiveTasks, filteredDoneTasks]
+  );
+
+  // Group tasks — special handling for status grouping
+  const groupedTasks = useMemo(() => {
     if (groupBy === 'status') {
+      // Build groups from active tasks (non-done statuses)
+      const groups: Record<string, Task[]> = {};
+      for (const task of filteredActiveTasks) {
+        const key = STATUS_LABELS[task.status] ?? task.status;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(task);
+      }
+      // Always add a Done group (even if empty, so the header shows)
+      groups['Done'] = filteredDoneTasks;
+
+      // Sort group keys so "Done" is last
       const sortedEntries = Object.entries(groups).sort(
         ([a], [b]) => (STATUS_ORDER[a] ?? 99) - (STATUS_ORDER[b] ?? 99)
       );
@@ -81,10 +106,21 @@ export function TaskList() {
       return sorted;
     }
 
-    return groups;
-  }, [filteredTasks, groupBy]);
+    if (groupBy === 'none') return { 'All Tasks': allFilteredTasks };
 
-  const toggleGroupCollapse = (group: string) => {
+    // Source grouping — use combined tasks
+    const groups: Record<string, Task[]> = {};
+    for (const task of allFilteredTasks) {
+      const key = SOURCE_LABELS[task.source] ?? task.source;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(task);
+    }
+    return groups;
+  }, [filteredActiveTasks, filteredDoneTasks, allFilteredTasks, groupBy]);
+
+  const toggleGroupCollapse = async (group: string) => {
+    const willExpand = collapsedGroups.has(group);
+
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) {
@@ -94,6 +130,13 @@ export function TaskList() {
       }
       return next;
     });
+
+    // Trigger loading done tasks when Done group is expanded for the first time
+    if (willExpand && group === 'Done' && !doneTasksLoaded) {
+      setLoadingDone(true);
+      await loadDoneTasks();
+      setLoadingDone(false);
+    }
   };
 
   const handleCreateTask = async () => {
@@ -123,7 +166,7 @@ export function TaskList() {
   const handleDrop = async () => {
     if (!dragItemRef.current || !dragOverRef.current || dragItemRef.current === dragOverRef.current) return;
 
-    const ids = filteredTasks.map((t) => t.id);
+    const ids = filteredActiveTasks.map((t) => t.id);
     const fromIdx = ids.indexOf(dragItemRef.current);
     const toIdx = ids.indexOf(dragOverRef.current);
     if (fromIdx === -1 || toIdx === -1) return;
@@ -161,6 +204,28 @@ export function TaskList() {
       .filter(Boolean);
   };
 
+  const handleLoadMoreActive = async () => {
+    setLoadingMoreActive(true);
+    await loadMoreActiveTasks();
+    setLoadingMoreActive(false);
+  };
+
+  const handleLoadMoreDone = async () => {
+    setLoadingMoreDone(true);
+    await loadMoreDoneTasks();
+    setLoadingMoreDone(false);
+  };
+
+  // Determine the count to show on the Done group header
+  const getDoneGroupCount = (group: string) => {
+    if (group === 'Done' && groupBy === 'status') {
+      return doneTasksTotal;
+    }
+    return undefined;
+  };
+
+  const totalVisible = filteredActiveTasks.length + filteredDoneTasks.length;
+
   return (
     <div className="task-list">
       <div className="task-list__toolbar">
@@ -191,6 +256,8 @@ export function TaskList() {
       <div className="task-list__body">
         {Object.entries(groupedTasks).map(([group, groupTasks]) => {
           const isCollapsed = collapsedGroups.has(group);
+          const doneCount = getDoneGroupCount(group);
+          const isDoneGroup = group === 'Done' && groupBy === 'status';
           return (
             <div key={group} className="task-list__group">
               {groupBy !== 'none' && (
@@ -200,71 +267,101 @@ export function TaskList() {
                 >
                   <span className="task-list__group-chevron">{isCollapsed ? '▸' : '▾'}</span>
                   {group}
-                  <span className="task-list__group-count">{groupTasks.length}</span>
+                  <span className="task-list__group-count">
+                    {doneCount !== undefined ? doneCount : groupTasks.length}
+                  </span>
                 </h3>
               )}
-              {!isCollapsed && groupTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`task-item ${selectedTaskId === task.id ? 'task-item--selected' : ''} ${
-                    isRunningForTask(task.id) ? 'task-item--timing' : ''
-                  }`}
-                  onClick={() => selectTask(task.id)}
-                  draggable
-                  onDragStart={() => handleDragStart(task.id)}
-                  onDragOver={(e) => handleDragOver(e, task.id)}
-                  onDrop={handleDrop}
-                >
-                  <div className="task-item__left">
-                    <button
-                      className={`task-item__timer-btn ${isRunningForTask(task.id) ? 'task-item__timer-btn--active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTimerToggle(task.id);
-                      }}
-                      title={isRunningForTask(task.id) ? 'Stop timer' : 'Start timer'}
+              {!isCollapsed && (
+                <>
+                  {isDoneGroup && loadingDone && (
+                    <div className="task-list__loading">Loading...</div>
+                  )}
+                  {groupTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className={`task-item ${selectedTaskId === task.id ? 'task-item--selected' : ''} ${
+                        isRunningForTask(task.id) ? 'task-item--timing' : ''
+                      }`}
+                      onClick={() => selectTask(task.id)}
+                      draggable
+                      onDragStart={() => handleDragStart(task.id)}
+                      onDragOver={(e) => handleDragOver(e, task.id)}
+                      onDrop={handleDrop}
                     >
-                      {isRunningForTask(task.id) ? '■' : '▶'}
-                    </button>
-                    <div className="task-item__info">
-                      <span className="task-item__title">{task.title}</span>
-                      <div className="task-item__meta">
-                        <span className={`task-item__status task-item__status--${task.status}`}>
-                          {STATUS_LABELS[task.status]}
-                        </span>
-                        {getCategoryDots(task).map((cat) => (
-                          <span
-                            key={cat!.id}
-                            className="task-item__cat-badge"
-                            style={{ background: cat!.color }}
+                      <div className="task-item__left">
+                        <button
+                          className={`task-item__timer-btn ${isRunningForTask(task.id) ? 'task-item__timer-btn--active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTimerToggle(task.id);
+                          }}
+                          title={isRunningForTask(task.id) ? 'Stop timer' : 'Start timer'}
+                        >
+                          {isRunningForTask(task.id) ? '■' : '▶'}
+                        </button>
+                        <div className="task-item__info">
+                          <span className="task-item__title">{task.title}</span>
+                          <div className="task-item__meta">
+                            <span className={`task-item__status task-item__status--${task.status}`}>
+                              {STATUS_LABELS[task.status]}
+                            </span>
+                            {getCategoryDots(task).map((cat) => (
+                              <span
+                                key={cat!.id}
+                                className="task-item__cat-badge"
+                                style={{ background: cat!.color }}
+                              >
+                                {cat!.name}
+                              </span>
+                            ))}
+                            {(task.notes ?? '').length > 0 && (
+                              <span className="task-item__notes-badge" title="Has notes">&#128221;</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="task-item__right">
+                        <span className="task-item__time">{getTaskTimeDisplay(task)}</span>
+                        {task.status !== 'done' && (
+                          <button
+                            className="task-item__check-btn"
+                            onClick={(e) => handleMarkDone(e, task.id)}
+                            title="Mark as done"
                           >
-                            {cat!.name}
-                          </span>
-                        ))}
-                        {(task.notes ?? '').length > 0 && (
-                          <span className="task-item__notes-badge" title="Has notes">&#128221;</span>
+                            &#10003;
+                          </button>
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="task-item__right">
-                    <span className="task-item__time">{getTaskTimeDisplay(task)}</span>
-                    {task.status !== 'done' && (
-                      <button
-                        className="task-item__check-btn"
-                        onClick={(e) => handleMarkDone(e, task.id)}
-                        title="Mark as done"
-                      >
-                        &#10003;
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  ))}
+                  {/* Load more for done tasks */}
+                  {isDoneGroup && doneTasksHasMore && !loadingMoreDone && (
+                    <button className="task-list__load-more" onClick={handleLoadMoreDone}>
+                      Load more done tasks...
+                    </button>
+                  )}
+                  {isDoneGroup && loadingMoreDone && (
+                    <div className="task-list__loading">Loading...</div>
+                  )}
+                </>
+              )}
             </div>
           );
         })}
-        {filteredTasks.length === 0 && (
+
+        {/* Load more for active tasks (non-grouped or non-status views) */}
+        {activeTasksHasMore && (
+          <button
+            className="task-list__load-more"
+            onClick={handleLoadMoreActive}
+            disabled={loadingMoreActive}
+          >
+            {loadingMoreActive ? 'Loading...' : 'Load more tasks...'}
+          </button>
+        )}
+
+        {totalVisible === 0 && (
           <div className="task-list__empty">
             No tasks found. Create one above or adjust your filters.
           </div>

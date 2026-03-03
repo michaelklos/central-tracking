@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput } from '../../shared/types';
+import type { CreateTaskInput, Task, UpdateTaskInput, PaginationParams, PaginatedResponse } from '../../shared/types';
 
 interface TaskRow {
   id: string;
@@ -75,6 +75,52 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
       | TaskRow
       | undefined;
     return row ? rowToTask(db, row) : null;
+  });
+
+  ipcMain.handle('tasks:getActive', (_event, params?: PaginationParams): PaginatedResponse<Task> => {
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? 50;
+    const rows = db.instance
+      .prepare(
+        `SELECT * FROM tasks WHERE status != 'done'
+         ORDER BY sort_order ASC, created_at DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset) as TaskRow[];
+    const countRow = db.instance
+      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status != 'done'")
+      .get() as { total: number };
+    const items = rows.map((row) => rowToTask(db, row));
+    return {
+      items,
+      total: countRow.total,
+      offset,
+      limit,
+      hasMore: offset + items.length < countRow.total,
+    };
+  });
+
+  ipcMain.handle('tasks:getDone', (_event, params?: PaginationParams): PaginatedResponse<Task> => {
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? 50;
+    const rows = db.instance
+      .prepare(
+        `SELECT * FROM tasks WHERE status = 'done'
+         ORDER BY updated_at DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset) as TaskRow[];
+    const countRow = db.instance
+      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status = 'done'")
+      .get() as { total: number };
+    const items = rows.map((row) => rowToTask(db, row));
+    return {
+      items,
+      total: countRow.total,
+      offset,
+      limit,
+      hasMore: offset + items.length < countRow.total,
+    };
   });
 
   ipcMain.handle('tasks:create', (_event, input: CreateTaskInput) => {

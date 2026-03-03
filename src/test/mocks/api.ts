@@ -6,6 +6,8 @@ export function createMockApi(): CentralTrackingAPI {
     tasks: {
       getAll: vi.fn().mockResolvedValue([]),
       getById: vi.fn().mockResolvedValue(null),
+      getActive: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, hasMore: false }),
+      getDone: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, hasMore: false }),
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),
@@ -13,6 +15,7 @@ export function createMockApi(): CentralTrackingAPI {
     },
     timeEntries: {
       getByTask: vi.fn().mockResolvedValue([]),
+      getByTaskPaginated: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 20, hasMore: false }),
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),

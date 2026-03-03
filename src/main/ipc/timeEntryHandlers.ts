@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput } from '../../shared/types';
+import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse } from '../../shared/types';
 
 interface TimeEntryRow {
   id: string;
@@ -32,6 +32,30 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
       .all(taskId) as TimeEntryRow[];
     return rows.map(rowToTimeEntry);
   });
+
+  ipcMain.handle(
+    'timeEntries:getByTaskPaginated',
+    (_event, taskId: string, params?: PaginationParams): PaginatedResponse<TimeEntry> => {
+      const offset = params?.offset ?? 0;
+      const limit = params?.limit ?? 20;
+      const rows = db.instance
+        .prepare(
+          'SELECT * FROM time_entries WHERE task_id = ? ORDER BY start_time DESC LIMIT ? OFFSET ?'
+        )
+        .all(taskId, limit, offset) as TimeEntryRow[];
+      const countRow = db.instance
+        .prepare('SELECT COUNT(*) as total FROM time_entries WHERE task_id = ?')
+        .get(taskId) as { total: number };
+      const items = rows.map(rowToTimeEntry);
+      return {
+        items,
+        total: countRow.total,
+        offset,
+        limit,
+        hasMore: offset + items.length < countRow.total,
+      };
+    }
+  );
 
   ipcMain.handle('timeEntries:create', (_event, input: CreateTimeEntryInput) => {
     const isManualEntry = input.endTime != null;

@@ -86,4 +86,59 @@ describe('TimeEntry IPC Handlers', () => {
     const entries = await ipc.invoke('timeEntries:getByTask', testTaskId);
     expect(entries).toHaveLength(0);
   });
+
+  // ─── Paginated time entry handler ─────────────────────────────────────
+
+  describe('timeEntries:getByTaskPaginated', () => {
+    it('returns paginated time entries for a task', async () => {
+      // Create 5 manual entries (so singleton timer doesn't stop previous ones)
+      const now = new Date();
+      for (let i = 0; i < 5; i++) {
+        const start = new Date(now.getTime() - (i + 1) * 3600000).toISOString();
+        const end = new Date(now.getTime() - i * 3600000).toISOString();
+        await ipc.invoke('timeEntries:create', {
+          taskId: testTaskId,
+          startTime: start,
+          endTime: end,
+        });
+      }
+
+      const page1 = await ipc.invoke('timeEntries:getByTaskPaginated', testTaskId, {
+        offset: 0,
+        limit: 2,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.total).toBe(5);
+      expect(page1.hasMore).toBe(true);
+      expect(page1.offset).toBe(0);
+      expect(page1.limit).toBe(2);
+    });
+
+    it('returns remaining entries on later pages', async () => {
+      const now = new Date();
+      for (let i = 0; i < 3; i++) {
+        const start = new Date(now.getTime() - (i + 1) * 3600000).toISOString();
+        const end = new Date(now.getTime() - i * 3600000).toISOString();
+        await ipc.invoke('timeEntries:create', {
+          taskId: testTaskId,
+          startTime: start,
+          endTime: end,
+        });
+      }
+
+      const page2 = await ipc.invoke('timeEntries:getByTaskPaginated', testTaskId, {
+        offset: 2,
+        limit: 2,
+      });
+      expect(page2.items).toHaveLength(1);
+      expect(page2.hasMore).toBe(false);
+    });
+
+    it('defaults to limit 20 offset 0', async () => {
+      const result = await ipc.invoke('timeEntries:getByTaskPaginated', testTaskId);
+      expect(result.offset).toBe(0);
+      expect(result.limit).toBe(20);
+      expect(result.total).toBe(0);
+    });
+  });
 });

@@ -27,6 +27,13 @@ const mockUpdateTask = vi.fn().mockResolvedValue({});
 
 const mockTaskContext = {
   tasks: [makeTask()],
+  activeTasks: [makeTask()],
+  activeTasksTotal: 1,
+  activeTasksHasMore: false,
+  doneTasks: [],
+  doneTasksTotal: 0,
+  doneTasksHasMore: false,
+  doneTasksLoaded: false,
   categories: [],
   selectedTaskId: 'task-1',
   filter: {},
@@ -37,6 +44,10 @@ const mockTaskContext = {
   deleteTask: vi.fn(),
   reorderTasks: vi.fn(),
   refreshTasks: vi.fn(),
+  refreshActiveTasks: vi.fn(),
+  loadMoreActiveTasks: vi.fn(),
+  loadDoneTasks: vi.fn(),
+  loadMoreDoneTasks: vi.fn(),
   createCategory: vi.fn(),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
@@ -63,6 +74,7 @@ describe('TaskDetail - Lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTaskContext.tasks = [makeTask()];
+    mockTaskContext.activeTasks = [makeTask()];
     mockTaskContext.selectedTaskId = 'task-1';
     mockTimerContext.isRunningForTask = vi.fn().mockReturnValue(false);
     mockTimerContext.stopTimer = vi.fn().mockResolvedValue(undefined);
@@ -76,7 +88,10 @@ describe('TaskDetail - Lifecycle', () => {
   });
 
   it('shows Reactivate button when status is done', () => {
-    mockTaskContext.tasks = [makeTask({ status: 'done' })];
+    const doneTask = makeTask({ status: 'done' });
+    mockTaskContext.tasks = [doneTask];
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [doneTask];
     render(<TaskDetail />);
     expect(screen.getByTitle('Reactivate task')).toBeInTheDocument();
   });
@@ -90,7 +105,10 @@ describe('TaskDetail - Lifecycle', () => {
 
   it('Reactivate button calls updateTask with status todo', async () => {
     const user = userEvent.setup();
-    mockTaskContext.tasks = [makeTask({ status: 'done' })];
+    const doneTask = makeTask({ status: 'done' });
+    mockTaskContext.tasks = [doneTask];
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [doneTask];
     render(<TaskDetail />);
     await user.click(screen.getByTitle('Reactivate task'));
     expect(mockUpdateTask).toHaveBeenCalledWith('task-1', { status: 'todo' });
@@ -106,7 +124,10 @@ describe('TaskDetail - Lifecycle', () => {
 
   it('Reactivate starts timer for the task', async () => {
     const user = userEvent.setup();
-    mockTaskContext.tasks = [makeTask({ status: 'done' })];
+    const doneTask = makeTask({ status: 'done' });
+    mockTaskContext.tasks = [doneTask];
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [doneTask];
     render(<TaskDetail />);
     await user.click(screen.getByTitle('Reactivate task'));
     expect(mockTimerContext.startTimer).toHaveBeenCalledWith('task-1');

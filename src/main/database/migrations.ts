@@ -67,6 +67,13 @@ const MIGRATIONS: string[] = [
   ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT '';
   INSERT OR IGNORE INTO schema_version (version) VALUES (2);
   `,
+  // Migration 003: Add indexes for paginated queries
+  `
+  CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+  CREATE INDEX IF NOT EXISTS idx_tasks_status_sort ON tasks(status, sort_order ASC, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_time_entries_task_start ON time_entries(task_id, start_time DESC);
+  INSERT OR IGNORE INTO schema_version (version) VALUES (3);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

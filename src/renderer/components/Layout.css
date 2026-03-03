@@ -16,3 +16,28 @@
   display: flex;
   overflow: hidden;
 }
+
+.layout__detail {
+  flex-shrink: 0;
+  display: flex;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border);
+  position: relative;
+}
+
+.layout__resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.layout__resize-handle:hover,
+.layout__resize-handle:active {
+  background: var(--color-primary);
+}
