@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
-import { formatDuration } from '../utils/time';
+import { formatDuration, startOfDay, endOfDay } from '../utils/time';
+import { TimeEntryEditor } from './TimeEntryEditor';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import './TaskDetail.css';
 
@@ -23,6 +24,8 @@ export function TaskDetail() {
   const [titleDraft, setTitleDraft] = useState('');
   const [descDraft, setDescDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
+  const [defaultStartTime, setDefaultStartTime] = useState(new Date().toISOString());
+  const defaultDurationSeconds = 1800;
 
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
@@ -38,6 +41,22 @@ export function TaskDetail() {
     setComments(cmts);
   }, [selectedTaskId]);
 
+  const loadSmartDefaults = useCallback(async () => {
+    const now = new Date();
+    const todayStart = startOfDay(now).toISOString();
+    const todayEnd = endOfDay(now).toISOString();
+    const allTodayEntries = await window.api.timeEntries.getByDateRange(todayStart, todayEnd);
+    const completedToday = allTodayEntries
+      .filter((e) => e.endTime)
+      .sort((a, b) => new Date(b.endTime!).getTime() - new Date(a.endTime!).getTime());
+
+    if (completedToday.length > 0) {
+      setDefaultStartTime(completedToday[0].endTime!);
+    } else {
+      setDefaultStartTime(new Date().toISOString());
+    }
+  }, []);
+
   useEffect(() => {
     if (task) {
       setTitleDraft(task.title);
@@ -46,7 +65,8 @@ export function TaskDetail() {
     }
     loadTimeEntries();
     loadComments();
-  }, [task?.id, loadTimeEntries, loadComments]);
+    loadSmartDefaults();
+  }, [task?.id, loadTimeEntries, loadComments, loadSmartDefaults]);
 
   if (!task) return null;
 
@@ -110,6 +130,19 @@ export function TaskDetail() {
   const handleDeleteTimeEntry = async (id: string) => {
     await window.api.timeEntries.delete(id);
     await loadTimeEntries();
+    await loadSmartDefaults();
+  };
+
+  const handleCreateEntry = async (startTime: string, endTime: string, note: string) => {
+    await window.api.timeEntries.create({ taskId: task.id, startTime, endTime, note });
+    await loadTimeEntries();
+    await loadSmartDefaults();
+  };
+
+  const handleUpdateEntry = async (id: string, startTime: string, endTime: string, note: string) => {
+    await window.api.timeEntries.update(id, { startTime, endTime, note });
+    await loadTimeEntries();
+    await loadSmartDefaults();
   };
 
   const handleTimerToggle = async () => {
@@ -269,38 +302,25 @@ export function TaskDetail() {
 
         {activeTab === 'time' && (
           <div className="task-detail__time-entries">
+            <TimeEntryEditor
+              mode="create"
+              allEntries={timeEntries}
+              onCreate={handleCreateEntry}
+              defaultStartTime={defaultStartTime}
+              defaultDurationSeconds={defaultDurationSeconds}
+            />
             {timeEntries.length === 0 && (
-              <p className="task-detail__empty">No time entries yet. Start the timer to begin tracking.</p>
+              <p className="task-detail__empty">No time entries yet. Start the timer or add an entry above.</p>
             )}
             {timeEntries.map((entry) => (
-              <div key={entry.id} className="time-entry">
-                <div className="time-entry__info">
-                  <span className="time-entry__date">
-                    {new Date(entry.startTime).toLocaleDateString()}
-                  </span>
-                  <span className="time-entry__range">
-                    {new Date(entry.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {entry.endTime
-                      ? ` - ${new Date(entry.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                      : ' - running'}
-                  </span>
-                  {entry.note && <span className="time-entry__note">{entry.note}</span>}
-                </div>
-                <div className="time-entry__right">
-                  <span className="time-entry__duration">
-                    {entry.durationSeconds != null
-                      ? formatDuration(entry.durationSeconds)
-                      : 'active'}
-                  </span>
-                  <button
-                    className="time-entry__delete"
-                    onClick={() => handleDeleteTimeEntry(entry.id)}
-                    title="Delete entry"
-                  >
-                    &times;
-                  </button>
-                </div>
-              </div>
+              <TimeEntryEditor
+                key={entry.id}
+                entry={entry}
+                allEntries={timeEntries}
+                onSave={handleUpdateEntry}
+                onCancel={() => {}}
+                onDelete={handleDeleteTimeEntry}
+              />
             ))}
           </div>
         )}

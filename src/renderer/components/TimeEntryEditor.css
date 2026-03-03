@@ -2,11 +2,35 @@
   padding: 12px 10px;
 }
 
+.time-entry--create {
+  background: var(--color-bg-secondary, #f8f9fa);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.time-entry-editor__header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
 .time-entry-editor__fields {
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
+}
+
+.time-entry-editor__datetime-row {
+  display: flex;
+  gap: 12px;
+}
+
+.time-entry-editor__datetime-row .time-entry-editor__row {
+  flex: 1;
 }
 
 .time-entry-editor__row {
@@ -16,7 +40,7 @@
 }
 
 .time-entry-editor__row label {
-  width: 40px;
+  width: 50px;
   font-size: 11px;
   text-transform: uppercase;
   color: var(--color-text-secondary);
@@ -26,6 +50,12 @@
 .time-entry-editor__row input {
   flex: 1;
   font-size: 12px;
+}
+
+.time-entry-editor__end-display {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-style: italic;
 }
 
 .time-entry-editor__error {
@@ -64,6 +94,16 @@
 .time-entry-editor__cancel:hover {
   color: var(--color-text);
   border-color: var(--color-text-secondary);
+}
+
+/* Clickable start time / duration in view mode */
+.time-entry__clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.time-entry__clickable:hover {
+  color: var(--color-primary);
 }
 
 .time-entry__edit {

@@ -12,8 +12,8 @@ export function parseDuration(input: string): number | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  // Format: "1h30m", "1h", "30m", "1h30m15s", etc.
-  const hmPattern = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i;
+  // Format: "1h30m", "1h", "30m", "1h30m15s", "1h 30m", etc.
+  const hmPattern = /^(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?$/i;
   const hmMatch = trimmed.match(hmPattern);
   if (hmMatch && (hmMatch[1] || hmMatch[2] || hmMatch[3])) {
     const hours = parseInt(hmMatch[1] || '0', 10);
