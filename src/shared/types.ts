@@ -22,6 +22,8 @@ export interface Task {
   todayTimeSeconds: number;
   /** Category/label IDs assigned to this task */
   categoryIds: string[];
+  /** Free-form notes for the task */
+  notes: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +44,7 @@ export interface UpdateTaskInput {
   status?: TaskStatus;
   sortOrder?: number;
   categoryIds?: string[];
+  notes?: string;
 }
 
 // ─── Time Entry ──────────────────────────────────────────────────────────────
@@ -114,6 +117,15 @@ export interface UpdateCategoryInput {
   color?: string;
 }
 
+// ─── Reporting ──────────────────────────────────────────────────────────────
+
+export interface TimeEntryReport {
+  date: string;
+  taskId: string;
+  taskTitle: string;
+  totalSeconds: number;
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export interface PluginInfo {
@@ -155,6 +167,9 @@ export interface CentralTrackingAPI {
     delete(id: string): Promise<void>;
     getActiveEntry(): Promise<TimeEntry | null>;
     stopActive(): Promise<TimeEntry | null>;
+    getTodayTotal(): Promise<number>;
+    getByDateRange(start: string, end: string): Promise<TimeEntry[]>;
+    getReport(start: string, end: string): Promise<TimeEntryReport[]>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;
@@ -172,5 +187,12 @@ export interface CentralTrackingAPI {
   plugins: {
     list(): Promise<PluginInfo[]>;
     sync(pluginId: string): Promise<PluginSyncResult>;
+  };
+  window: {
+    setAlwaysOnTop(flag: boolean): Promise<void>;
+    getAlwaysOnTop(): Promise<boolean>;
+  };
+  reports: {
+    exportCsv(start: string, end: string): Promise<string | null>;
   };
 }

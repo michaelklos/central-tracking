@@ -1,0 +1,58 @@
+.split-button {
+  position: relative;
+  display: flex;
+}
+
+.split-button__primary {
+  padding: 6px 12px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.split-button__primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.split-button__arrow {
+  padding: 6px 8px;
+  background: var(--color-primary);
+  color: white;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 10px;
+}
+
+.split-button__arrow:hover {
+  background: var(--color-primary-hover);
+}
+
+.split-button__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  z-index: 10;
+  min-width: 140px;
+}
+
+.split-button__option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-text);
+  transition: background 0.1s;
+}
+
+.split-button__option:hover {
+  background: var(--color-surface-hover);
+}

@@ -34,10 +34,16 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     return entry;
   }, []);
 
-  // On mount, check for any running timer
+  const refreshTodayTotal = useCallback(async () => {
+    const total = await window.api.timeEntries.getTodayTotal();
+    setTotalTodaySeconds(total);
+  }, []);
+
+  // On mount, check for any running timer and load today total
   useEffect(() => {
     refreshActive();
-  }, [refreshActive]);
+    refreshTodayTotal();
+  }, [refreshActive, refreshTodayTotal]);
 
   // Tick the elapsed counter every second while timer is active
   useEffect(() => {
@@ -65,13 +71,15 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const startTimer = useCallback(async (taskId: string) => {
     const entry = await window.api.timeEntries.create({ taskId });
     setActiveEntry(entry);
-  }, []);
+    await refreshTodayTotal();
+  }, [refreshTodayTotal]);
 
   const stopTimer = useCallback(async () => {
     await window.api.timeEntries.stopActive();
     setActiveEntry(null);
     setElapsedSeconds(0);
-  }, []);
+    await refreshTodayTotal();
+  }, [refreshTodayTotal]);
 
   const isRunningForTask = useCallback(
     (taskId: string) => activeEntry?.taskId === taskId,

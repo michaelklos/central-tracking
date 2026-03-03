@@ -1,14 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTimerContext } from '../context/TimerContext';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
 import './TimerBar.css';
 
 export function TimerBar() {
-  const { activeEntry, elapsedSeconds, stopTimer } = useTimerContext();
+  const { activeEntry, elapsedSeconds, totalTodaySeconds, stopTimer } = useTimerContext();
   const { tasks } = useTaskContext();
+  const [pinned, setPinned] = useState(false);
+
+  useEffect(() => {
+    window.api.window.getAlwaysOnTop().then(setPinned);
+  }, []);
+
+  const handleTogglePin = async () => {
+    const next = !pinned;
+    await window.api.window.setAlwaysOnTop(next);
+    setPinned(next);
+  };
 
   const activeTask = activeEntry ? tasks.find((t) => t.id === activeEntry.taskId) : null;
+  const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
 
   return (
     <div className={`timer-bar ${activeEntry ? 'timer-bar--active' : ''}`}>
@@ -24,6 +36,10 @@ export function TimerBar() {
         )}
       </div>
       <div className="timer-bar__right">
+        <span className="timer-bar__today">
+          <span className="timer-bar__today-label">Today:</span>{' '}
+          <span className="timer-bar__today-value">{formatDuration(todayDisplay)}</span>
+        </span>
         {activeEntry && (
           <>
             <span className="timer-bar__elapsed">{formatDuration(elapsedSeconds)}</span>
@@ -32,6 +48,13 @@ export function TimerBar() {
             </button>
           </>
         )}
+        <button
+          className={`timer-bar__pin ${pinned ? 'timer-bar__pin--active' : ''}`}
+          onClick={handleTogglePin}
+          title={pinned ? 'Unpin window' : 'Pin window on top'}
+        >
+          {pinned ? '&#128204;' : '&#128204;'}
+        </button>
       </div>
     </div>
   );

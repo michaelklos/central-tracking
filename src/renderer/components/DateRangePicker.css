@@ -1,0 +1,39 @@
+.date-range-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-range-picker__inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-picker__inputs input {
+  font-size: 13px;
+}
+
+.date-range-picker__separator {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.date-range-picker__presets {
+  display: flex;
+  gap: 6px;
+}
+
+.date-range-picker__presets button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  transition: all 0.15s;
+}
+
+.date-range-picker__presets button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}

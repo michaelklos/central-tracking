@@ -4,10 +4,11 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist/main",
-    "rootDir": "src/main",
+    "rootDir": "src",
     "paths": {
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/main/**/*", "src/shared/**/*"]
+  "include": ["src/main/**/*", "src/shared/**/*"],
+  "exclude": ["src/main/**/__tests__/**", "src/main/**/*.test.ts"]
 }

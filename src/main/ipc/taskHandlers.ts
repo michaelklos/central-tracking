@@ -12,6 +12,7 @@ interface TaskRow {
   external_id: string | null;
   plugin_id: string | null;
   sort_order: number;
+  notes: string;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +56,7 @@ function rowToTask(db: Database, row: TaskRow): Task {
     totalTimeSeconds: totalTime.total,
     todayTimeSeconds: todayTime.total,
     categoryIds: catRows.map((r) => r.category_id),
+    notes: row.notes ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -133,6 +135,10 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     if (updates.sortOrder !== undefined) {
       sets.push('sort_order = ?');
       values.push(updates.sortOrder);
+    }
+    if (updates.notes !== undefined) {
+      sets.push('notes = ?');
+      values.push(updates.notes);
     }
 
     if (sets.length > 0) {

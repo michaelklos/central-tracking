@@ -34,24 +34,37 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
   });
 
   ipcMain.handle('timeEntries:create', (_event, input: CreateTimeEntryInput) => {
-    // Singleton timer: stop any currently active entry first
-    const active = db.instance
-      .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
-      .get() as TimeEntryRow | undefined;
+    const isManualEntry = input.endTime != null;
 
-    if (active) {
-      const duration = Math.floor(
-        (Date.now() - new Date(active.start_time).getTime()) / 1000
-      );
-      db.instance
-        .prepare(
-          "UPDATE time_entries SET end_time = datetime('now'), duration_seconds = ? WHERE id = ?"
-        )
-        .run(duration, active.id);
+    // Singleton timer: stop any currently active entry first
+    // But only if this is NOT a manual (completed) entry
+    if (!isManualEntry) {
+      const active = db.instance
+        .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
+        .get() as TimeEntryRow | undefined;
+
+      if (active) {
+        const duration = Math.floor(
+          (Date.now() - new Date(active.start_time).getTime()) / 1000
+        );
+        db.instance
+          .prepare(
+            "UPDATE time_entries SET end_time = datetime('now'), duration_seconds = ? WHERE id = ?"
+          )
+          .run(duration, active.id);
+      }
     }
 
     const id = uuidv4();
     const now = new Date().toISOString();
+
+    // Calculate duration for manual entries
+    let durationSeconds: number | null = null;
+    if (isManualEntry) {
+      const startMs = new Date(input.startTime ?? now).getTime();
+      const endMs = new Date(input.endTime!).getTime();
+      durationSeconds = Math.floor((endMs - startMs) / 1000);
+    }
 
     db.instance
       .prepare(
@@ -63,7 +76,7 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
         input.taskId,
         input.startTime ?? now,
         input.endTime ?? null,
-        null,
+        durationSeconds,
         input.note ?? '',
         now
       );
@@ -116,6 +129,57 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
       .prepare('SELECT * FROM time_entries WHERE end_time IS NULL LIMIT 1')
       .get() as TimeEntryRow | undefined;
     return row ? rowToTimeEntry(row) : null;
+  });
+
+  ipcMain.handle('timeEntries:getTodayTotal', () => {
+    const row = db.instance
+      .prepare(
+        `SELECT COALESCE(SUM(
+          CASE WHEN end_time IS NOT NULL
+            THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
+            ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          END
+        ), 0) as total FROM time_entries WHERE date(start_time) = date('now')`
+      )
+      .get() as { total: number };
+    return row.total;
+  });
+
+  ipcMain.handle('timeEntries:getByDateRange', (_event, start: string, end: string) => {
+    const rows = db.instance
+      .prepare(
+        'SELECT * FROM time_entries WHERE start_time >= ? AND start_time <= ? ORDER BY start_time DESC'
+      )
+      .all(start, end) as TimeEntryRow[];
+    return rows.map(rowToTimeEntry);
+  });
+
+  ipcMain.handle('timeEntries:getReport', (_event, start: string, end: string) => {
+    const rows = db.instance
+      .prepare(
+        `SELECT
+          date(te.start_time) as date,
+          te.task_id,
+          t.title as task_title,
+          COALESCE(SUM(
+            CASE WHEN te.end_time IS NOT NULL
+              THEN CAST((julianday(te.end_time) - julianday(te.start_time)) * 86400 AS INTEGER)
+              ELSE CAST((julianday('now') - julianday(te.start_time)) * 86400 AS INTEGER)
+            END
+          ), 0) as total_seconds
+        FROM time_entries te
+        JOIN tasks t ON t.id = te.task_id
+        WHERE te.start_time >= ? AND te.start_time <= ?
+        GROUP BY date(te.start_time), te.task_id
+        ORDER BY date(te.start_time)`
+      )
+      .all(start, end) as { date: string; task_id: string; task_title: string; total_seconds: number }[];
+    return rows.map((r) => ({
+      date: r.date,
+      taskId: r.task_id,
+      taskTitle: r.task_title,
+      totalSeconds: r.total_seconds,
+    }));
   });
 
   ipcMain.handle('timeEntries:stopActive', () => {

@@ -5,6 +5,7 @@ import { registerTaskHandlers } from './ipc/taskHandlers';
 import { registerTimeEntryHandlers } from './ipc/timeEntryHandlers';
 import { registerCommentHandlers } from './ipc/commentHandlers';
 import { registerCategoryHandlers } from './ipc/categoryHandlers';
+import { registerReportHandlers } from './ipc/reportHandlers';
 import { PluginManager } from './plugins/pluginManager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -47,6 +48,15 @@ app.whenReady().then(() => {
   registerTimeEntryHandlers(ipcMain, database);
   registerCommentHandlers(ipcMain, database);
   registerCategoryHandlers(ipcMain, database);
+  registerReportHandlers(ipcMain, database);
+
+  // Window management IPC handlers
+  ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean) => {
+    if (mainWindow) mainWindow.setAlwaysOnTop(flag);
+  });
+  ipcMain.handle('window:getAlwaysOnTop', () => {
+    return mainWindow?.isAlwaysOnTop() ?? false;
+  });
 
   // Plugin IPC handlers
   ipcMain.handle('plugins:list', () => pluginManager.listPlugins());

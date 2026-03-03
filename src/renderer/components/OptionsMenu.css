@@ -1,0 +1,32 @@
+.options-menu {
+  padding: 12px 16px;
+}
+
+.options-menu__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.options-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.options-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.options-menu__item input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+}

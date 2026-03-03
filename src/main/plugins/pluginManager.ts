@@ -97,6 +97,7 @@ export class PluginManager {
       totalTimeSeconds: 0,
       todayTimeSeconds: 0,
       categoryIds: [],
+      notes: '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));

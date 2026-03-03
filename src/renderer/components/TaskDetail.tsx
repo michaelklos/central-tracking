@@ -5,7 +5,7 @@ import { formatDuration } from '../utils/time';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import './TaskDetail.css';
 
-type DetailTab = 'details' | 'time' | 'comments';
+type DetailTab = 'details' | 'time' | 'comments' | 'notes';
 
 const STATUS_OPTIONS: TaskStatus[] = ['todo', 'in-progress', 'done', 'blocked'];
 const SOURCE_OPTIONS: TaskSource[] = ['ad-hoc', 'email', 'meeting-prep', 'plugin'];
@@ -22,6 +22,7 @@ export function TaskDetail() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [descDraft, setDescDraft] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
 
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
@@ -41,6 +42,7 @@ export function TaskDetail() {
     if (task) {
       setTitleDraft(task.title);
       setDescDraft(task.description);
+      setNotesDraft(task.notes ?? '');
     }
     loadTimeEntries();
     loadComments();
@@ -62,8 +64,26 @@ export function TaskDetail() {
     }
   };
 
+  const handleSaveNotes = async () => {
+    if (notesDraft !== (task.notes ?? '')) {
+      await updateTask(task.id, { notes: notesDraft });
+    }
+  };
+
   const handleStatusChange = async (status: TaskStatus) => {
     await updateTask(task.id, { status });
+  };
+
+  const handleComplete = async () => {
+    if (isRunningForTask(task.id)) {
+      await stopTimer();
+    }
+    await updateTask(task.id, { status: 'done' });
+  };
+
+  const handleReactivate = async () => {
+    await updateTask(task.id, { status: 'todo' });
+    await startTimer(task.id);
   };
 
   const handleCategoryToggle = async (catId: string) => {
@@ -105,6 +125,8 @@ export function TaskDetail() {
   const todayDisplay = running ? task.todayTimeSeconds + elapsedSeconds : task.todayTimeSeconds;
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
 
+  const hasNotes = (task.notes ?? '').length > 0;
+
   return (
     <div className="task-detail">
       <div className="task-detail__header">
@@ -123,9 +145,28 @@ export function TaskDetail() {
               {task.title}
             </h2>
           )}
-          <button className="task-detail__close" onClick={() => selectTask(null)}>
-            &times;
-          </button>
+          <div className="task-detail__header-actions">
+            {task.status !== 'done' ? (
+              <button
+                className="task-detail__complete-btn"
+                onClick={handleComplete}
+                title="Mark as done"
+              >
+                &#10003;
+              </button>
+            ) : (
+              <button
+                className="task-detail__reactivate-btn"
+                onClick={handleReactivate}
+                title="Reactivate task"
+              >
+                &#8634;
+              </button>
+            )}
+            <button className="task-detail__close" onClick={() => selectTask(null)}>
+              &times;
+            </button>
+          </div>
         </div>
 
         <div className="task-detail__time-summary">
@@ -149,13 +190,21 @@ export function TaskDetail() {
       </div>
 
       <div className="task-detail__tabs">
-        {(['details', 'time', 'comments'] as DetailTab[]).map((tab) => (
+        {(['details', 'time', 'comments', 'notes'] as DetailTab[]).map((tab) => (
           <button
             key={tab}
             className={`task-detail__tab ${activeTab === tab ? 'task-detail__tab--active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'details' ? 'Details' : tab === 'time' ? `Time (${timeEntries.length})` : `Comments (${comments.length})`}
+            {tab === 'details'
+              ? 'Details'
+              : tab === 'time'
+                ? `Time (${timeEntries.length})`
+                : tab === 'comments'
+                  ? `Comments (${comments.length})`
+                  : hasNotes
+                    ? 'Notes*'
+                    : 'Notes'}
           </button>
         ))}
       </div>
@@ -194,6 +243,9 @@ export function TaskDetail() {
             <div className="task-detail__field">
               <label>Categories</label>
               <div className="task-detail__cat-list">
+                {categories.length === 0 && (
+                  <span className="task-detail__no-categories">No categories</span>
+                )}
                 {categories.map((cat) => (
                   <button
                     key={cat.id}
@@ -305,6 +357,22 @@ export function TaskDetail() {
                 <p className="comment__body">{comment.body}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {activeTab === 'notes' && (
+          <div className="task-detail__notes">
+            <textarea
+              className="task-detail__notes-editor"
+              rows={12}
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onBlur={handleSaveNotes}
+              placeholder="Add notes..."
+            />
+            <div className="task-detail__notes-hint">
+              Notes auto-save when you click away.
+            </div>
           </div>
         )}
       </div>

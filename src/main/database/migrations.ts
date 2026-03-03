@@ -62,6 +62,11 @@ const MIGRATIONS: string[] = [
 
   INSERT OR IGNORE INTO schema_version (version) VALUES (1);
   `,
+  // Migration 002: Add notes column to tasks
+  `
+  ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+  INSERT OR IGNORE INTO schema_version (version) VALUES (2);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

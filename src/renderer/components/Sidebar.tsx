@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
+import { OptionsMenu } from './OptionsMenu';
 import './Sidebar.css';
 
 const STATUS_OPTIONS = [
@@ -23,6 +25,15 @@ export function Sidebar() {
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#6366f1');
 
+  let navigate: ReturnType<typeof useNavigate> | null = null;
+  let location: ReturnType<typeof useLocation> | null = null;
+  try {
+    navigate = useNavigate();
+    location = useLocation();
+  } catch {
+    // Not inside a router (e.g., in tests)
+  }
+
   const handleCreateCategory = async () => {
     const name = newCatName.trim();
     if (!name) return;
@@ -39,6 +50,23 @@ export function Sidebar() {
       <div className="sidebar__header">
         <h1 className="sidebar__title">Central Tracking</h1>
       </div>
+
+      {navigate && (
+        <div className="sidebar__nav">
+          <button
+            className={`sidebar__nav-btn ${!location?.pathname.includes('/reports') ? 'sidebar__nav-btn--active' : ''}`}
+            onClick={() => navigate!('/')}
+          >
+            Tasks
+          </button>
+          <button
+            className={`sidebar__nav-btn ${location?.pathname.includes('/reports') ? 'sidebar__nav-btn--active' : ''}`}
+            onClick={() => navigate!('/reports')}
+          >
+            Reports
+          </button>
+        </div>
+      )}
 
       <div className="sidebar__section">
         <h3 className="sidebar__section-title">Filter</h3>
@@ -113,6 +141,8 @@ export function Sidebar() {
           <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
         </div>
       </div>
+
+      <OptionsMenu />
     </aside>
   );
 }

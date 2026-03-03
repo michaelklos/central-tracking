@@ -19,6 +19,11 @@ const api = {
     delete: (id: string) => ipcRenderer.invoke('timeEntries:delete', id),
     getActiveEntry: () => ipcRenderer.invoke('timeEntries:getActive'),
     stopActive: () => ipcRenderer.invoke('timeEntries:stopActive'),
+    getTodayTotal: () => ipcRenderer.invoke('timeEntries:getTodayTotal'),
+    getByDateRange: (start: string, end: string) =>
+      ipcRenderer.invoke('timeEntries:getByDateRange', start, end),
+    getReport: (start: string, end: string) =>
+      ipcRenderer.invoke('timeEntries:getReport', start, end),
   },
 
   // Comments
@@ -43,6 +48,18 @@ const api = {
   plugins: {
     list: () => ipcRenderer.invoke('plugins:list'),
     sync: (pluginId: string) => ipcRenderer.invoke('plugins:sync', pluginId),
+  },
+
+  // Window management
+  window: {
+    setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
+    getAlwaysOnTop: () => ipcRenderer.invoke('window:getAlwaysOnTop'),
+  },
+
+  // Reports
+  reports: {
+    exportCsv: (start: string, end: string) =>
+      ipcRenderer.invoke('reports:exportCsv', start, end),
   },
 };
 

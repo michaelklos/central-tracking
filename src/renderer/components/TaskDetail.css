@@ -11,6 +11,11 @@
 .task-detail__header {
   padding: 16px;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.task-detail__tabs {
+  flex-shrink: 0;
 }
 
 .task-detail__title-row {
@@ -39,6 +44,50 @@
   font-weight: 600;
   background: var(--color-bg);
   padding: 4px 8px;
+}
+
+.task-detail__title-input--invalid {
+  border-color: var(--color-danger);
+}
+
+.task-detail__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.task-detail__complete-btn,
+.task-detail__reactivate-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.task-detail__complete-btn {
+  color: var(--color-success);
+}
+
+.task-detail__complete-btn:hover {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
+}
+
+.task-detail__reactivate-btn {
+  color: var(--color-primary);
+}
+
+.task-detail__reactivate-btn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
 }
 
 .task-detail__close {
@@ -220,6 +269,34 @@
 .task-detail__delete-btn:hover {
   background: var(--color-danger);
   color: white;
+}
+
+.task-detail__no-categories {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* ─── Notes tab ──────────────────────────────────────────────── */
+
+.task-detail__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-detail__notes-editor {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.task-detail__notes-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
 }
 
 /* ─── Time entries tab ────────────────────────────────────────── */

@@ -1,0 +1,56 @@
+.report-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.report-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.report-view__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.report-view__export {
+  padding: 6px 14px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.report-view__export:hover {
+  background: var(--color-primary-hover);
+}
+
+.report-view__summary {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.report-view__summary span:first-child {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.report-view__chart {
+  flex: 1;
+  min-height: 300px;
+}
+
+.report-view__empty {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  padding: 40px 0;
+}

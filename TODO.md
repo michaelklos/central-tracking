@@ -9,23 +9,32 @@
 
 ## Testing
 
-- [ ] **Set up test framework** — No test runner configured (consider Vitest or Jest + React Testing Library)
-- [ ] **Unit tests for IPC handlers** — Task, time entry, comment, category CRUD
-- [ ] **Unit tests for database migrations** — Ensure schema is created correctly
-- [ ] **Component tests for renderer** — TaskList, TaskDetail, TimerBar, Sidebar
+- [x] **Set up test framework** — Vitest + @testing-library/react configured
+- [x] **Unit tests for IPC handlers** — Task, time entry, comment, category CRUD
+- [x] **Unit tests for database migrations** — Schema creation and idempotency
+- [x] **Component tests for renderer** — TaskList, TaskDetail, TimerBar, Sidebar, ReportView, SplitButton, OptionsMenu
+- [ ] **Integration tests** — End-to-end flows (create task, track time, export report)
+- [ ] **Increase coverage** — Aim for >80% on critical paths
 
 ## UX / UI
 
-- [ ] **Drag-and-drop task reordering** — `reorder` API exists but no drag UI
+- [x] **Drag-and-drop task reordering** — Implemented in TaskList
+- [x] **Task lifecycle** — Complete/reactivate with auto timer stop/start
+- [x] **Collapsible groups** — "Done" group collapsed by default
+- [x] **Notes feature** — Notes tab, notes indicator, auto-save
+- [x] **Manual time entries** — Create and edit completed entries
+- [x] **Reporting** — Date range picker, bar chart, CSV export
+- [x] **Split action button** — Add + Start / Add as To-Do
+- [x] **Always-on-top pin** — Pin window toggle in timer bar
+- [x] **Options menu** — Settings panel in sidebar
+- [x] **Today's total** — Cumulative daily time in timer bar
 - [ ] **Keyboard shortcuts** — Quick-start timer, create task, navigate list
-- [ ] **Dark mode / theming**
 - [ ] **Responsive layout improvements**
-- [ ] **Task detail: time entry history view** — Show past time entries per task
 - [ ] **Notifications / reminders** — e.g., remind to stop timer after idle
 
 ## Data & Persistence
 
-- [ ] **Data export** — Export tasks / time entries to CSV or JSON
+- [x] **Data export** — CSV export of time entries via Reports view
 - [ ] **Data import** — Bulk import from external formats
 - [ ] **Backup / restore** — Copy SQLite DB or export/import snapshots
 - [ ] **Database migration tooling** — Currently a raw array of SQL strings; consider a more robust migration approach as schema evolves

@@ -48,6 +48,24 @@
   font-weight: 600;
 }
 
+.timer-bar__today {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.timer-bar__today-label {
+  color: var(--color-text-secondary);
+}
+
+.timer-bar__today-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .timer-bar__elapsed {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 14px;
@@ -66,4 +84,23 @@
 
 .timer-bar__stop:hover {
   opacity: 0.9;
+}
+
+.timer-bar__pin {
+  padding: 4px 6px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  transition: all 0.15s;
+  opacity: 0.6;
+}
+
+.timer-bar__pin:hover {
+  opacity: 1;
+  color: var(--color-text);
+}
+
+.timer-bar__pin--active {
+  opacity: 1;
+  color: var(--color-primary);
 }
