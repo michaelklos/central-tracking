@@ -164,6 +164,44 @@ export interface PluginSyncResult {
   errors: string[];
 }
 
+// ─── Import ─────────────────────────────────────────────────────────────────
+
+export interface ParsedImportItem {
+  lineNumber: number;
+  title: string;
+  externalId: string | null;
+  source: TaskSource;
+  pluginId: string | null;
+  date: string;           // "2026-03-04"
+  startTime: string;      // "09:30"
+  durationSeconds: number;
+  startDateTime: string;  // ISO
+  endDateTime: string;    // ISO
+}
+
+export interface ImportPreviewItem extends ParsedImportItem {
+  existingTask: { id: string; title: string } | null;
+  action: 'create' | 'skip';
+}
+
+export interface ImportPreview {
+  items: ImportPreviewItem[];
+  errors: ImportError[];
+  filePath: string;
+}
+
+export interface ImportError {
+  lineNumber: number;
+  line: string;
+  reason: string;
+}
+
+export interface ImportResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 // ─── API bridge type (exposed via preload) ───────────────────────────────────
 
 export interface CentralTrackingAPI {
@@ -212,5 +250,9 @@ export interface CentralTrackingAPI {
   };
   reports: {
     exportCsv(start: string, end: string): Promise<string | null>;
+  };
+  import: {
+    selectAndParse(): Promise<ImportPreview | null>;
+    execute(items: ImportPreviewItem[]): Promise<ImportResult>;
   };
 }

@@ -67,6 +67,12 @@ const api = {
     exportCsv: (start: string, end: string) =>
       ipcRenderer.invoke('reports:exportCsv', start, end),
   },
+
+  // Import
+  import: {
+    selectAndParse: () => ipcRenderer.invoke('import:selectAndParse'),
+    execute: (items: unknown[]) => ipcRenderer.invoke('import:execute', items),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

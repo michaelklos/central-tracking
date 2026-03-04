@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
 import { OptionsMenu } from './OptionsMenu';
+import { ImportPreviewDialog } from './ImportPreviewDialog';
+import type { ImportPreview, ImportPreviewItem, ImportResult } from '../../shared/types';
 import './Sidebar.css';
 
 const STATUS_OPTIONS = [
@@ -21,9 +23,11 @@ const SOURCE_OPTIONS = [
 ];
 
 export function Sidebar() {
-  const { filter, setFilter, categories, createCategory, deleteCategory } = useTaskContext();
+  const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks } = useTaskContext();
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#6366f1');
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   let navigate: ReturnType<typeof useNavigate> | null = null;
   let location: ReturnType<typeof useLocation> | null = null;
@@ -39,6 +43,36 @@ export function Sidebar() {
     if (!name) return;
     await createCategory({ name, color: newCatColor });
     setNewCatName('');
+  };
+
+  const handleImportClick = async () => {
+    const preview = await window.api.import.selectAndParse();
+    if (preview) {
+      setImportPreview(preview);
+      setImportResult(null);
+    }
+  };
+
+  const handleToggleAction = (index: number) => {
+    if (!importPreview) return;
+    const items = importPreview.items.map((item, i) =>
+      i === index
+        ? { ...item, action: (item.action === 'create' ? 'skip' : 'create') as ImportPreviewItem['action'] }
+        : item
+    );
+    setImportPreview({ ...importPreview, items });
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importPreview) return;
+    const result = await window.api.import.execute(importPreview.items);
+    setImportResult(result);
+    setImportPreview(null);
+    await refreshTasks();
+  };
+
+  const handleImportCancel = () => {
+    setImportPreview(null);
   };
 
   const updateFilter = (partial: Partial<TaskFilter>) => {
@@ -67,6 +101,17 @@ export function Sidebar() {
           </button>
         </div>
       )}
+
+      <div className="sidebar__import">
+        <button className="sidebar__import-btn" onClick={handleImportClick}>
+          Import Tasks
+        </button>
+        {importResult && (
+          <p className="sidebar__import-result">
+            Imported {importResult.created}, skipped {importResult.skipped}
+          </p>
+        )}
+      </div>
 
       <div className="sidebar__section">
         <h3 className="sidebar__section-title">Filter</h3>
@@ -143,6 +188,17 @@ export function Sidebar() {
       </div>
 
       <OptionsMenu />
+
+      {importPreview && (
+        <ImportPreviewDialog
+          items={importPreview.items}
+          errors={importPreview.errors}
+          filePath={importPreview.filePath}
+          onToggleAction={handleToggleAction}
+          onConfirm={handleImportConfirm}
+          onCancel={handleImportCancel}
+        />
+      )}
     </aside>
   );
 }
