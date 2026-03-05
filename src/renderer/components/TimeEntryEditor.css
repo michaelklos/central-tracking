@@ -2,6 +2,7 @@
   padding: 12px 10px;
   overflow: hidden;
   min-width: 0;
+  flex-direction: column;
 }
 
 .time-entry--create {
