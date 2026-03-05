@@ -1,0 +1,98 @@
+.batch-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.batch-bar__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.batch-bar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.batch-bar__section--danger {
+  border-top-color: rgba(220, 38, 38, 0.3);
+}
+
+.batch-bar__section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.batch-bar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.batch-bar__field select {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.batch-bar__apply {
+  padding: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  color: white;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.batch-bar__apply:hover {
+  background: var(--color-primary-hover);
+}
+
+.batch-bar__apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-bar__delete {
+  padding: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  color: white;
+  background: var(--color-danger, #dc2626);
+  cursor: pointer;
+}
+
+.batch-bar__delete:hover {
+  background: #b91c1c;
+}
+
+.batch-bar__delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-bar__cancel {
+  padding: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.batch-bar__cancel:hover {
+  background: var(--color-surface-hover);
+}

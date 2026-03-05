@@ -74,6 +74,12 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_time_entries_task_start ON time_entries(task_id, start_time DESC);
   INSERT OR IGNORE INTO schema_version (version) VALUES (3);
   `,
+  // Migration 004: Soft-delete support (recycle bin)
+  `
+  ALTER TABLE tasks ADD COLUMN deleted_at TEXT DEFAULT NULL;
+  CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
+  INSERT OR IGNORE INTO schema_version (version) VALUES (4);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

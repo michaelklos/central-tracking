@@ -52,6 +52,11 @@ app.whenReady().then(() => {
   registerReportHandlers(ipcMain, database);
   registerImportHandlers(ipcMain, database);
 
+  // Auto-purge tasks deleted more than 30 days ago
+  database.instance.prepare(
+    "DELETE FROM tasks WHERE deleted_at IS NOT NULL AND deleted_at < datetime('now', '-30 days')"
+  ).run();
+
   // Window management IPC handlers
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean) => {
     if (mainWindow) mainWindow.setAlwaysOnTop(flag);

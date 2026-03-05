@@ -19,6 +19,8 @@ const mockTaskContext = {
   createCategory: vi.fn().mockResolvedValue({ id: 'cat-1', name: 'Test' }),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
+  batchMode: false,
+  enterBatchMode: vi.fn(),
 };
 
 const mockTimerContext = {

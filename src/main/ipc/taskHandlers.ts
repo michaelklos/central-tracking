@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput, PaginationParams, PaginatedResponse } from '../../shared/types';
+import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse } from '../../shared/types';
 
 interface TaskRow {
   id: string;
@@ -13,6 +13,7 @@ interface TaskRow {
   plugin_id: string | null;
   sort_order: number;
   notes: string;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +58,7 @@ function rowToTask(db: Database, row: TaskRow): Task {
     todayTimeSeconds: todayTime.total,
     categoryIds: catRows.map((r) => r.category_id),
     notes: row.notes ?? '',
+    deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -65,13 +67,13 @@ function rowToTask(db: Database, row: TaskRow): Task {
 export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:getAll', () => {
     const rows = db.instance
-      .prepare('SELECT * FROM tasks ORDER BY sort_order ASC, created_at DESC')
+      .prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC')
       .all() as TaskRow[];
     return rows.map((row) => rowToTask(db, row));
   });
 
   ipcMain.handle('tasks:getById', (_event, id: string) => {
-    const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as
+    const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL').get(id) as
       | TaskRow
       | undefined;
     return row ? rowToTask(db, row) : null;
@@ -82,13 +84,13 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     const limit = params?.limit ?? 50;
     const rows = db.instance
       .prepare(
-        `SELECT * FROM tasks WHERE status != 'done'
+        `SELECT * FROM tasks WHERE status != 'done' AND deleted_at IS NULL
          ORDER BY sort_order ASC, created_at DESC
          LIMIT ? OFFSET ?`
       )
       .all(limit, offset) as TaskRow[];
     const countRow = db.instance
-      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status != 'done'")
+      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status != 'done' AND deleted_at IS NULL")
       .get() as { total: number };
     const items = rows.map((row) => rowToTask(db, row));
     return {
@@ -105,13 +107,13 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     const limit = params?.limit ?? 50;
     const rows = db.instance
       .prepare(
-        `SELECT * FROM tasks WHERE status = 'done'
+        `SELECT * FROM tasks WHERE status = 'done' AND deleted_at IS NULL
          ORDER BY updated_at DESC
          LIMIT ? OFFSET ?`
       )
       .all(limit, offset) as TaskRow[];
     const countRow = db.instance
-      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status = 'done'")
+      .prepare("SELECT COUNT(*) as total FROM tasks WHERE status = 'done' AND deleted_at IS NULL")
       .get() as { total: number };
     const items = rows.map((row) => rowToTask(db, row));
     return {
@@ -182,6 +184,10 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
       sets.push('sort_order = ?');
       values.push(updates.sortOrder);
     }
+    if (updates.source !== undefined) {
+      sets.push('source = ?');
+      values.push(updates.source);
+    }
     if (updates.notes !== undefined) {
       sets.push('notes = ?');
       values.push(updates.notes);
@@ -207,8 +213,11 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     return rowToTask(db, row);
   });
 
+  // Soft-delete: sets deleted_at instead of removing the row
   ipcMain.handle('tasks:delete', (_event, id: string) => {
-    db.instance.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    db.instance
+      .prepare("UPDATE tasks SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL")
+      .run(id);
   });
 
   ipcMain.handle('tasks:reorder', (_event, orderedIds: string[]) => {
@@ -219,5 +228,118 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
       });
     });
     transaction();
+  });
+
+  // ─── Batch operations ──────────────────────────────────────────────
+
+  ipcMain.handle('tasks:batchUpdate', (_event, ids: string[], input: BatchUpdateInput) => {
+    const transaction = db.instance.transaction(() => {
+      for (const id of ids) {
+        const sets: string[] = [];
+        const values: unknown[] = [];
+
+        if (input.status !== undefined) {
+          sets.push('status = ?');
+          values.push(input.status);
+        }
+        if (input.source !== undefined) {
+          sets.push('source = ?');
+          values.push(input.source);
+        }
+
+        if (sets.length > 0) {
+          sets.push("updated_at = datetime('now')");
+          values.push(id);
+          db.instance.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).run(...values);
+        }
+
+        if (input.categoryIds !== undefined) {
+          db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(id);
+          const insertCat = db.instance.prepare(
+            'INSERT OR IGNORE INTO task_categories (task_id, category_id) VALUES (?, ?)'
+          );
+          for (const catId of input.categoryIds) {
+            insertCat.run(id, catId);
+          }
+        }
+      }
+    });
+    transaction();
+    return { updatedCount: ids.length };
+  });
+
+  ipcMain.handle('tasks:batchSoftDelete', (_event, ids: string[]) => {
+    const stmt = db.instance.prepare(
+      "UPDATE tasks SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL"
+    );
+    const transaction = db.instance.transaction(() => {
+      let count = 0;
+      for (const id of ids) {
+        const result = stmt.run(id);
+        count += result.changes;
+      }
+      return count;
+    });
+    const deletedCount = transaction();
+    return { deletedCount };
+  });
+
+  ipcMain.handle('tasks:getDeleted', (_event, params?: PaginationParams): PaginatedResponse<Task> => {
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? 50;
+    const rows = db.instance
+      .prepare(
+        `SELECT * FROM tasks WHERE deleted_at IS NOT NULL
+         ORDER BY deleted_at DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset) as TaskRow[];
+    const countRow = db.instance
+      .prepare('SELECT COUNT(*) as total FROM tasks WHERE deleted_at IS NOT NULL')
+      .get() as { total: number };
+    const items = rows.map((row) => rowToTask(db, row));
+    return {
+      items,
+      total: countRow.total,
+      offset,
+      limit,
+      hasMore: offset + items.length < countRow.total,
+    };
+  });
+
+  ipcMain.handle('tasks:restore', (_event, id: string) => {
+    db.instance
+      .prepare("UPDATE tasks SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NOT NULL")
+      .run(id);
+    const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow;
+    return rowToTask(db, row);
+  });
+
+  ipcMain.handle('tasks:batchRestore', (_event, ids: string[]) => {
+    const stmt = db.instance.prepare(
+      "UPDATE tasks SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NOT NULL"
+    );
+    const transaction = db.instance.transaction(() => {
+      let count = 0;
+      for (const id of ids) {
+        const result = stmt.run(id);
+        count += result.changes;
+      }
+      return count;
+    });
+    const restoredCount = transaction();
+    return { restoredCount };
+  });
+
+  ipcMain.handle('tasks:purgeDeleted', (_event, id: string) => {
+    db.instance
+      .prepare('DELETE FROM tasks WHERE id = ? AND deleted_at IS NOT NULL')
+      .run(id);
+  });
+
+  ipcMain.handle('tasks:emptyRecycleBin', () => {
+    db.instance
+      .prepare('DELETE FROM tasks WHERE deleted_at IS NOT NULL')
+      .run();
   });
 }

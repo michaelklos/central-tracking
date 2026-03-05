@@ -12,6 +12,13 @@ export function createMockApi(): CentralTrackingAPI {
       update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),
       reorder: vi.fn().mockResolvedValue(undefined),
+      batchUpdate: vi.fn().mockResolvedValue({ updatedCount: 0 }),
+      batchSoftDelete: vi.fn().mockResolvedValue({ deletedCount: 0 }),
+      getDeleted: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, hasMore: false }),
+      restore: vi.fn().mockResolvedValue({}),
+      batchRestore: vi.fn().mockResolvedValue({ restoredCount: 0 }),
+      purgeDeleted: vi.fn().mockResolvedValue(undefined),
+      emptyRecycleBin: vi.fn().mockResolvedValue(undefined),
     },
     timeEntries: {
       getByTask: vi.fn().mockResolvedValue([]),

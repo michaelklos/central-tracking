@@ -18,6 +18,7 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   todayTimeSeconds: 0,
   categoryIds: [],
   notes: '',
+  deletedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
   ...overrides,
@@ -49,6 +50,20 @@ const mockTaskContext = {
   createCategory: vi.fn(),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
+  deletedTasks: [],
+  deletedTasksTotal: 0,
+  deletedTasksHasMore: false,
+  deletedTasksLoaded: false,
+  batchMode: false,
+  selectedTaskIds: new Set<string>(),
+  toggleTaskSelection: vi.fn(),
+  selectAllTasks: vi.fn(),
+  deselectAllTasks: vi.fn(),
+  loadDeletedTasks: vi.fn().mockResolvedValue(undefined),
+  loadMoreDeletedTasks: vi.fn().mockResolvedValue(undefined),
+  restoreTask: vi.fn(),
+  purgeTask: vi.fn(),
+  emptyRecycleBin: vi.fn(),
 };
 
 const mockTimerContext = {

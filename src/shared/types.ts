@@ -24,6 +24,8 @@ export interface Task {
   categoryIds: string[];
   /** Free-form notes for the task */
   notes: string;
+  /** Soft-delete timestamp (null = active, non-null = in recycle bin) */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,9 +44,16 @@ export interface UpdateTaskInput {
   title?: string;
   description?: string;
   status?: TaskStatus;
+  source?: TaskSource;
   sortOrder?: number;
   categoryIds?: string[];
   notes?: string;
+}
+
+export interface BatchUpdateInput {
+  status?: TaskStatus;
+  source?: TaskSource;
+  categoryIds?: string[];
 }
 
 // ─── Time Entry ──────────────────────────────────────────────────────────────
@@ -214,6 +223,13 @@ export interface CentralTrackingAPI {
     update(id: string, input: UpdateTaskInput): Promise<Task>;
     delete(id: string): Promise<void>;
     reorder(orderedIds: string[]): Promise<void>;
+    batchUpdate(ids: string[], input: BatchUpdateInput): Promise<{ updatedCount: number }>;
+    batchSoftDelete(ids: string[]): Promise<{ deletedCount: number }>;
+    getDeleted(params?: PaginationParams): Promise<PaginatedResponse<Task>>;
+    restore(id: string): Promise<Task>;
+    batchRestore(ids: string[]): Promise<{ restoredCount: number }>;
+    purgeDeleted(id: string): Promise<void>;
+    emptyRecycleBin(): Promise<void>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;

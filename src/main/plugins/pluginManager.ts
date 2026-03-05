@@ -13,6 +13,7 @@ interface TaskRow {
   external_id: string | null;
   plugin_id: string | null;
   sort_order: number;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -98,6 +99,7 @@ export class PluginManager {
       todayTimeSeconds: 0,
       categoryIds: [],
       notes: '',
+      deletedAt: row.deleted_at ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));

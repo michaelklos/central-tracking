@@ -5,6 +5,7 @@ import { useTimerContext } from '../context/TimerContext';
 import { formatDuration } from '../utils/time';
 import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
+import { BatchActionBar } from './BatchActionBar';
 import type { ImportPreview, ImportPreviewItem, ImportResult } from '../../shared/types';
 import './Sidebar.css';
 
@@ -46,7 +47,7 @@ const SOURCE_OPTIONS = [
 ];
 
 export function Sidebar() {
-  const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks } = useTaskContext();
+  const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
   const { activeEntry, elapsedSeconds, totalTodaySeconds } = useTimerContext();
   const [collapsed, setCollapsed] = useState(getStoredCollapsed);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
@@ -172,89 +173,96 @@ export function Sidebar() {
       {!collapsed && (
         <div className="sidebar__content">
           {activeTab === 'tasks' && !isOnReports && (
-            <>
-              <div className="sidebar__section">
-                <h3 className="sidebar__section-title">Categories</h3>
-                <ul className="sidebar__cat-list">
-                  {categories.map((cat) => (
-                    <li key={cat.id} className="sidebar__cat-item">
-                      <span className="sidebar__cat-dot" style={{ background: cat.color }} />
-                      <span className="sidebar__cat-name">{cat.name}</span>
-                      <button
-                        className="sidebar__cat-delete"
-                        onClick={() => deleteCategory(cat.id)}
-                        title="Delete category"
-                      >
-                        &times;
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="sidebar__cat-form">
-                  <input
-                    type="text"
-                    placeholder="New category..."
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
-                  />
-                  <input
-                    type="color"
-                    value={newCatColor}
-                    onChange={(e) => setNewCatColor(e.target.value)}
-                    className="sidebar__cat-color"
-                  />
-                  <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
+            batchMode ? (
+              <BatchActionBar />
+            ) : (
+              <>
+                <div className="sidebar__section">
+                  <h3 className="sidebar__section-title">Categories</h3>
+                  <ul className="sidebar__cat-list">
+                    {categories.map((cat) => (
+                      <li key={cat.id} className="sidebar__cat-item">
+                        <span className="sidebar__cat-dot" style={{ background: cat.color }} />
+                        <span className="sidebar__cat-name">{cat.name}</span>
+                        <button
+                          className="sidebar__cat-delete"
+                          onClick={() => deleteCategory(cat.id)}
+                          title="Delete category"
+                        >
+                          &times;
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="sidebar__cat-form">
+                    <input
+                      type="text"
+                      placeholder="New category..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
+                    />
+                    <input
+                      type="color"
+                      value={newCatColor}
+                      onChange={(e) => setNewCatColor(e.target.value)}
+                      className="sidebar__cat-color"
+                    />
+                    <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="sidebar__section">
-                <h3 className="sidebar__section-title">Filter</h3>
-                <input
-                  className="sidebar__search"
-                  type="text"
-                  placeholder="Search tasks..."
-                  value={filter.search ?? ''}
-                  onChange={(e) => updateFilter({ search: e.target.value })}
-                />
-                <select
-                  value={filter.status ?? ''}
-                  onChange={(e) => updateFilter({ status: e.target.value || undefined })}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={filter.source ?? ''}
-                  onChange={(e) => updateFilter({ source: e.target.value || undefined })}
-                >
-                  {SOURCE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={filter.categoryId ?? ''}
-                  onChange={(e) => updateFilter({ categoryId: e.target.value || undefined })}
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
+                <div className="sidebar__section">
+                  <h3 className="sidebar__section-title">Filter</h3>
+                  <input
+                    className="sidebar__search"
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={filter.search ?? ''}
+                    onChange={(e) => updateFilter({ search: e.target.value })}
+                  />
+                  <select
+                    value={filter.status ?? ''}
+                    onChange={(e) => updateFilter({ status: e.target.value || undefined })}
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filter.source ?? ''}
+                    onChange={(e) => updateFilter({ source: e.target.value || undefined })}
+                  >
+                    {SOURCE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filter.categoryId ?? ''}
+                    onChange={(e) => updateFilter({ categoryId: e.target.value || undefined })}
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="sidebar__import">
-                <button className="sidebar__import-btn" onClick={handleImportClick}>
-                  Import Tasks
-                </button>
-                {importResult && (
-                  <p className="sidebar__import-result">
-                    Imported {importResult.created}, skipped {importResult.skipped}
-                  </p>
-                )}
-              </div>
-            </>
+                <div className="sidebar__import">
+                  <button className="sidebar__import-btn" onClick={handleImportClick}>
+                    Import Tasks
+                  </button>
+                  <button className="sidebar__batch-btn" onClick={enterBatchMode}>
+                    Select Tasks
+                  </button>
+                  {importResult && (
+                    <p className="sidebar__import-result">
+                      Imported {importResult.created}, skipped {importResult.skipped}
+                    </p>
+                  )}
+                </div>
+              </>
+            )
           )}
 
           {activeTab === 'settings' && !isOnReports && (

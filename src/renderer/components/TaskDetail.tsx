@@ -4,6 +4,7 @@ import { useTimerContext } from '../context/TimerContext';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
 import { TimeEntryEditor } from './TimeEntryEditor';
 import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
+import { ConfirmDialog } from './ConfirmDialog';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import './TaskDetail.css';
 
@@ -34,6 +35,7 @@ export function TaskDetail() {
   const [notesDraft, setNotesDraft] = useState('');
   const [defaultStartTime, setDefaultStartTime] = useState(new Date().toISOString());
   const defaultDurationSeconds = 1800;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
@@ -337,7 +339,17 @@ export function TaskDetail() {
             </div>
 
             <div className="task-detail__actions">
-              <button className="task-detail__delete-btn" onClick={() => deleteTask(task.id)}>
+              <button
+                className="task-detail__delete-btn"
+                onClick={() => {
+                  const confirmEnabled = localStorage.getItem('ct-option-confirm-delete') !== 'false';
+                  if (confirmEnabled) {
+                    setShowDeleteConfirm(true);
+                  } else {
+                    deleteTask(task.id);
+                  }
+                }}
+              >
                 Delete Task
               </button>
             </div>
@@ -451,6 +463,20 @@ export function TaskDetail() {
           </div>
         )}
       </div>
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Task"
+          message={`Move "${task.title}" to the recycle bin?`}
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={() => {
+            setShowDeleteConfirm(false);
+            deleteTask(task.id);
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,15 @@ const api = {
     update: (id: string, updates: unknown) => ipcRenderer.invoke('tasks:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('tasks:delete', id),
     reorder: (orderedIds: string[]) => ipcRenderer.invoke('tasks:reorder', orderedIds),
+    batchUpdate: (ids: string[], input: unknown) =>
+      ipcRenderer.invoke('tasks:batchUpdate', ids, input),
+    batchSoftDelete: (ids: string[]) => ipcRenderer.invoke('tasks:batchSoftDelete', ids),
+    getDeleted: (params?: { offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('tasks:getDeleted', params),
+    restore: (id: string) => ipcRenderer.invoke('tasks:restore', id),
+    batchRestore: (ids: string[]) => ipcRenderer.invoke('tasks:batchRestore', ids),
+    purgeDeleted: (id: string) => ipcRenderer.invoke('tasks:purgeDeleted', id),
+    emptyRecycleBin: () => ipcRenderer.invoke('tasks:emptyRecycleBin'),
   },
 
   // Time entries
