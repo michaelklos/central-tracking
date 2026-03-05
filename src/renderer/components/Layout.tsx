@@ -10,7 +10,7 @@ import './Layout.css';
 const STORAGE_KEY = 'central-tracking:detail-width';
 const DEFAULT_WIDTH = 500;
 const MIN_WIDTH = 350;
-const MAX_WIDTH_RATIO = 0.7;
+const TASK_LIST_MIN_WIDTH = 400;
 
 function getInitialWidth(): number {
   try {
@@ -43,7 +43,7 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
       const contentRect = contentRef.current?.getBoundingClientRect();
       const contentRight = contentRect ? contentRect.right : window.innerWidth;
       const contentWidth = contentRect ? contentRect.width : window.innerWidth;
-      const maxWidth = contentWidth * MAX_WIDTH_RATIO;
+      const maxWidth = contentWidth - TASK_LIST_MIN_WIDTH;
       const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, contentRight - moveEvent.clientX));
       setDetailWidth(newWidth);
     };
