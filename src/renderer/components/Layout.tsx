@@ -31,6 +31,7 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
   const { selectedTaskId } = useTaskContext();
   const [detailWidth, setDetailWidth] = useState(getInitialWidth);
   const isResizing = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,8 +40,11 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
     document.body.style.userSelect = 'none';
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const maxWidth = window.innerWidth * MAX_WIDTH_RATIO;
-      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, window.innerWidth - moveEvent.clientX));
+      const contentRect = contentRef.current?.getBoundingClientRect();
+      const contentRight = contentRect ? contentRect.right : window.innerWidth;
+      const contentWidth = contentRect ? contentRect.width : window.innerWidth;
+      const maxWidth = contentWidth * MAX_WIDTH_RATIO;
+      const newWidth = Math.min(maxWidth, Math.max(MIN_WIDTH, contentRight - moveEvent.clientX));
       setDetailWidth(newWidth);
     };
 
@@ -67,7 +71,7 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
       <Sidebar />
       <div className="layout__main">
         <TimerBar />
-        <div className="layout__content">
+        <div className="layout__content" ref={contentRef}>
           {view === 'reports' ? (
             <ReportView />
           ) : (
