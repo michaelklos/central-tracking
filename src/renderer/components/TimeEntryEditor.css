@@ -1,5 +1,7 @@
 .time-entry--editing {
   padding: 12px 10px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .time-entry--create {
@@ -31,6 +33,7 @@
 
 .time-entry-editor__datetime-row .time-entry-editor__row {
   flex: 1;
+  min-width: 0;
 }
 
 .time-entry-editor__row {
@@ -49,6 +52,7 @@
 
 .time-entry-editor__row input {
   flex: 1;
+  min-width: 0;
   font-size: 12px;
 }
 
