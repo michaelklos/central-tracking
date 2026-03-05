@@ -5,7 +5,7 @@ import { formatDuration } from '../utils/time';
 import './TimerBar.css';
 
 export function TimerBar() {
-  const { activeEntry, elapsedSeconds, totalTodaySeconds, stopTimer } = useTimerContext();
+  const { activeEntry, elapsedSeconds, stopTimer } = useTimerContext();
   const { tasks } = useTaskContext();
   const [pinned, setPinned] = useState(false);
 
@@ -20,7 +20,6 @@ export function TimerBar() {
   };
 
   const activeTask = activeEntry ? tasks.find((t) => t.id === activeEntry.taskId) : null;
-  const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
 
   return (
     <div className={`timer-bar ${activeEntry ? 'timer-bar--active' : ''}`}>
@@ -36,10 +35,6 @@ export function TimerBar() {
         )}
       </div>
       <div className="timer-bar__right">
-        <span className="timer-bar__today">
-          <span className="timer-bar__today-label">Today:</span>{' '}
-          <span className="timer-bar__today-value">{formatDuration(todayDisplay)}</span>
-        </span>
         {activeEntry && (
           <>
             <span className="timer-bar__elapsed">{formatDuration(elapsedSeconds)}</span>

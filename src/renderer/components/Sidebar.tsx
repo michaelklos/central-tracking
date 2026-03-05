@@ -1,10 +1,33 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
+import { useTimerContext } from '../context/TimerContext';
+import { formatDuration } from '../utils/time';
 import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
 import type { ImportPreview, ImportPreviewItem, ImportResult } from '../../shared/types';
 import './Sidebar.css';
+
+type SidebarTab = 'tasks' | 'settings';
+
+const COLLAPSE_KEY = 'central-tracking:sidebar-collapsed';
+const TAB_KEY = 'central-tracking:sidebar-tab';
+
+function getStoredCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function getStoredTab(): SidebarTab {
+  try {
+    const stored = localStorage.getItem(TAB_KEY);
+    if (stored === 'tasks' || stored === 'settings') return stored;
+  } catch { /* ignore */ }
+  return 'tasks';
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -24,6 +47,9 @@ const SOURCE_OPTIONS = [
 
 export function Sidebar() {
   const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks } = useTaskContext();
+  const { activeEntry, elapsedSeconds, totalTodaySeconds } = useTimerContext();
+  const [collapsed, setCollapsed] = useState(getStoredCollapsed);
+  const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#6366f1');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
@@ -37,6 +63,29 @@ export function Sidebar() {
   } catch {
     // Not inside a router (e.g., in tests)
   }
+
+  const isOnReports = location?.pathname.includes('/reports') ?? false;
+  const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
+
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem(COLLAPSE_KEY, String(next)); } catch { /* ignore */ }
+  };
+
+  const handleTabClick = (tab: SidebarTab) => {
+    setActiveTab(tab);
+    try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ }
+    if (navigate && isOnReports) {
+      navigate('/');
+    }
+  };
+
+  const handleReportsClick = () => {
+    if (navigate) {
+      navigate('/reports');
+    }
+  };
 
   const handleCreateCategory = async () => {
     const name = newCatName.trim();
@@ -79,115 +128,150 @@ export function Sidebar() {
     setFilter({ ...filter, ...partial });
   };
 
-  return (
-    <aside className="sidebar">
-      <div className="sidebar__header">
-        <h1 className="sidebar__title">Central Tracking</h1>
-      </div>
+  // Determine which tab icon is visually active
+  const tasksTabActive = !isOnReports && activeTab === 'tasks';
+  const reportsTabActive = isOnReports;
+  const settingsTabActive = !isOnReports && activeTab === 'settings';
 
-      {navigate && (
-        <div className="sidebar__nav">
-          <button
-            className={`sidebar__nav-btn ${!location?.pathname.includes('/reports') ? 'sidebar__nav-btn--active' : ''}`}
-            onClick={() => navigate!('/')}
-          >
-            Tasks
-          </button>
-          <button
-            className={`sidebar__nav-btn ${location?.pathname.includes('/reports') ? 'sidebar__nav-btn--active' : ''}`}
-            onClick={() => navigate!('/reports')}
-          >
-            Reports
-          </button>
+  return (
+    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
+      {!collapsed && (
+        <div className="sidebar__header">
+          <h1 className="sidebar__title">Central Tracking</h1>
+          <div className="sidebar__today">
+            <span className="sidebar__today-label">Today:</span>{' '}
+            <span className="sidebar__today-value">{formatDuration(todayDisplay)}</span>
+          </div>
         </div>
       )}
 
-      <div className="sidebar__import">
-        <button className="sidebar__import-btn" onClick={handleImportClick}>
-          Import Tasks
+      <div className={`sidebar__tabs ${collapsed ? 'sidebar__tabs--vertical' : ''}`}>
+        <button
+          className={`sidebar__tab ${tasksTabActive ? 'sidebar__tab--active' : ''}`}
+          onClick={() => handleTabClick('tasks')}
+          title="Tasks"
+        >
+          {'\u2630'}
         </button>
-        {importResult && (
-          <p className="sidebar__import-result">
-            Imported {importResult.created}, skipped {importResult.skipped}
-          </p>
-        )}
+        <button
+          className={`sidebar__tab ${reportsTabActive ? 'sidebar__tab--active' : ''}`}
+          onClick={handleReportsClick}
+          title="Reports"
+        >
+          {'\u25A6'}
+        </button>
+        <button
+          className={`sidebar__tab ${settingsTabActive ? 'sidebar__tab--active' : ''}`}
+          onClick={() => handleTabClick('settings')}
+          title="Settings"
+        >
+          {'\u2699'}
+        </button>
       </div>
 
-      <div className="sidebar__section">
-        <h3 className="sidebar__section-title">Filter</h3>
-        <input
-          className="sidebar__search"
-          type="text"
-          placeholder="Search tasks..."
-          value={filter.search ?? ''}
-          onChange={(e) => updateFilter({ search: e.target.value })}
-        />
+      {!collapsed && (
+        <div className="sidebar__content">
+          {activeTab === 'tasks' && !isOnReports && (
+            <>
+              <div className="sidebar__section">
+                <h3 className="sidebar__section-title">Categories</h3>
+                <ul className="sidebar__cat-list">
+                  {categories.map((cat) => (
+                    <li key={cat.id} className="sidebar__cat-item">
+                      <span className="sidebar__cat-dot" style={{ background: cat.color }} />
+                      <span className="sidebar__cat-name">{cat.name}</span>
+                      <button
+                        className="sidebar__cat-delete"
+                        onClick={() => deleteCategory(cat.id)}
+                        title="Delete category"
+                      >
+                        &times;
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="sidebar__cat-form">
+                  <input
+                    type="text"
+                    placeholder="New category..."
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
+                  />
+                  <input
+                    type="color"
+                    value={newCatColor}
+                    onChange={(e) => setNewCatColor(e.target.value)}
+                    className="sidebar__cat-color"
+                  />
+                  <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
+                </div>
+              </div>
 
-        <select
-          value={filter.status ?? ''}
-          onChange={(e) => updateFilter({ status: e.target.value || undefined })}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+              <div className="sidebar__section">
+                <h3 className="sidebar__section-title">Filter</h3>
+                <input
+                  className="sidebar__search"
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={filter.search ?? ''}
+                  onChange={(e) => updateFilter({ search: e.target.value })}
+                />
+                <select
+                  value={filter.status ?? ''}
+                  onChange={(e) => updateFilter({ status: e.target.value || undefined })}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={filter.source ?? ''}
+                  onChange={(e) => updateFilter({ source: e.target.value || undefined })}
+                >
+                  {SOURCE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={filter.categoryId ?? ''}
+                  onChange={(e) => updateFilter({ categoryId: e.target.value || undefined })}
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
 
-        <select
-          value={filter.source ?? ''}
-          onChange={(e) => updateFilter({ source: e.target.value || undefined })}
-        >
-          {SOURCE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+              <div className="sidebar__import">
+                <button className="sidebar__import-btn" onClick={handleImportClick}>
+                  Import Tasks
+                </button>
+                {importResult && (
+                  <p className="sidebar__import-result">
+                    Imported {importResult.created}, skipped {importResult.skipped}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
 
-        <select
-          value={filter.categoryId ?? ''}
-          onChange={(e) => updateFilter({ categoryId: e.target.value || undefined })}
-        >
-          <option value="">All Categories</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="sidebar__section">
-        <h3 className="sidebar__section-title">Categories</h3>
-        <ul className="sidebar__cat-list">
-          {categories.map((cat) => (
-            <li key={cat.id} className="sidebar__cat-item">
-              <span className="sidebar__cat-dot" style={{ background: cat.color }} />
-              <span className="sidebar__cat-name">{cat.name}</span>
-              <button
-                className="sidebar__cat-delete"
-                onClick={() => deleteCategory(cat.id)}
-                title="Delete category"
-              >
-                &times;
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="sidebar__cat-form">
-          <input
-            type="text"
-            placeholder="New category..."
-            value={newCatName}
-            onChange={(e) => setNewCatName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
-          />
-          <input
-            type="color"
-            value={newCatColor}
-            onChange={(e) => setNewCatColor(e.target.value)}
-            className="sidebar__cat-color"
-          />
-          <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
+          {activeTab === 'settings' && !isOnReports && (
+            <OptionsMenu />
+          )}
         </div>
-      </div>
+      )}
 
-      <OptionsMenu />
+      <div className="sidebar__footer">
+        <button
+          className="sidebar__collapse-btn"
+          onClick={toggleCollapse}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? '\u203A' : '\u2039'}
+        </button>
+      </div>
 
       {importPreview && (
         <ImportPreviewDialog

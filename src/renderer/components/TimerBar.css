@@ -48,24 +48,6 @@
   font-weight: 600;
 }
 
-.timer-bar__today {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.timer-bar__today-label {
-  color: var(--color-text-secondary);
-}
-
-.timer-bar__today-value {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
 .timer-bar__elapsed {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 14px;
