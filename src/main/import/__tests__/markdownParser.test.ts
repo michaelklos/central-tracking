@@ -86,16 +86,19 @@ describe('parseMarkdownImport', () => {
     expect(items[1].date).toBe('2026-03-05');
   });
 
-  it('computes correct start and end datetimes', () => {
+  it('computes correct start and end datetimes in local time', () => {
     const input = `# 2026-03-04
 * Work item: 09:30 (1h 30m)`;
 
     const { items } = parseMarkdownImport(input);
-    expect(items[0].startDateTime).toBe('2026-03-04T09:30:00.000Z');
-    // 1h 30m = 5400s after 09:30 = 11:00
+    // Start should be 09:30 local time
+    const startDate = new Date(items[0].startDateTime);
+    expect(startDate.getHours()).toBe(9);
+    expect(startDate.getMinutes()).toBe(30);
+    // 1h 30m = 5400s after 09:30 = 11:00 local
     const endDate = new Date(items[0].endDateTime);
-    expect(endDate.getUTCHours()).toBe(11);
-    expect(endDate.getUTCMinutes()).toBe(0);
+    expect(endDate.getHours()).toBe(11);
+    expect(endDate.getMinutes()).toBe(0);
   });
 
   it('returns error for task before any date header', () => {

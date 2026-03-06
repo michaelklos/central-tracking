@@ -60,8 +60,11 @@ export function parseMarkdownImport(content: string): ParseResult {
     const externalId = ticket || null;
     const { source, pluginId } = detectSource(ticket);
 
-    const startDateTime = `${currentDate}T${startTimeStr.padStart(5, '0')}:00.000Z`;
-    const endDate = new Date(new Date(startDateTime).getTime() + durationSeconds * 1000);
+    const [year, month, day] = currentDate.split('-').map(Number);
+    const [hours, minutes] = startTimeStr.padStart(5, '0').split(':').map(Number);
+    const startDateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const startDateTime = startDateObj.toISOString();
+    const endDate = new Date(startDateObj.getTime() + durationSeconds * 1000);
     const endDateTime = endDate.toISOString();
 
     items.push({
