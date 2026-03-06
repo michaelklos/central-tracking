@@ -4,6 +4,7 @@ import { TaskList } from './TaskList';
 import { TaskDetail } from './TaskDetail';
 import { TimerBar } from './TimerBar';
 import { ReportView } from './ReportView';
+import { TimelineView } from './TimelineView';
 import { useTaskContext } from '../context/TaskContext';
 import './Layout.css';
 
@@ -24,7 +25,7 @@ function getInitialWidth(): number {
 }
 
 interface LayoutProps {
-  view?: 'tasks' | 'reports';
+  view?: 'tasks' | 'reports' | 'timeline';
 }
 
 export function Layout({ view = 'tasks' }: LayoutProps) {
@@ -74,6 +75,8 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
         <div className="layout__content" ref={contentRef}>
           {view === 'reports' ? (
             <ReportView />
+          ) : view === 'timeline' ? (
+            <TimelineView />
           ) : (
             <>
               <TaskList />

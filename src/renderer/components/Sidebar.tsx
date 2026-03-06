@@ -66,6 +66,8 @@ export function Sidebar() {
   }
 
   const isOnReports = location?.pathname.includes('/reports') ?? false;
+  const isOnTimeline = location?.pathname.includes('/timeline') ?? false;
+  const isOnSubpage = isOnReports || isOnTimeline;
   const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
 
   const toggleCollapse = () => {
@@ -77,7 +79,7 @@ export function Sidebar() {
   const handleTabClick = (tab: SidebarTab) => {
     setActiveTab(tab);
     try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ }
-    if (navigate && isOnReports) {
+    if (navigate && isOnSubpage) {
       navigate('/');
     }
   };
@@ -85,6 +87,12 @@ export function Sidebar() {
   const handleReportsClick = () => {
     if (navigate) {
       navigate('/reports');
+    }
+  };
+
+  const handleTimelineClick = () => {
+    if (navigate) {
+      navigate('/timeline');
     }
   };
 
@@ -130,9 +138,10 @@ export function Sidebar() {
   };
 
   // Determine which tab icon is visually active
-  const tasksTabActive = !isOnReports && activeTab === 'tasks';
+  const tasksTabActive = !isOnSubpage && activeTab === 'tasks';
   const reportsTabActive = isOnReports;
-  const settingsTabActive = !isOnReports && activeTab === 'settings';
+  const timelineTabActive = isOnTimeline;
+  const settingsTabActive = !isOnSubpage && activeTab === 'settings';
 
   return (
     <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
@@ -155,6 +164,13 @@ export function Sidebar() {
           {'\u2630'}
         </button>
         <button
+          className={`sidebar__tab ${timelineTabActive ? 'sidebar__tab--active' : ''}`}
+          onClick={handleTimelineClick}
+          title="Timeline"
+        >
+          {'\u23F1'}
+        </button>
+        <button
           className={`sidebar__tab ${reportsTabActive ? 'sidebar__tab--active' : ''}`}
           onClick={handleReportsClick}
           title="Reports"
@@ -172,7 +188,7 @@ export function Sidebar() {
 
       {!collapsed && (
         <div className="sidebar__content">
-          {activeTab === 'tasks' && !isOnReports && (
+          {activeTab === 'tasks' && !isOnSubpage && (
             batchMode ? (
               <BatchActionBar />
             ) : (
@@ -265,7 +281,7 @@ export function Sidebar() {
             )
           )}
 
-          {activeTab === 'settings' && !isOnReports && (
+          {activeTab === 'settings' && !isOnSubpage && (
             <OptionsMenu />
           )}
         </div>

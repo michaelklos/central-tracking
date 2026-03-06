@@ -19,6 +19,24 @@ function getOption(key: string, defaultValue: boolean): boolean {
   return stored === 'true';
 }
 
+export function getStringSetting(key: string, defaultValue: string): string {
+  return localStorage.getItem(key) ?? defaultValue;
+}
+
+interface TimelineSetting {
+  key: string;
+  label: string;
+  type: 'time' | 'number' | 'text';
+  defaultValue: string;
+}
+
+const TIMELINE_SETTINGS: TimelineSetting[] = [
+  { key: 'ct-option-work-hours-start', label: 'Work hours start', type: 'time', defaultValue: '08:00' },
+  { key: 'ct-option-work-hours-end', label: 'Work hours end', type: 'time', defaultValue: '17:00' },
+  { key: 'ct-option-min-gap-minutes', label: 'Min gap (minutes)', type: 'number', defaultValue: '15' },
+  { key: 'ct-option-gap-label', label: 'Gap label', type: 'text', defaultValue: 'gap' },
+];
+
 export function OptionsMenu() {
   const [values, setValues] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -28,10 +46,23 @@ export function OptionsMenu() {
     return initial;
   });
 
+  const [timelineValues, setTimelineValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const s of TIMELINE_SETTINGS) {
+      initial[s.key] = getStringSetting(s.key, s.defaultValue);
+    }
+    return initial;
+  });
+
   const toggleOption = (key: string) => {
     const newValue = !values[key];
     setValues({ ...values, [key]: newValue });
     localStorage.setItem(key, String(newValue));
+  };
+
+  const updateTimelineSetting = (key: string, value: string) => {
+    setTimelineValues({ ...timelineValues, [key]: value });
+    localStorage.setItem(key, value);
   };
 
   return (
@@ -46,6 +77,22 @@ export function OptionsMenu() {
               onChange={() => toggleOption(opt.key)}
             />
             <span>{opt.label}</span>
+          </label>
+        ))}
+      </div>
+
+      <h3 className="options-menu__title options-menu__title--section">Timeline</h3>
+      <div className="options-menu__list">
+        {TIMELINE_SETTINGS.map((setting) => (
+          <label key={setting.key} className="options-menu__field">
+            <span className="options-menu__field-label">{setting.label}</span>
+            <input
+              type={setting.type}
+              value={timelineValues[setting.key]}
+              onChange={(e) => updateTimelineSetting(setting.key, e.target.value)}
+              className="options-menu__field-input"
+              {...(setting.type === 'number' ? { min: 1, max: 120 } : {})}
+            />
           </label>
         ))}
       </div>

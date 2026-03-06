@@ -150,6 +150,21 @@ export interface TimeEntryReport {
   totalSeconds: number;
 }
 
+export interface SummaryReportEntry {
+  date: string;
+  taskId: string;
+  taskTitle: string;
+  taskSource: TaskSource;
+  taskStatus: TaskStatus;
+  categoryIds: string[];
+  totalSeconds: number;
+}
+
+export interface TimeEntryWithTask extends TimeEntry {
+  taskTitle: string;
+  taskSource: TaskSource;
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export interface PluginInfo {
@@ -242,6 +257,8 @@ export interface CentralTrackingAPI {
     getTodayTotal(): Promise<number>;
     getByDateRange(start: string, end: string): Promise<TimeEntry[]>;
     getReport(start: string, end: string): Promise<TimeEntryReport[]>;
+    getSummaryReport(start: string, end: string): Promise<SummaryReportEntry[]>;
+    getByDateRangeWithTasks(start: string, end: string): Promise<TimeEntryWithTask[]>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;

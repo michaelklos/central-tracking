@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse } from '../../shared/types';
+import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus } from '../../shared/types';
 
 interface TimeEntryRow {
   id: string;
@@ -204,6 +204,68 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
       taskId: r.task_id,
       taskTitle: r.task_title,
       totalSeconds: r.total_seconds,
+    }));
+  });
+
+  ipcMain.handle('timeEntries:getSummaryReport', (_event, start: string, end: string) => {
+    const rows = db.instance
+      .prepare(
+        `SELECT
+          date(te.start_time) as date,
+          te.task_id,
+          t.title as task_title,
+          t.source as task_source,
+          t.status as task_status,
+          COALESCE(SUM(
+            CASE WHEN te.end_time IS NOT NULL
+              THEN CAST((julianday(te.end_time) - julianday(te.start_time)) * 86400 AS INTEGER)
+              ELSE CAST((julianday('now') - julianday(te.start_time)) * 86400 AS INTEGER)
+            END
+          ), 0) as total_seconds
+        FROM time_entries te
+        JOIN tasks t ON t.id = te.task_id
+        WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
+        GROUP BY date(te.start_time), te.task_id
+        ORDER BY date(te.start_time)`
+      )
+      .all(start, end) as { date: string; task_id: string; task_title: string; task_source: string; task_status: string; total_seconds: number }[];
+
+    // Batch-fetch category IDs for all unique task IDs
+    const taskIds = [...new Set(rows.map((r) => r.task_id))];
+    const categoryMap: Record<string, string[]> = {};
+    for (const taskId of taskIds) {
+      const cats = db.instance
+        .prepare('SELECT category_id FROM task_categories WHERE task_id = ?')
+        .all(taskId) as { category_id: string }[];
+      categoryMap[taskId] = cats.map((c) => c.category_id);
+    }
+
+    return rows.map((r): SummaryReportEntry => ({
+      date: r.date,
+      taskId: r.task_id,
+      taskTitle: r.task_title,
+      taskSource: r.task_source as TaskSource,
+      taskStatus: r.task_status as TaskStatus,
+      categoryIds: categoryMap[r.task_id] ?? [],
+      totalSeconds: r.total_seconds,
+    }));
+  });
+
+  ipcMain.handle('timeEntries:getByDateRangeWithTasks', (_event, start: string, end: string) => {
+    const rows = db.instance
+      .prepare(
+        `SELECT te.*, t.title as task_title, t.source as task_source
+        FROM time_entries te
+        JOIN tasks t ON t.id = te.task_id
+        WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
+        ORDER BY te.start_time ASC`
+      )
+      .all(start, end) as (TimeEntryRow & { task_title: string; task_source: string })[];
+
+    return rows.map((r): TimeEntryWithTask => ({
+      ...rowToTimeEntry(r),
+      taskTitle: r.task_title,
+      taskSource: r.task_source as TaskSource,
     }));
   });
 

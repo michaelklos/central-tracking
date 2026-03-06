@@ -31,6 +31,8 @@ export function createMockApi(): CentralTrackingAPI {
       getTodayTotal: vi.fn().mockResolvedValue(0),
       getByDateRange: vi.fn().mockResolvedValue([]),
       getReport: vi.fn().mockResolvedValue([]),
+      getSummaryReport: vi.fn().mockResolvedValue([]),
+      getByDateRangeWithTasks: vi.fn().mockResolvedValue([]),
     },
     comments: {
       getByTask: vi.fn().mockResolvedValue([]),
