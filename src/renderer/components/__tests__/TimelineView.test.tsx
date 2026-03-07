@@ -4,6 +4,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { TimelineView } from '../TimelineView';
 import type { TimeEntryWithTask } from '../../../shared/types';
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock('../../context/TaskContext', () => ({
+  useTaskContext: () => ({
+    selectTask: vi.fn(),
+    createTask: vi.fn().mockResolvedValue({ id: 'new-task' }),
+    setPendingTimeEntry: vi.fn(),
+  }),
+}));
+
 function localTime(hours: number, minutes: number = 0): string {
   return new Date(2026, 2, 6, hours, minutes, 0, 0).toISOString();
 }

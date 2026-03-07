@@ -13,6 +13,7 @@ export interface TimelineItem {
   endTime: Date;
   durationSeconds: number;
   // entry fields
+  taskId?: string;
   taskTitle?: string;
   taskSource?: string;
   entryId?: string;
@@ -92,6 +93,7 @@ export function buildTimeline(entries: TimeEntryWithTask[], options: TimelineOpt
       startTime: entryStart,
       endTime: entryEnd,
       durationSeconds: Math.floor((entryEnd.getTime() - entryStart.getTime()) / 1000),
+      taskId: entry.taskId,
       taskTitle: entry.taskTitle,
       taskSource: entry.taskSource,
       entryId: entry.id,

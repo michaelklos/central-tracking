@@ -38,6 +38,8 @@ const mockTaskContext = {
   createCategory: vi.fn(),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
+  pendingTimeEntry: null,
+  setPendingTimeEntry: vi.fn(),
 };
 
 const mockTimerContext = {

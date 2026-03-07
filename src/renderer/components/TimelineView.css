@@ -45,7 +45,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.timeline-view__item:hover {
+  background-color: var(--color-hover);
+}
+
+.timeline-view__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .timeline-view__time {

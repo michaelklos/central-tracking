@@ -17,7 +17,7 @@ const TIME_ENTRIES_LIMIT = 20;
 const AUTO_LOAD_MAX_BATCHES = 3;
 
 export function TaskDetail() {
-  const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories } = useTaskContext();
+  const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
@@ -34,7 +34,7 @@ export function TaskDetail() {
   const [descDraft, setDescDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
   const [defaultStartTime, setDefaultStartTime] = useState(new Date().toISOString());
-  const defaultDurationSeconds = 1800;
+  const [defaultDurationSeconds, setDefaultDurationSeconds] = useState(1800);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Track which task the entries are loaded for to prevent stale appends
@@ -104,6 +104,18 @@ export function TaskDetail() {
     loadComments();
     loadSmartDefaults();
   }, [task?.id, loadTimeEntries, loadComments, loadSmartDefaults]);
+
+  useEffect(() => {
+    if (pendingTimeEntry && selectedTaskId) {
+      setActiveTab('time');
+      setDefaultStartTime(pendingTimeEntry.startTime);
+      const duration = Math.floor(
+        (new Date(pendingTimeEntry.endTime).getTime() - new Date(pendingTimeEntry.startTime).getTime()) / 1000
+      );
+      setDefaultDurationSeconds(duration > 0 ? duration : 1800);
+      setPendingTimeEntry(null);
+    }
+  }, [pendingTimeEntry, selectedTaskId, setPendingTimeEntry]);
 
   if (!task) return null;
 

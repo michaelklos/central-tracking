@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils/timeline';
+import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
 import type { TimeEntryWithTask, TaskSource } from '../../shared/types';
 import './TimelineView.css';
@@ -22,6 +24,8 @@ function formatTime(date: Date): string {
 }
 
 export function TimelineView() {
+  const navigate = useNavigate();
+  const { selectTask, createTask, setPendingTimeEntry } = useTaskContext();
   const [entries, setEntries] = useState<TimeEntryWithTask[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,21 @@ export function TimelineView() {
     .filter((i) => i.type === 'gap')
     .reduce((sum, i) => sum + i.durationSeconds, 0);
 
+  const handleItemClick = async (item: TimelineItem) => {
+    if (item.type === 'gap') {
+      const task = await createTask({ title: 'New task', source: 'ad-hoc' });
+      selectTask(task.id);
+      setPendingTimeEntry({
+        startTime: item.startTime.toISOString(),
+        endTime: item.endTime.toISOString(),
+      });
+      navigate('/');
+    } else if (item.taskId) {
+      selectTask(item.taskId);
+      navigate('/');
+    }
+  };
+
   if (loading) {
     return (
       <div className="timeline-view">
@@ -91,6 +110,10 @@ export function TimelineView() {
             <div
               key={index}
               className={`timeline-view__item ${item.type === 'gap' ? 'timeline-view__item--gap' : 'timeline-view__item--entry'}`}
+              onClick={() => handleItemClick(item)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleItemClick(item); } }}
+              role="button"
+              tabIndex={0}
             >
               <span className="timeline-view__time">{formatTime(item.startTime)}</span>
               <span className="timeline-view__rail">&#x2503;</span>

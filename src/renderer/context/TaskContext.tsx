@@ -67,6 +67,9 @@ interface TaskContextValue {
   createCategory(input: CreateCategoryInput): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
   refreshCategories(): Promise<void>;
+
+  pendingTimeEntry: { startTime: string; endTime: string } | null;
+  setPendingTimeEntry(entry: { startTime: string; endTime: string } | null): void;
 }
 
 export interface TaskFilter {
@@ -105,6 +108,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>({});
+  const [pendingTimeEntry, setPendingTimeEntry] = useState<{ startTime: string; endTime: string } | null>(null);
 
   // Combined view of all loaded tasks (for TaskDetail lookup by ID)
   const tasks = useMemo(() => [...activeTasks, ...doneTasks], [activeTasks, doneTasks]);
@@ -393,6 +397,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     createCategory,
     deleteCategory,
     refreshCategories,
+    pendingTimeEntry,
+    setPendingTimeEntry,
   };
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
