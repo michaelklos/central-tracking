@@ -1,17 +1,33 @@
 .sidebar {
-  width: 240px;
-  min-width: 240px;
+  flex-shrink: 0;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.2s ease, min-width 0.2s ease;
+  position: relative;
 }
 
 .sidebar--collapsed {
-  width: 40px;
-  min-width: 40px;
+  width: 40px !important;
+}
+
+/* Resize handle on right edge */
+.sidebar__resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.sidebar__resize-handle:hover,
+.sidebar__resize-handle:active {
+  background: var(--color-primary);
 }
 
 /* Header */

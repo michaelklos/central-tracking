@@ -12,6 +12,8 @@
 
 .date-range-picker__inputs input {
   font-size: 13px;
+  min-width: 0;
+  flex: 1;
 }
 
 .date-range-picker__separator {

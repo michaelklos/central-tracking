@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
@@ -15,6 +15,11 @@ type SidebarTab = 'tasks' | 'settings';
 
 const COLLAPSE_KEY = 'central-tracking:sidebar-collapsed';
 const TAB_KEY = 'central-tracking:sidebar-tab';
+const WIDTH_KEY = 'central-tracking:sidebar-width';
+const COLLAPSED_WIDTH = 40;
+const DEFAULT_WIDTH = 280;
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 500;
 
 function getStoredCollapsed(): boolean {
   try {
@@ -22,6 +27,17 @@ function getStoredCollapsed(): boolean {
   } catch {
     return false;
   }
+}
+
+function getStoredWidth(): number {
+  try {
+    const stored = localStorage.getItem(WIDTH_KEY);
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) return parsed;
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_WIDTH;
 }
 
 function getStoredTab(): SidebarTab {
@@ -65,6 +81,8 @@ export function Sidebar() {
     // Not inside a ReportProvider (e.g., in tests)
   }
   const [collapsed, setCollapsed] = useState(getStoredCollapsed);
+  const [sidebarWidth, setSidebarWidth] = useState(getStoredWidth);
+  const isResizing = useRef(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#6366f1');
@@ -90,6 +108,35 @@ export function Sidebar() {
     setCollapsed(next);
     try { localStorage.setItem(COLLAPSE_KEY, String(next)); } catch { /* ignore */ }
   };
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, moveEvent.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WIDTH_KEY, String(Math.round(sidebarWidth)));
+    } catch { /* ignore */ }
+  }, [sidebarWidth]);
 
   const handleTabClick = (tab: SidebarTab) => {
     setActiveTab(tab);
@@ -159,7 +206,10 @@ export function Sidebar() {
   const settingsTabActive = !isOnSubpage && activeTab === 'settings';
 
   return (
-    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
+    <aside
+      className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}
+      style={{ width: collapsed ? COLLAPSED_WIDTH : sidebarWidth }}
+    >
       {!collapsed && (
         <div className="sidebar__header">
           <h1 className="sidebar__title">Central Tracking</h1>
@@ -377,6 +427,10 @@ export function Sidebar() {
           {collapsed ? '\u203A' : '\u2039'}
         </button>
       </div>
+
+      {!collapsed && (
+        <div className="sidebar__resize-handle" onMouseDown={handleResizeStart} />
+      )}
 
       {importPreview && (
         <ImportPreviewDialog
