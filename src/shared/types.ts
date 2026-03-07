@@ -126,6 +126,10 @@ export interface UpdateCategoryInput {
   color?: string;
 }
 
+// ─── Sort ───────────────────────────────────────────────────────────────────
+
+export type TaskSortBy = 'manual' | 'recent' | 'created' | 'alphabetical' | 'most-time-today';
+
 // ─── Pagination ─────────────────────────────────────────────────────────────
 
 export interface PaginatedResponse<T> {
@@ -140,6 +144,10 @@ export interface PaginationParams {
   offset?: number;
   limit?: number;
 }
+
+// ─── Report Mode ────────────────────────────────────────────────────────────
+
+export type ReportMode = 'chart' | 'summary' | 'categories';
 
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
@@ -232,8 +240,8 @@ export interface CentralTrackingAPI {
   tasks: {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
-    getActive(params?: PaginationParams): Promise<PaginatedResponse<Task>>;
-    getDone(params?: PaginationParams): Promise<PaginatedResponse<Task>>;
+    getActive(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
+    getDone(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
     delete(id: string): Promise<void>;

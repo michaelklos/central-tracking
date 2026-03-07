@@ -1,32 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { DateRangePicker } from './DateRangePicker';
+import { useReportContext } from '../context/ReportContext';
+import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
 import { generateMarkdownReport } from '../utils/markdownReport';
-import type { TimeEntryReport, SummaryReportEntry, Category, TaskStatus, TaskSource } from '../../shared/types';
+import { CategoryPieCharts } from './CategoryPieCharts';
+import type { TimeEntryReport, SummaryReportEntry } from '../../shared/types';
 import './ReportView.css';
 
-function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
-
-type ReportMode = 'chart' | 'summary';
-
 export function ReportView() {
-  const today = toDateString(new Date());
-  const monthStart = toDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const { mode, startDate, endDate, filterStatus, filterSource, filterCategories } = useReportContext();
+  const { categories } = useTaskContext();
 
-  const [startDate, setStartDate] = useState(monthStart);
-  const [endDate, setEndDate] = useState(today);
-  const [mode, setMode] = useState<ReportMode>('chart');
   const [reportData, setReportData] = useState<TimeEntryReport[]>([]);
-
-  // Summary mode state
   const [summaryData, setSummaryData] = useState<SummaryReportEntry[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [filterCategories, setFilterCategories] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<TaskStatus | ''>('');
-  const [filterSource, setFilterSource] = useState<TaskSource | ''>('');
   const [copied, setCopied] = useState(false);
 
   const loadReport = useCallback(async () => {
@@ -35,7 +22,7 @@ export function ReportView() {
     if (mode === 'chart') {
       const data = await window.api.timeEntries.getReport(start, end);
       setReportData(data);
-    } else {
+    } else if (mode === 'summary') {
       const data = await window.api.timeEntries.getSummaryReport(start, end);
       setSummaryData(data);
     }
@@ -45,25 +32,10 @@ export function ReportView() {
     loadReport();
   }, [loadReport]);
 
-  useEffect(() => {
-    window.api.categories.getAll().then(setCategories);
-  }, []);
-
-  const handleDateChange = (start: string, end: string) => {
-    setStartDate(start);
-    setEndDate(end);
-  };
-
   const handleExportCsv = async () => {
     const start = `${startDate}T00:00:00Z`;
     const end = `${endDate}T23:59:59Z`;
     await window.api.reports.exportCsv(start, end);
-  };
-
-  const toggleCategoryFilter = (catId: string) => {
-    setFilterCategories((prev) =>
-      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
-    );
   };
 
   // Filter summary data
@@ -124,20 +96,6 @@ export function ReportView() {
       <div className="report-view__header">
         <h2 className="report-view__title">Time Report</h2>
         <div className="report-view__header-actions">
-          <div className="report-view__mode-toggle">
-            <button
-              className={`report-view__mode-btn ${mode === 'chart' ? 'report-view__mode-btn--active' : ''}`}
-              onClick={() => setMode('chart')}
-            >
-              Chart
-            </button>
-            <button
-              className={`report-view__mode-btn ${mode === 'summary' ? 'report-view__mode-btn--active' : ''}`}
-              onClick={() => setMode('summary')}
-            >
-              Summary
-            </button>
-          </div>
           {mode === 'chart' && (
             <button className="report-view__export" onClick={handleExportCsv}>
               Export CSV
@@ -146,9 +104,7 @@ export function ReportView() {
         </div>
       </div>
 
-      <DateRangePicker start={startDate} end={endDate} onChange={handleDateChange} />
-
-      {mode === 'chart' ? (
+      {mode === 'chart' && (
         <>
           <div className="report-view__summary">
             <span>Total: {formatDuration(totalSeconds)}</span>
@@ -181,57 +137,10 @@ export function ReportView() {
             )}
           </div>
         </>
-      ) : (
+      )}
+
+      {mode === 'summary' && (
         <>
-          <div className="report-view__filters">
-            <div className="report-view__filter-group">
-              <label className="report-view__filter-label">Status</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as TaskStatus | '')}
-              >
-                <option value="">All Statuses</option>
-                <option value="todo">To Do</option>
-                <option value="in-progress">In Progress</option>
-                <option value="done">Done</option>
-                <option value="blocked">Blocked</option>
-              </select>
-            </div>
-
-            <div className="report-view__filter-group">
-              <label className="report-view__filter-label">Source</label>
-              <select
-                value={filterSource}
-                onChange={(e) => setFilterSource(e.target.value as TaskSource | '')}
-              >
-                <option value="">All Sources</option>
-                <option value="ad-hoc">Ad Hoc</option>
-                <option value="email">Email</option>
-                <option value="meeting-prep">Meeting Prep</option>
-                <option value="plugin">External (Plugin)</option>
-              </select>
-            </div>
-
-            {categories.length > 0 && (
-              <div className="report-view__filter-group">
-                <label className="report-view__filter-label">Categories</label>
-                <div className="report-view__cat-chips">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      className={`report-view__cat-chip ${filterCategories.includes(cat.id) ? 'report-view__cat-chip--active' : ''}`}
-                      onClick={() => toggleCategoryFilter(cat.id)}
-                      style={{ '--cat-color': cat.color } as React.CSSProperties}
-                    >
-                      <span className="report-view__cat-dot" style={{ background: cat.color }} />
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="report-view__summary-actions">
             <button className="report-view__copy-btn" onClick={handleCopy}>
               {copied ? 'Copied!' : 'Copy to Clipboard'}
@@ -242,6 +151,10 @@ export function ReportView() {
             {markdownText}
           </pre>
         </>
+      )}
+
+      {mode === 'categories' && (
+        <CategoryPieCharts categories={categories} />
       )}
     </div>
   );

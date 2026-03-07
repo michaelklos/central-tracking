@@ -37,6 +37,19 @@
   background: var(--color-primary-hover);
 }
 
+.task-list__sort-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.task-list__sort-by select {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
 .task-list__group-by {
   display: flex;
   align-items: center;

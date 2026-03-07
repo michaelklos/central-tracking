@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse } from '../../shared/types';
+import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy } from '../../shared/types';
 
 interface TaskRow {
   id: string;
@@ -64,6 +64,27 @@ function rowToTask(db: Database, row: TaskRow): Task {
   };
 }
 
+function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): string {
+  switch (sortBy) {
+    case 'recent':
+      return `(SELECT MAX(COALESCE(end_time, start_time)) FROM time_entries WHERE task_id = tasks.id) DESC NULLS LAST, created_at DESC`;
+    case 'created':
+      return `created_at DESC, rowid DESC`;
+    case 'alphabetical':
+      return `title COLLATE NOCASE ASC`;
+    case 'most-time-today':
+      return `(SELECT COALESCE(SUM(
+        CASE WHEN end_time IS NOT NULL
+          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
+          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+        END
+      ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time) = date('now')) DESC, created_at DESC`;
+    case 'manual':
+    default:
+      return isDone ? `updated_at DESC` : `sort_order ASC, created_at DESC`;
+  }
+}
+
 export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:getAll', () => {
     const rows = db.instance
@@ -79,13 +100,14 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     return row ? rowToTask(db, row) : null;
   });
 
-  ipcMain.handle('tasks:getActive', (_event, params?: PaginationParams): PaginatedResponse<Task> => {
+  ipcMain.handle('tasks:getActive', (_event, params?: PaginationParams & { sortBy?: TaskSortBy }): PaginatedResponse<Task> => {
     const offset = params?.offset ?? 0;
     const limit = params?.limit ?? 50;
+    const orderBy = getSortOrderClause(params?.sortBy, false);
     const rows = db.instance
       .prepare(
         `SELECT * FROM tasks WHERE status != 'done' AND deleted_at IS NULL
-         ORDER BY sort_order ASC, created_at DESC
+         ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`
       )
       .all(limit, offset) as TaskRow[];
@@ -102,13 +124,14 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
     };
   });
 
-  ipcMain.handle('tasks:getDone', (_event, params?: PaginationParams): PaginatedResponse<Task> => {
+  ipcMain.handle('tasks:getDone', (_event, params?: PaginationParams & { sortBy?: TaskSortBy }): PaginatedResponse<Task> => {
     const offset = params?.offset ?? 0;
     const limit = params?.limit ?? 50;
+    const orderBy = getSortOrderClause(params?.sortBy, true);
     const rows = db.instance
       .prepare(
         `SELECT * FROM tasks WHERE status = 'done' AND deleted_at IS NULL
-         ORDER BY updated_at DESC
+         ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`
       )
       .all(limit, offset) as TaskRow[];

@@ -1,0 +1,174 @@
+.category-pie-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.category-pie-charts__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.category-pie-charts__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.category-pie-charts__chip--active {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.category-pie-charts__chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-pie-charts__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .category-pie-charts__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.category-pie-charts__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.category-pie-charts__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.category-pie-charts__panel-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.category-pie-charts__panel-total {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.category-pie-charts__custom-toggle {
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.category-pie-charts__custom-toggle:hover {
+  text-decoration: underline;
+}
+
+.category-pie-charts__date-override {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.category-pie-charts__date-override input[type='date'] {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.category-pie-charts__reset-btn {
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.category-pie-charts__reset-btn:hover {
+  text-decoration: underline;
+}
+
+.category-pie-charts__chart {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.category-pie-charts__empty {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.category-pie-charts__tooltip {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.category-pie-charts__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category-pie-charts__legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.category-pie-charts__legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-pie-charts__legend-name {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.category-pie-charts__legend-time {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--color-text-secondary);
+}

@@ -5,9 +5,9 @@ const api = {
   tasks: {
     getAll: () => ipcRenderer.invoke('tasks:getAll'),
     getById: (id: string) => ipcRenderer.invoke('tasks:getById', id),
-    getActive: (params?: { offset?: number; limit?: number }) =>
+    getActive: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
       ipcRenderer.invoke('tasks:getActive', params),
-    getDone: (params?: { offset?: number; limit?: number }) =>
+    getDone: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
       ipcRenderer.invoke('tasks:getDone', params),
     create: (task: unknown) => ipcRenderer.invoke('tasks:create', task),
     update: (id: string, updates: unknown) => ipcRenderer.invoke('tasks:update', id, updates),

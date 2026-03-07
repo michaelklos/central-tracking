@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput } from '../../shared/types';
+import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, TaskSortBy } from '../../shared/types';
 
 const ACTIVE_TASKS_LIMIT = 50;
 const DONE_TASKS_LIMIT = 50;
@@ -68,6 +68,9 @@ interface TaskContextValue {
   deleteCategory(id: string): Promise<void>;
   refreshCategories(): Promise<void>;
 
+  sortBy: TaskSortBy;
+  setSortBy(sortBy: TaskSortBy): void;
+
   pendingTimeEntry: { startTime: string; endTime: string } | null;
   setPendingTimeEntry(entry: { startTime: string; endTime: string } | null): void;
 }
@@ -108,45 +111,59 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>({});
+  const [sortBy, setSortByState] = useState<TaskSortBy>(() => {
+    try {
+      const stored = localStorage.getItem('ct-sort-by');
+      if (stored && ['manual', 'recent', 'created', 'alphabetical', 'most-time-today'].includes(stored)) {
+        return stored as TaskSortBy;
+      }
+    } catch { /* ignore */ }
+    return 'manual';
+  });
   const [pendingTimeEntry, setPendingTimeEntry] = useState<{ startTime: string; endTime: string } | null>(null);
+
+  const setSortBy = useCallback((s: TaskSortBy) => {
+    setSortByState(s);
+    try { localStorage.setItem('ct-sort-by', s); } catch { /* ignore */ }
+  }, []);
 
   // Combined view of all loaded tasks (for TaskDetail lookup by ID)
   const tasks = useMemo(() => [...activeTasks, ...doneTasks], [activeTasks, doneTasks]);
 
   const refreshActiveTasks = useCallback(async () => {
-    const res = await window.api.tasks.getActive({ offset: 0, limit: ACTIVE_TASKS_LIMIT });
+    const res = await window.api.tasks.getActive({ offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, []);
+  }, [sortBy]);
 
   const loadMoreActiveTasks = useCallback(async () => {
-    const res = await window.api.tasks.getActive({ offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT });
+    const res = await window.api.tasks.getActive({ offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, [activeTasks.length]);
+  }, [activeTasks.length, sortBy]);
 
   const loadDoneTasks = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: 0, limit: DONE_TASKS_LIMIT });
+    const res = await window.api.tasks.getDone({ offset: 0, limit: DONE_TASKS_LIMIT, sortBy });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
     setDoneTasksLoaded(true);
-  }, []);
+  }, [sortBy]);
 
   const loadMoreDoneTasks = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: doneTasks.length, limit: DONE_TASKS_LIMIT });
+    const res = await window.api.tasks.getDone({ offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy });
     setDoneTasks((prev) => [...prev, ...res.items]);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
-  }, [doneTasks.length]);
+  }, [doneTasks.length, sortBy]);
 
   // Also refresh the done total count (for badge) even when done tasks aren't loaded
   const refreshDoneCount = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: 0, limit: 0 });
+    const res = await window.api.tasks.getDone({ offset: 0, limit: 0, sortBy });
     setDoneTasksTotal(res.total);
-  }, []);
+  }, [sortBy]);
 
   // Deleted tasks (recycle bin) loading
   const loadDeletedTasks = useCallback(async () => {
@@ -397,6 +414,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     createCategory,
     deleteCategory,
     refreshCategories,
+    sortBy,
+    setSortBy,
     pendingTimeEntry,
     setPendingTimeEntry,
   };

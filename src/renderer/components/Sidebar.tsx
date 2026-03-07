@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
+import { useReportContext } from '../context/ReportContext';
 import { formatDuration } from '../utils/time';
+import { DateRangePicker } from './DateRangePicker';
 import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
 import { BatchActionBar } from './BatchActionBar';
-import type { ImportPreview, ImportPreviewItem, ImportResult } from '../../shared/types';
+import type { ImportPreview, ImportPreviewItem, ImportResult, ReportMode, TaskStatus, TaskSource } from '../../shared/types';
 import './Sidebar.css';
 
 type SidebarTab = 'tasks' | 'settings';
@@ -46,9 +48,22 @@ const SOURCE_OPTIONS = [
   { value: 'plugin', label: 'External (Plugin)' },
 ];
 
+const REPORT_MODE_OPTIONS: { value: ReportMode; label: string }[] = [
+  { value: 'chart', label: 'Chart' },
+  { value: 'summary', label: 'Summary' },
+  { value: 'categories', label: 'Categories' },
+];
+
 export function Sidebar() {
   const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
   const { activeEntry, elapsedSeconds, totalTodaySeconds } = useTimerContext();
+
+  let reportContext: ReturnType<typeof useReportContext> | null = null;
+  try {
+    reportContext = useReportContext();
+  } catch {
+    // Not inside a ReportProvider (e.g., in tests)
+  }
   const [collapsed, setCollapsed] = useState(getStoredCollapsed);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
   const [newCatName, setNewCatName] = useState('');
@@ -279,6 +294,72 @@ export function Sidebar() {
                 </div>
               </>
             )
+          )}
+
+          {isOnReports && reportContext && (
+            <>
+              <div className="sidebar__section">
+                <h3 className="sidebar__section-title">Report Type</h3>
+                <div className="sidebar__report-types">
+                  {REPORT_MODE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      className={`sidebar__report-type-btn ${reportContext!.mode === opt.value ? 'sidebar__report-type-btn--active' : ''}`}
+                      onClick={() => reportContext!.setMode(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {reportContext.mode !== 'categories' && (
+                <>
+                  <div className="sidebar__section">
+                    <h3 className="sidebar__section-title">Date Range</h3>
+                    <DateRangePicker
+                      start={reportContext.startDate}
+                      end={reportContext.endDate}
+                      onChange={reportContext.setDateRange}
+                    />
+                  </div>
+
+                  <div className="sidebar__section">
+                    <h3 className="sidebar__section-title">Filters</h3>
+                    <select
+                      value={reportContext.filterStatus}
+                      onChange={(e) => reportContext!.setFilterStatus(e.target.value as TaskStatus | '')}
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={reportContext.filterSource}
+                      onChange={(e) => reportContext!.setFilterSource(e.target.value as TaskSource | '')}
+                    >
+                      {SOURCE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    {categories.length > 0 && (
+                      <div className="sidebar__report-cat-chips">
+                        {categories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            className={`sidebar__report-cat-chip ${reportContext!.filterCategories.includes(cat.id) ? 'sidebar__report-cat-chip--active' : ''}`}
+                            onClick={() => reportContext!.toggleCategoryFilter(cat.id)}
+                          >
+                            <span className="sidebar__cat-dot" style={{ background: cat.color }} />
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           {activeTab === 'settings' && !isOnSubpage && (

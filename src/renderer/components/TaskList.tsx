@@ -4,7 +4,7 @@ import { useTimerContext } from '../context/TimerContext';
 import { formatDuration } from '../utils/time';
 import { SplitButton } from './SplitButton';
 import { ConfirmDialog } from './ConfirmDialog';
-import type { Task, TaskStatus, TaskSource } from '../../shared/types';
+import type { Task, TaskStatus, TaskSource, TaskSortBy } from '../../shared/types';
 import './TaskList.css';
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -63,6 +63,8 @@ export function TaskList() {
     purgeTask,
     emptyRecycleBin,
     categories,
+    sortBy,
+    setSortBy,
   } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -327,6 +329,16 @@ export function TaskList() {
             />
           </div>
         )}
+        <div className="task-list__sort-by">
+          <label>Sort:</label>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as TaskSortBy)}>
+            <option value="manual">Manual</option>
+            <option value="recent">Recent</option>
+            <option value="created">Newest</option>
+            <option value="alphabetical">A-Z</option>
+            <option value="most-time-today">Most Time Today</option>
+          </select>
+        </div>
         <div className="task-list__group-by">
           <label>Group:</label>
           <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
@@ -368,7 +380,7 @@ export function TaskList() {
                         isRunningForTask(task.id) ? 'task-item--timing' : ''
                       } ${batchMode && selectedTaskIds.has(task.id) ? 'task-item--batch-selected' : ''}`}
                       onClick={() => batchMode ? toggleTaskSelection(task.id) : selectTask(task.id)}
-                      draggable={!batchMode}
+                      draggable={!batchMode && sortBy === 'manual'}
                       onDragStart={() => handleDragStart(task.id)}
                       onDragOver={(e) => handleDragOver(e, task.id)}
                       onDrop={handleDrop}
