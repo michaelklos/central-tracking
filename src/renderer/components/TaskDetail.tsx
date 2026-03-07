@@ -6,6 +6,7 @@ import { formatDuration, startOfDay, endOfDay } from '../utils/time';
 import { TimeEntryEditor } from './TimeEntryEditor';
 import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
+import { getStringSetting } from './OptionsMenu';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import './TaskDetail.css';
 
@@ -36,7 +37,10 @@ export function TaskDetail() {
   const [descDraft, setDescDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
   const [defaultStartTime, setDefaultStartTime] = useState(new Date().toISOString());
-  const [defaultDurationSeconds, setDefaultDurationSeconds] = useState(1800);
+  const [defaultDurationSeconds, setDefaultDurationSeconds] = useState(() => {
+    const min = parseInt(getStringSetting('ct-option-default-duration-min', '30'), 10);
+    return (!isNaN(min) && min > 0) ? min * 60 : 1800;
+  });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Track which task the entries are loaded for to prevent stale appends
@@ -122,7 +126,9 @@ export function TaskDetail() {
       const duration = Math.floor(
         (new Date(pendingTimeEntry.endTime).getTime() - new Date(pendingTimeEntry.startTime).getTime()) / 1000
       );
-      setDefaultDurationSeconds(duration > 0 ? duration : 1800);
+      const fallbackMin = parseInt(getStringSetting('ct-option-default-duration-min', '30'), 10);
+      const fallbackSecs = (!isNaN(fallbackMin) && fallbackMin > 0) ? fallbackMin * 60 : 1800;
+      setDefaultDurationSeconds(duration > 0 ? duration : fallbackSecs);
       setPendingTimeEntry(null);
     }
   }, [pendingTimeEntry, selectedTaskId, setPendingTimeEntry]);
