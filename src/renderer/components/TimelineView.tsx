@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils/timeline';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
@@ -23,17 +23,41 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+function toDateString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatDateLabel(date: Date): string {
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 export function TimelineView() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { selectTask, createTask, setPendingTimeEntry } = useTaskContext();
   const [entries, setEntries] = useState<TimeEntryWithTask[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const viewDate = useMemo(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      const [y, m, d] = dateParam.split('-').map(Number);
+      if (y && m && d) return new Date(y, m - 1, d);
+    }
+    return new Date();
+  }, [searchParams]);
+
+  const isViewingToday = isSameDay(viewDate, new Date());
+
   const loadTimeline = useCallback(async () => {
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
-    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
+    const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 0, 0, 0).toISOString();
+    const end = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 23, 59, 59).toISOString();
 
     const data = await window.api.timeEntries.getByDateRangeWithTasks(start, end);
     setEntries(data);
@@ -47,14 +71,32 @@ export function TimelineView() {
 
     setTimeline(buildTimeline(data, options));
     setLoading(false);
-  }, []);
+  }, [viewDate]);
 
   useEffect(() => {
     loadTimeline();
-    // Refresh every 60 seconds for active timers
-    const interval = setInterval(loadTimeline, 60000);
-    return () => clearInterval(interval);
-  }, [loadTimeline]);
+    // Only auto-refresh when viewing today (for active timers)
+    if (isViewingToday) {
+      const interval = setInterval(loadTimeline, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [loadTimeline, isViewingToday]);
+
+  const goToPreviousDay = () => {
+    const prev = new Date(viewDate);
+    prev.setDate(prev.getDate() - 1);
+    setSearchParams({ date: toDateString(prev) });
+  };
+
+  const goToNextDay = () => {
+    const next = new Date(viewDate);
+    next.setDate(next.getDate() + 1);
+    setSearchParams({ date: toDateString(next) });
+  };
+
+  const goToToday = () => {
+    setSearchParams({});
+  };
 
   const trackedSeconds = entries.reduce((sum, e) => {
     const start = new Date(e.startTime).getTime();
@@ -91,7 +133,18 @@ export function TimelineView() {
 
   return (
     <div className="timeline-view">
-      <h2 className="timeline-view__title">Today's Timeline</h2>
+      <div className="timeline-view__header">
+        <div className="timeline-view__nav">
+          <button className="timeline-view__nav-btn" onClick={goToPreviousDay} title="Previous day">&lsaquo;</button>
+          <h2 className="timeline-view__title">
+            {isViewingToday ? "Today's Timeline" : formatDateLabel(viewDate)}
+          </h2>
+          <button className="timeline-view__nav-btn" onClick={goToNextDay} title="Next day">&rsaquo;</button>
+        </div>
+        {!isViewingToday && (
+          <button className="timeline-view__today-btn" onClick={goToToday}>Today</button>
+        )}
+      </div>
 
       <div className="timeline-view__totals">
         <span className="timeline-view__tracked">
@@ -103,7 +156,9 @@ export function TimelineView() {
       </div>
 
       {timeline.length === 0 ? (
-        <p className="timeline-view__empty">No time entries for today.</p>
+        <p className="timeline-view__empty">
+          No time entries for {isViewingToday ? 'today' : formatDateLabel(viewDate)}.
+        </p>
       ) : (
         <div className="timeline-view__list">
           {timeline.map((item, index) => (

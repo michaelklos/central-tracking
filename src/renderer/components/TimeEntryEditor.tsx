@@ -8,6 +8,7 @@ import './TimeEntryEditor.css';
 interface TimeEntryEditorBaseProps {
   allEntries: TimeEntry[];
   onDelete?: (id: string) => void;
+  onNavigateToTimeline?: (date: string) => void;
 }
 
 interface EditModeProps extends TimeEntryEditorBaseProps {
@@ -258,6 +259,15 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
         >
           {entry.durationSeconds != null ? formatDuration(entry.durationSeconds) : 'active'}
         </span>
+        {props.onNavigateToTimeline && (
+          <button
+            className="time-entry__timeline-link"
+            onClick={() => props.onNavigateToTimeline!(toDateValue(entry.startTime))}
+            title="View in timeline"
+          >
+            &#9776;
+          </button>
+        )}
         <button className="time-entry__delete" onClick={() => props.onDelete?.(entry.id)} title="Delete entry">
           &times;
         </button>

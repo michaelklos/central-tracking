@@ -4,8 +4,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { TimelineView } from '../TimelineView';
 import type { TimeEntryWithTask } from '../../../shared/types';
 
+const mockSetSearchParams = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
 }));
 
 vi.mock('../../context/TaskContext', () => ({

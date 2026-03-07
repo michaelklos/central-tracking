@@ -348,6 +348,7 @@
   color: var(--color-text-secondary);
 }
 
+.time-entry__timeline-link,
 .time-entry__delete {
   color: var(--color-text-secondary);
   font-size: 14px;
@@ -355,8 +356,13 @@
   transition: opacity 0.15s;
 }
 
+.time-entry:hover .time-entry__timeline-link,
 .time-entry:hover .time-entry__delete {
   opacity: 1;
+}
+
+.time-entry__timeline-link:hover {
+  color: var(--color-primary);
 }
 
 .time-entry__delete:hover {

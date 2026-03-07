@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
@@ -17,6 +18,7 @@ const TIME_ENTRIES_LIMIT = 20;
 const AUTO_LOAD_MAX_BATCHES = 3;
 
 export function TaskDetail() {
+  const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
 
@@ -39,6 +41,10 @@ export function TaskDetail() {
 
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
+
+  // Track pendingTimeEntry so loadSmartDefaults can check without re-firing
+  const pendingTimeEntryRef = useRef(pendingTimeEntry);
+  pendingTimeEntryRef.current = pendingTimeEntry;
 
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
@@ -102,7 +108,11 @@ export function TaskDetail() {
     }
     loadTimeEntries();
     loadComments();
-    loadSmartDefaults();
+    // Only load smart defaults if there's no pending time entry (gap click)
+    // to avoid the async overwrite race condition
+    if (!pendingTimeEntryRef.current) {
+      loadSmartDefaults();
+    }
   }, [task?.id, loadTimeEntries, loadComments, loadSmartDefaults]);
 
   useEffect(() => {
@@ -206,6 +216,10 @@ export function TaskDetail() {
       await startTimer(task.id);
     }
     await loadTimeEntries();
+  };
+
+  const handleNavigateToTimeline = (date: string) => {
+    navigate('/timeline?date=' + date);
   };
 
   const running = isRunningForTask(task.id);
@@ -388,6 +402,7 @@ export function TaskDetail() {
                 onSave={handleUpdateEntry}
                 onCancel={() => {}}
                 onDelete={handleDeleteTimeEntry}
+                onNavigateToTimeline={handleNavigateToTimeline}
               />
             ))}
             {showScrollSentinel && (

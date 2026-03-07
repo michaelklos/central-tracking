@@ -5,6 +5,10 @@ import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '../TaskDetail';
 import type { Task } from '../../../shared/types';
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-1',
   title: 'Test Task',
