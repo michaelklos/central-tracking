@@ -12,10 +12,50 @@
     "build": "npm run build:main && npm run build:renderer",
     "start": "electron dist/main/main.js",
     "start:debug": "electron dist/main/main.js --debug",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint 'src/**/*.{ts,tsx}'"
+  },
+  "build": {
+    "appId": "com.centraltracking.app",
+    "productName": "Central Tracking",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**/*",
+      "**/node_modules/bindings/**/*",
+      "**/node_modules/file-uri-to-path/**/*"
+    ],
+    "afterSign": "scripts/notarize.js",
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
@@ -26,6 +66,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.3.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -37,6 +78,7 @@
     "concurrently": "^8.2.2",
     "css-loader": "^7.1.2",
     "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.8.0",
     "html-webpack-plugin": "^5.6.0",
     "jsdom": "^28.1.0",
