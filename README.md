@@ -72,6 +72,88 @@ npm start
 npm run start:debug
 ```
 
+### Packaging
+
+Builds unsigned distributable(s) locally:
+
+```bash
+npm run dist        # both platforms (only works on the current OS)
+npm run dist:mac    # macOS: .dmg + .zip (x64 and arm64)
+npm run dist:win    # Windows: NSIS installer (x64)
+```
+
+Output goes to `release/`. Unsigned builds run fine for local testing; macOS will show a Gatekeeper warning and Windows may show a SmartScreen prompt.
+
+## Releases
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`). Push a version tag to trigger a build on both platforms, sign/notarize the artifacts, and publish a GitHub Release:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow produces signed artifacts only when the signing secrets are configured (see below). Without them it builds and uploads unsigned artifacts.
+
+### Code Signing Setup
+
+#### macOS
+
+**Prerequisites:** Apple Developer Program membership ($99/yr).
+
+**Steps:**
+
+1. In Xcode → Settings → Accounts, add your Apple ID and generate a **Developer ID Application** certificate (used for distribution outside the App Store). This adds it to your Keychain automatically.
+
+2. In Keychain Access, find the **Developer ID Application: Your Name (XXXXXXXXXX)** certificate, right-click → Export → save as a `.p12` with a strong password.
+
+3. Base64-encode the `.p12`:
+   ```bash
+   base64 -i certificate.p12 | pbcopy   # macOS — copies to clipboard
+   ```
+
+4. Generate an **app-specific password** for notarization at [appleid.apple.com](https://appleid.apple.com) → Sign-In and Security → App-Specific Passwords.
+
+5. Find your **Team ID** at [developer.apple.com/account](https://developer.apple.com/account) → Membership.
+
+6. Add the following secrets to your GitHub repo (Settings → Secrets and variables → Actions):
+
+   | Secret | Value |
+   |---|---|
+   | `APPLE_CSC_LINK` | base64-encoded `.p12` from step 3 |
+   | `APPLE_CSC_KEY_PASSWORD` | `.p12` export password from step 2 |
+   | `APPLE_ID` | your Apple ID email |
+   | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password from step 4 |
+   | `APPLE_TEAM_ID` | 10-character Team ID from step 5 |
+
+#### Windows
+
+**Prerequisites:** A code-signing certificate from a trusted CA (DigiCert, Sectigo, GlobalSign, etc.).
+
+- **OV (Organization Validation)** — ~$100–300/yr. Requires proving your business exists. Removes most SmartScreen warnings once you accumulate reputation.
+- **EV (Extended Validation)** — ~$300–500/yr. Comes on a USB hardware token. SmartScreen reputation is immediate, but EV tokens can't be used directly in CI — you'd need a cloud signing service (e.g. DigiCert KeyLocker, SSL.com eSigner) and a custom signing setup.
+
+For standard CI use, an OV certificate is the practical choice.
+
+**Steps:**
+
+1. Purchase an OV certificate. The CA will verify your identity/organization and deliver a `.pfx` file.
+
+2. Base64-encode the `.pfx`:
+   ```bash
+   # macOS/Linux
+   base64 -i certificate.pfx | pbcopy
+   # Windows (PowerShell)
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("certificate.pfx")) | clip
+   ```
+
+3. Add the following secrets to your GitHub repo:
+
+   | Secret | Value |
+   |---|---|
+   | `WIN_CSC_LINK` | base64-encoded `.pfx` from step 2 |
+   | `WIN_CSC_KEY_PASSWORD` | `.pfx` password |
+
 ## Testing
 
 The project uses **Vitest** with `@testing-library/react` for component testing. Tests follow a TDD approach.
