@@ -8,7 +8,7 @@ import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { PluginManager } from './plugins/pluginManager';
-import { startMouseMover, stopMouseMover } from './mouseMover';
+import { startMouseMover, stopMouseMover } from './activityMonitor';
 
 const mmEnabled = process.argv.includes('--mm');
 
