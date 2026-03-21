@@ -25,14 +25,14 @@ jobs:
 
       - name: Package (macOS)
         env:
-          # Code signing — P12 certificate exported from Keychain, base64-encoded
-          CSC_LINK: ${{ secrets.APPLE_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CSC_KEY_PASSWORD }}
-          # Notarization
+          _CSC_LINK: ${{ secrets.APPLE_CSC_LINK }}
+          _CSC_KEY_PASSWORD: ${{ secrets.APPLE_CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --mac --publish never
+        run: |
+          [ -n "$_CSC_LINK" ] && export CSC_LINK="$_CSC_LINK" && export CSC_KEY_PASSWORD="$_CSC_KEY_PASSWORD"
+          npx electron-builder --mac --publish never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -61,10 +61,11 @@ jobs:
 
       - name: Package (Windows)
         env:
-          # Code signing — PFX certificate, base64-encoded
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: npx electron-builder --win --publish never
+          _WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          _WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if ($env:_WIN_CSC_LINK) { $env:WIN_CSC_LINK = $env:_WIN_CSC_LINK; $env:WIN_CSC_KEY_PASSWORD = $env:_WIN_CSC_KEY_PASSWORD }
+          npx electron-builder --win --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

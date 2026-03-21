@@ -33,6 +33,10 @@
       "**/node_modules/bindings/**/*",
       "**/node_modules/file-uri-to-path/**/*"
     ],
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
     "afterSign": "scripts/notarize.js",
     "mac": {
       "target": [
