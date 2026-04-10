@@ -13,6 +13,7 @@
     "start": "electron dist/main/main.js",
     "start:debug": "electron dist/main/main.js --debug",
     "pack": "npm run build && electron-builder --dir",
+    "build:icons": "node scripts/build-icons.js",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
@@ -39,9 +40,22 @@
     },
     "afterSign": "scripts/notarize.js",
     "mac": {
+      "icon": "assets/mac/icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
@@ -50,8 +64,14 @@
       "entitlementsInherit": "assets/entitlements.mac.plist"
     },
     "win": {
+      "icon": "assets/win/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -71,6 +91,7 @@
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
+    "@resvg/resvg-js": "^2.6.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -81,11 +102,12 @@
     "@typescript-eslint/parser": "^8.56.1",
     "concurrently": "^8.2.2",
     "css-loader": "^7.1.2",
-    "electron": "^35.7.5",
-    "electron-builder": "^25.1.8",
+    "electron": "^41.0.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.8.0",
     "html-webpack-plugin": "^5.6.0",
     "jsdom": "^28.1.0",
+    "png-to-ico": "^2.1.8",
     "style-loader": "^4.0.0",
     "terser-webpack-plugin": "^5.3.16",
     "ts-loader": "^9.5.1",

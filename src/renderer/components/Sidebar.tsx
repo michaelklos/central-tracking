@@ -17,7 +17,7 @@ const COLLAPSE_KEY = 'central-tracking:sidebar-collapsed';
 const TAB_KEY = 'central-tracking:sidebar-tab';
 const WIDTH_KEY = 'central-tracking:sidebar-width';
 const COLLAPSED_WIDTH = 40;
-const DEFAULT_WIDTH = 280;
+const DEFAULT_WIDTH = 300;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 500;
 
