@@ -13,6 +13,7 @@
     "start": "electron dist/main/main.js",
     "start:debug": "electron dist/main/main.js --debug",
     "pack": "npm run build && electron-builder --dir",
+    "build:icons": "node scripts/build-icons.js",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
@@ -39,6 +40,7 @@
     },
     "afterSign": "scripts/notarize.js",
     "mac": {
+      "icon": "assets/mac/icon.icns",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
@@ -50,6 +52,7 @@
       "entitlementsInherit": "assets/entitlements.mac.plist"
     },
     "win": {
+      "icon": "assets/win/icon.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ]
@@ -71,6 +74,8 @@
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
+    "@resvg/resvg-js": "^2.6.0",
+    "electron-icon-builder": "^2.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
