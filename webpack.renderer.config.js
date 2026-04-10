@@ -1,13 +1,15 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
-module.exports = {
+module.exports = (_env, argv) => ({
   entry: './src/renderer/index.tsx',
   target: 'web',
   output: {
     path: path.resolve(__dirname, 'dist/renderer'),
     filename: 'renderer.js',
-    publicPath: '/',
+    // '/' works for webpack-dev-server; './' is required when Electron loads
+    // the file directly via file:// (absolute paths don't resolve there)
+    publicPath: argv.mode === 'production' ? './' : '/',
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -42,4 +44,4 @@ module.exports = {
     hot: true,
     historyApiFallback: true,
   },
-};
+});

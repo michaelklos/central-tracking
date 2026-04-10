@@ -8,6 +8,9 @@ import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { PluginManager } from './plugins/pluginManager';
+import { startMouseMover, stopMouseMover } from './activityMonitor';
+
+const mmEnabled = process.argv.includes('--mm');
 
 let mainWindow: BrowserWindow | null = null;
 let database: Database;
@@ -60,6 +63,7 @@ app.whenReady().then(() => {
   // Window management IPC handlers
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean) => {
     if (mainWindow) mainWindow.setAlwaysOnTop(flag);
+    if (mmEnabled) flag ? startMouseMover() : stopMouseMover();
   });
   ipcMain.handle('window:getAlwaysOnTop', () => {
     return mainWindow?.isAlwaysOnTop() ?? false;
