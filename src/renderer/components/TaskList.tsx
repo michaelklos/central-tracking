@@ -68,7 +68,9 @@ export function TaskList() {
   } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [addAsTodo, setAddAsTodo] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>('status');
+  const newTaskInputRef = useRef<HTMLInputElement>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(['Done']));
   const [loadingDone, setLoadingDone] = useState(false);
   const [loadingMoreActive, setLoadingMoreActive] = useState(false);
@@ -164,16 +166,37 @@ export function TaskList() {
   const handleCreateTask = async () => {
     const title = newTaskTitle.trim();
     if (!title) return;
-    const task = await createTask({ title, status: 'in-progress' });
-    await startTimer(task.id);
+    if (addAsTodo) {
+      await createTask({ title });
+    } else {
+      const task = await createTask({ title, status: 'in-progress' });
+      await startTimer(task.id);
+    }
     setNewTaskTitle('');
+    newTaskInputRef.current?.focus();
   };
 
-  const handleCreateTaskOnly = async () => {
+  // Switches to sticky To-Do mode; if text is present also adds that task
+  const handleSelectAddAsTodo = async () => {
+    setAddAsTodo(true);
     const title = newTaskTitle.trim();
-    if (!title) return;
-    await createTask({ title });
-    setNewTaskTitle('');
+    if (title) {
+      await createTask({ title });
+      setNewTaskTitle('');
+    }
+    newTaskInputRef.current?.focus();
+  };
+
+  // Switches back to Add & Start Timer mode; if text is present also adds that task
+  const handleSelectAddWithTimer = async () => {
+    setAddAsTodo(false);
+    const title = newTaskTitle.trim();
+    if (title) {
+      const task = await createTask({ title, status: 'in-progress' });
+      await startTimer(task.id);
+      setNewTaskTitle('');
+    }
+    newTaskInputRef.current?.focus();
   };
 
   const handleDragStart = (taskId: string) => {
@@ -316,6 +339,7 @@ export function TaskList() {
         ) : (
           <div className="task-list__add">
             <input
+              ref={newTaskInputRef}
               type="text"
               placeholder="Add a new task..."
               value={newTaskTitle}
@@ -323,9 +347,12 @@ export function TaskList() {
               onKeyDown={(e) => e.key === 'Enter' && handleCreateTask()}
             />
             <SplitButton
-              primaryLabel="Add"
+              primaryLabel={addAsTodo ? 'Add as To-Do' : 'Add'}
               primaryAction={handleCreateTask}
-              alternatives={[{ label: 'Add as To-Do', action: handleCreateTaskOnly }]}
+              alternatives={addAsTodo
+                ? [{ label: 'Add & Start Timer', action: handleSelectAddWithTimer }]
+                : [{ label: 'Add as To-Do', action: handleSelectAddAsTodo }]
+              }
             />
           </div>
         )}
