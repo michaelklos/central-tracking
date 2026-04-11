@@ -164,7 +164,7 @@ export function TaskList() {
   const handleCreateTask = async () => {
     const title = newTaskTitle.trim();
     if (!title) return;
-    const task = await createTask({ title });
+    const task = await createTask({ title, status: 'in-progress' });
     await startTimer(task.id);
     setNewTaskTitle('');
   };
