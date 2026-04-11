@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="appClip">
+      <rect width="1024" height="1024" rx="220"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" rx="220" fill="#14192A"/>
+  <rect x="0" y="860" width="1024" height="164" fill="#0D1120" clip-path="url(#appClip)"/>
+  <rect x="0" y="878" width="1024" height="22" fill="#252D52"/>
+  <rect x="0" y="910" width="1024" height="22" fill="#252D52"/>
+
+  <circle cx="512" cy="490" r="346" fill="none" stroke="#07080E" stroke-width="12"/>
+  <circle cx="512" cy="490" r="336" fill="#181E35"/>
+  <circle cx="512" cy="490" r="326" fill="none" stroke="#6B5FE4" stroke-width="56"/>
+  <circle cx="512" cy="490" r="296" fill="none" stroke="#4A40A8" stroke-width="4"/>
+
+  <line x1="587" y1="210" x2="437" y2="770" stroke="#5C52D8" stroke-width="52" stroke-linecap="round"/>
+  <line x1="792" y1="415" x2="232" y2="565" stroke="#5C52D8" stroke-width="52" stroke-linecap="round"/>
+  <line x1="717" y1="695" x2="307" y2="285" stroke="#5C52D8" stroke-width="52" stroke-linecap="round"/>
+
+  <rect x="-20" y="560" width="1064" height="14" fill="#1E1860" clip-path="url(#appClip)"/>
+  <rect x="-20" y="534" width="1064" height="40" fill="#3A3480" clip-path="url(#appClip)"/>
+  <rect x="-20" y="534" width="1064" height="10" fill="#524AA8" clip-path="url(#appClip)"/>
+
+  <!-- Hub — now copper/amber center -->
+  <circle cx="512" cy="490" r="108" fill="#6B5FE4"/>
+  <circle cx="512" cy="490" r="78"  fill="#14192A"/>
+  <circle cx="512" cy="490" r="46"  fill="#C97A2A"/>
+  <circle cx="512" cy="490" r="20"  fill="#0F1320"/>
+
+  <!-- Crankpin — now green -->
+  <circle cx="734" cy="550" r="48" fill="#1A1408" opacity="0.7"/>
+  <circle cx="734" cy="550" r="42" fill="#2DCA72"/>
+  <circle cx="734" cy="550" r="24" fill="#1A8A4A"/>
+  <circle cx="734" cy="550" r="11" fill="#0F1320"/>
+
+</svg>
