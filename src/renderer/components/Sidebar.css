@@ -116,6 +116,16 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.sidebar__import-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar__import-row .sidebar__import-btn {
+  flex: 1;
+}
+
 .sidebar__import-btn {
   width: 100%;
   padding: 6px;

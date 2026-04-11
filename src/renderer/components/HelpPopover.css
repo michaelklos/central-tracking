@@ -1,0 +1,100 @@
+.help-popover {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.help-popover__trigger {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border, #555);
+  background: transparent;
+  color: var(--color-text-muted, #aaa);
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.help-popover__trigger:hover {
+  background: var(--color-accent, #6366f1);
+  border-color: var(--color-accent, #6366f1);
+  color: #fff;
+}
+
+.help-popover__panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  background: var(--color-surface-2, #2a2a2a);
+  border: 1px solid var(--color-border, #444);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--color-text, #e0e0e0);
+}
+
+.help-popover__panel::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--color-border, #444);
+}
+
+.help-popover__title {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: var(--color-text, #e0e0e0);
+}
+
+.help-popover__content {
+  line-height: 1.5;
+}
+
+.help-popover__content code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.help-popover__content pre {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.help-popover__content p {
+  margin: 4px 0;
+}
+
+.help-popover__content ul {
+  margin: 4px 0 4px 16px;
+  padding: 0;
+}
+
+.help-popover__content li {
+  margin: 2px 0;
+}
