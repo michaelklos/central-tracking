@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Converts assets/central-tracking-icon-v2.svg into platform icon files.
+// Converts assets/central-tracking-icon.svg into platform icon files.
 // Run once locally after changing the SVG, then commit the outputs:
 //
 //   npm run build:icons
@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const svgPath = path.join(root, 'assets', 'central-tracking-icon-v2.svg');
+const svgPath = path.join(root, 'assets', 'central-tracking-icon.svg');
 const svg = fs.readFileSync(svgPath);
 
 function renderPng(size) {
