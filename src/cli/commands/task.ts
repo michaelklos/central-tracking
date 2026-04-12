@@ -33,10 +33,14 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .option('done', { type: 'boolean', describe: 'Show completed tasks' })
             .option('deleted', { type: 'boolean', describe: 'Show deleted tasks (recycle bin)' })
             .option('all', { type: 'boolean', describe: 'Show all tasks' })
+            .option('search', { type: 'string', alias: 's', describe: 'Search title and description' })
             .option('status', { type: 'string', describe: 'Filter by status' })
+            .option('source', { type: 'string', describe: 'Filter by source' })
+            .option('category', { type: 'string', describe: 'Filter by category ID' })
             .option('sort', { type: 'string', describe: 'Sort: manual|recent|created|alphabetical|most-time-today' })
             .option('limit', { type: 'number', default: 50, describe: 'Max results' })
-            .option('offset', { type: 'number', default: 0, describe: 'Skip results' }),
+            .option('offset', { type: 'number', default: 0, describe: 'Skip results' })
+            .option('full-id', { type: 'boolean', default: false, describe: 'Show full UUID instead of prefix' }),
         async (argv) => {
           const server = discoverServer();
           const json = argv.json as boolean;
@@ -48,12 +52,20 @@ export function registerTaskCommands(yargs: Argv): Argv {
             if (json) {
               console.log(JSON.stringify(result, null, 2));
             } else {
-              console.log(formatTaskTable(result));
+              console.log(formatTaskTable(result, { fullId: argv['full-id'] as boolean }));
             }
             return;
           }
 
-          const params = { offset: argv.offset, limit: argv.limit, sortBy: argv.sort };
+          const params: Record<string, unknown> = {
+            offset: argv.offset,
+            limit: argv.limit,
+            sortBy: argv.sort,
+          };
+          if (argv.search) params.search = argv.search;
+          if (argv.status) params.status = argv.status;
+          if (argv.source) params.source = argv.source;
+          if (argv.category) params.categoryId = argv.category;
 
           if (argv.deleted) {
             endpoint = 'tasks/getDeleted';
@@ -70,7 +82,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
           if (json) {
             console.log(JSON.stringify(result, null, 2));
           } else {
-            console.log(formatTaskTable(result.items));
+            console.log(formatTaskTable(result.items, { fullId: argv['full-id'] as boolean }));
             if (result.hasMore) {
               console.log(`\nShowing ${result.items.length} of ${result.total} tasks. Use --offset to see more.`);
             }
@@ -80,7 +92,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
       .command(
         'get <id>',
         'Get a task by ID',
-        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        (yy) => yy.positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
         async (argv) => {
           const server = discoverServer();
           const task = await apiRequest<Task | null>(server, 'tasks/getById', [argv.id]);
@@ -134,7 +146,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
         'Update a task',
         (yy) =>
           yy
-            .positional('id', { type: 'string', demandOption: true })
+            .positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .option('title', { type: 'string' })
             .option('description', { type: 'string', alias: 'd' })
             .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
@@ -162,7 +174,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
       .command(
         'delete <ids..>',
         'Soft-delete task(s)',
-        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true }),
+        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
         async (argv) => {
           const server = discoverServer();
           const ids = argv.ids as string[];
@@ -178,7 +190,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
       .command(
         'restore <ids..>',
         'Restore deleted task(s)',
-        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true }),
+        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
         async (argv) => {
           const server = discoverServer();
           const ids = argv.ids as string[];
@@ -201,7 +213,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
         (yy) =>
           yy
             .option('all', { type: 'boolean', describe: 'Empty recycle bin' })
-            .option('id', { type: 'string', describe: 'Task ID to purge' }),
+            .option('id', { type: 'string', describe: 'UUID, prefix, or name substring' }),
         async (argv) => {
           const server = discoverServer();
           if (argv.all) {
@@ -219,7 +231,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
       .command(
         'reorder <ids..>',
         'Set task sort order',
-        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true }),
+        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
         async (argv) => {
           const server = discoverServer();
           await apiRequest(server, 'tasks/reorder', [argv.ids]);
@@ -231,7 +243,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
         'Batch update tasks',
         (yy) =>
           yy
-            .positional('ids', { type: 'string', array: true, demandOption: true })
+            .positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' })
             .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
             .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
             .option('category', { type: 'string', array: true }),

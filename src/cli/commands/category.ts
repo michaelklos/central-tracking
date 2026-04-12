@@ -83,7 +83,7 @@ export function registerCategoryCommands(yargs: Argv): Argv {
         'Assign categories to a task',
         (yy) =>
           yy
-            .positional('task-id', { type: 'string', demandOption: true })
+            .positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .positional('category-ids', { type: 'string', array: true, demandOption: true }),
         async (argv) => {
           const server = discoverServer();

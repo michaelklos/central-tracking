@@ -36,7 +36,7 @@ export function registerTimeCommands(yargs: Argv): Argv {
         'List time entries for a task',
         (yy) =>
           yy
-            .positional('task-id', { type: 'string', demandOption: true })
+            .positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .option('limit', { type: 'number', default: 20 })
             .option('offset', { type: 'number', default: 0 }),
         async (argv) => {
@@ -60,7 +60,7 @@ export function registerTimeCommands(yargs: Argv): Argv {
         'Add a manual time entry',
         (yy) =>
           yy
-            .positional('task-id', { type: 'string', demandOption: true })
+            .positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .option('start', { type: 'string', describe: 'Start time (ISO 8601)' })
             .option('end', { type: 'string', describe: 'End time (ISO 8601)' })
             .option('duration', { type: 'string', describe: 'Duration (e.g., 1h30m)' })

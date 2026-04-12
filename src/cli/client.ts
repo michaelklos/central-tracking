@@ -15,15 +15,25 @@ interface ApiResponse<T = unknown> {
   error?: { code: string; message: string };
 }
 
-function getDefaultUserDataPath(): string {
+function getUserDataPaths(): string[] {
   const platform = os.platform();
   const home = os.homedir();
   if (platform === 'darwin') {
-    return path.join(home, 'Library', 'Application Support', 'Central Tracking');
+    return [
+      path.join(home, 'Library', 'Application Support', 'Central Tracking'),
+      path.join(home, 'Library', 'Application Support', 'Electron'), // dev mode (unpackaged)
+    ];
   } else if (platform === 'win32') {
-    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Central Tracking');
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    return [
+      path.join(appData, 'Central Tracking'),
+      path.join(appData, 'Electron'),
+    ];
   }
-  return path.join(home, '.config', 'Central Tracking');
+  return [
+    path.join(home, '.config', 'Central Tracking'),
+    path.join(home, '.config', 'Electron'),
+  ];
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -36,23 +46,28 @@ function isProcessRunning(pid: number): boolean {
 }
 
 export function discoverServer(): ServerInfo {
-  const userDataPath = getDefaultUserDataPath();
-  const serverFilePath = path.join(userDataPath, 'ct-server.json');
+  const paths = getUserDataPaths();
 
-  let content: string;
-  try {
-    content = fs.readFileSync(serverFilePath, 'utf-8');
-  } catch {
-    throw new Error('Central Tracking is not running. Start the app first.');
+  for (const userDataPath of paths) {
+    const serverFilePath = path.join(userDataPath, 'ct-server.json');
+
+    let content: string;
+    try {
+      content = fs.readFileSync(serverFilePath, 'utf-8');
+    } catch {
+      continue; // Try next path
+    }
+
+    const info: ServerInfo = JSON.parse(content);
+
+    if (!isProcessRunning(info.pid)) {
+      continue; // Stale file, try next path
+    }
+
+    return info;
   }
 
-  const info: ServerInfo = JSON.parse(content);
-
-  if (!isProcessRunning(info.pid)) {
-    throw new Error('Central Tracking is not running (stale server file). Start the app first.');
-  }
-
-  return info;
+  throw new Error('Central Tracking is not running. Start the app first.');
 }
 
 export function apiRequest<T = unknown>(

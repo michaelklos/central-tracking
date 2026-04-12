@@ -63,8 +63,8 @@ ct [--json] <command> [subcommand] [args] [flags]
 ### Commands
 
 ```bash
-# Tasks
-ct task list [--done|--deleted|--all] [--status X] [--sort X] [--limit N]
+# Tasks (<id> accepts full UUID, prefix, or task name substring)
+ct task list [--done|--deleted|--all] [--search X] [--status X] [--source X] [--category ID] [--sort X] [--limit N] [--full-id]
 ct task get <id>
 ct task create <title> [--description X] [--status X] [--category ID...]
 ct task update <id> [--title X] [--status X] [--description X] [--notes X]

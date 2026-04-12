@@ -21,7 +21,9 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
+    "pretest": "node scripts/ensure-node-sqlite.js",
     "test": "vitest run",
+    "posttest": "npx electron-rebuild -f -w better-sqlite3 2>/dev/null; exit 0",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint 'src/**/*.{ts,tsx}'"
@@ -108,7 +110,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "concurrently": "^8.2.2",
     "css-loader": "^7.1.2",
-    "electron": "^41.0.0",
+    "electron": "41.2.0",
     "electron-builder": "^26.8.1",
     "eslint": "^9.8.0",
     "html-webpack-plugin": "^5.6.0",

@@ -18,7 +18,7 @@ export function registerCommentCommands(yargs: Argv): Argv {
       .command(
         'list <task-id>',
         'List comments for a task',
-        (yy) => yy.positional('task-id', { type: 'string', demandOption: true }),
+        (yy) => yy.positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
         async (argv) => {
           const server = discoverServer();
           const comments = await apiRequest<Comment[]>(server, 'comments/getByTask', [argv['task-id']]);
@@ -34,7 +34,7 @@ export function registerCommentCommands(yargs: Argv): Argv {
         'Add a comment to a task',
         (yy) =>
           yy
-            .positional('task-id', { type: 'string', demandOption: true })
+            .positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .positional('body', { type: 'string', demandOption: true })
             .option('syncable', { type: 'boolean', default: false }),
         async (argv) => {

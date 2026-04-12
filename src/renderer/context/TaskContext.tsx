@@ -131,29 +131,41 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const tasks = useMemo(() => [...activeTasks, ...doneTasks], [activeTasks, doneTasks]);
 
   const refreshActiveTasks = useCallback(async () => {
-    const res = await window.api.tasks.getActive({ offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy });
+    const res = await window.api.tasks.getActive({
+      offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy,
+      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+    });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, [sortBy]);
+  }, [sortBy, filter]);
 
   const loadMoreActiveTasks = useCallback(async () => {
-    const res = await window.api.tasks.getActive({ offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy });
+    const res = await window.api.tasks.getActive({
+      offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy,
+      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+    });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, [activeTasks.length, sortBy]);
+  }, [activeTasks.length, sortBy, filter]);
 
   const loadDoneTasks = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: 0, limit: DONE_TASKS_LIMIT, sortBy });
+    const res = await window.api.tasks.getDone({
+      offset: 0, limit: DONE_TASKS_LIMIT, sortBy,
+      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+    });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
     setDoneTasksLoaded(true);
-  }, [sortBy]);
+  }, [sortBy, filter]);
 
   const loadMoreDoneTasks = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy });
+    const res = await window.api.tasks.getDone({
+      offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy,
+      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+    });
     setDoneTasks((prev) => [...prev, ...res.items]);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);

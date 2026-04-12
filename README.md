@@ -87,7 +87,10 @@ The CLI requires the Electron app to be running. It discovers the server via `{u
 ```bash
 ct status                           # Check if app is running
 ct task list                        # List active tasks
+ct task list --search "deploy"      # Search by title/description
+ct task list --full-id              # Show full UUIDs
 ct task create "New task"           # Create a task (appears in UI)
+ct task update "deploy" --status done  # Update by name (or ID prefix)
 ct timer start <task-id>            # Start timer (UI updates)
 ct timer stop                       # Stop timer
 ct report summary --from 2026-04-01 --to 2026-04-11  # Text report

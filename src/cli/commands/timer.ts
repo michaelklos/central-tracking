@@ -17,7 +17,7 @@ export function registerTimerCommands(yargs: Argv): Argv {
       .command(
         'start <task-id>',
         'Start timer for a task',
-        (yy) => yy.positional('task-id', { type: 'string', demandOption: true }),
+        (yy) => yy.positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
         async (argv) => {
           const server = discoverServer();
           const entry = await apiRequest<TimeEntry>(server, 'timeEntries/create', [

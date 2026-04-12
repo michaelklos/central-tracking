@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy } from '../../shared/types';
+import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams } from '../../shared/types';
 
 interface TaskRow {
   id: string;
@@ -85,6 +85,52 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
   }
 }
 
+function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; values: unknown[] } {
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+
+  if (params?.search) {
+    clauses.push('(title LIKE ? OR description LIKE ?)');
+    const pattern = `%${params.search}%`;
+    values.push(pattern, pattern);
+  }
+  if (params?.status) {
+    clauses.push('status = ?');
+    values.push(params.status);
+  }
+  if (params?.source) {
+    clauses.push('source = ?');
+    values.push(params.source);
+  }
+  if (params?.categoryId) {
+    clauses.push('id IN (SELECT task_id FROM task_categories WHERE category_id = ?)');
+    values.push(params.categoryId);
+  }
+
+  return { clauses, values };
+}
+
+function resolveTaskId(db: Database, id: string): string {
+  // Full UUID — return as-is
+  if (id.length >= 36) return id;
+
+  // Try ID prefix match first
+  const byId = db.instance
+    .prepare("SELECT id FROM tasks WHERE id LIKE ?")
+    .all(`${id}%`) as { id: string }[];
+  if (byId.length === 1) return byId[0].id;
+  if (byId.length > 1) throw new Error(`Ambiguous ID prefix "${id}" matches ${byId.length} tasks. Use more characters.`);
+
+  // Fall back to case-insensitive title match
+  const byTitle = db.instance
+    .prepare("SELECT id FROM tasks WHERE title LIKE ? AND deleted_at IS NULL")
+    .all(`%${id}%`) as { id: string }[];
+  if (byTitle.length === 1) return byTitle[0].id;
+  if (byTitle.length > 1) throw new Error(`Ambiguous name "${id}" matches ${byTitle.length} tasks. Be more specific.`);
+
+  throw new Error(`Task not found: ${id}`);
+}
+
 // ─── Exported handler functions (used by both IPC and HTTP server) ───
 
 export function getAllTasks(db: Database): Task[] {
@@ -95,26 +141,33 @@ export function getAllTasks(db: Database): Task[] {
 }
 
 export function getTaskById(db: Database, id: string): Task | null {
-  const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL').get(id) as
-    | TaskRow
-    | undefined;
+  const fullId = id.length < 36 ? (() => { try { return resolveTaskId(db, id); } catch { return null; } })() : id;
+  if (!fullId) return null;
+  const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL').get(fullId) as TaskRow | undefined;
   return row ? rowToTask(db, row) : null;
 }
 
-export function getActiveTasks(db: Database, params?: PaginationParams & { sortBy?: TaskSortBy }): PaginatedResponse<Task> {
+export function getActiveTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
   const offset = params?.offset ?? 0;
   const limit = params?.limit ?? 50;
   const orderBy = getSortOrderClause(params?.sortBy, false);
+  const { clauses, values } = buildFilterClauses(params);
+
+  const baseWhere = "status != 'done' AND deleted_at IS NULL";
+  const where = clauses.length > 0
+    ? `${baseWhere} AND ${clauses.join(' AND ')}`
+    : baseWhere;
+
   const rows = db.instance
     .prepare(
-      `SELECT * FROM tasks WHERE status != 'done' AND deleted_at IS NULL
+      `SELECT * FROM tasks WHERE ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
-    .all(limit, offset) as TaskRow[];
+    .all(...values, limit, offset) as TaskRow[];
   const countRow = db.instance
-    .prepare("SELECT COUNT(*) as total FROM tasks WHERE status != 'done' AND deleted_at IS NULL")
-    .get() as { total: number };
+    .prepare(`SELECT COUNT(*) as total FROM tasks WHERE ${where}`)
+    .get(...values) as { total: number };
   const items = rows.map((row) => rowToTask(db, row));
   return {
     items,
@@ -125,20 +178,27 @@ export function getActiveTasks(db: Database, params?: PaginationParams & { sortB
   };
 }
 
-export function getDoneTasks(db: Database, params?: PaginationParams & { sortBy?: TaskSortBy }): PaginatedResponse<Task> {
+export function getDoneTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
   const offset = params?.offset ?? 0;
   const limit = params?.limit ?? 50;
   const orderBy = getSortOrderClause(params?.sortBy, true);
+  const { clauses, values } = buildFilterClauses(params);
+
+  const baseWhere = "status = 'done' AND deleted_at IS NULL";
+  const where = clauses.length > 0
+    ? `${baseWhere} AND ${clauses.join(' AND ')}`
+    : baseWhere;
+
   const rows = db.instance
     .prepare(
-      `SELECT * FROM tasks WHERE status = 'done' AND deleted_at IS NULL
+      `SELECT * FROM tasks WHERE ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
-    .all(limit, offset) as TaskRow[];
+    .all(...values, limit, offset) as TaskRow[];
   const countRow = db.instance
-    .prepare("SELECT COUNT(*) as total FROM tasks WHERE status = 'done' AND deleted_at IS NULL")
-    .get() as { total: number };
+    .prepare(`SELECT COUNT(*) as total FROM tasks WHERE ${where}`)
+    .get(...values) as { total: number };
   const items = rows.map((row) => rowToTask(db, row));
   return {
     items,
@@ -189,6 +249,7 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 }
 
 export function updateTask(db: Database, id: string, updates: UpdateTaskInput): Task {
+  id = resolveTaskId(db, id);
   const sets: string[] = [];
   const values: unknown[] = [];
 
@@ -238,6 +299,7 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
 }
 
 export function deleteTask(db: Database, id: string): void {
+  id = resolveTaskId(db, id);
   db.instance
     .prepare("UPDATE tasks SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL")
     .run(id);
@@ -329,6 +391,7 @@ export function getDeletedTasks(db: Database, params?: PaginationParams): Pagina
 }
 
 export function restoreTask(db: Database, id: string): Task {
+  id = resolveTaskId(db, id);
   db.instance
     .prepare("UPDATE tasks SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ? AND deleted_at IS NOT NULL")
     .run(id);
@@ -353,6 +416,7 @@ export function batchRestoreTasks(db: Database, ids: string[]): { restoredCount:
 }
 
 export function purgeDeletedTask(db: Database, id: string): void {
+  id = resolveTaskId(db, id);
   db.instance
     .prepare('DELETE FROM tasks WHERE id = ? AND deleted_at IS NOT NULL')
     .run(id);
@@ -369,8 +433,8 @@ export function emptyRecycleBin(db: Database): void {
 export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:getAll', () => getAllTasks(db));
   ipcMain.handle('tasks:getById', (_event, id: string) => getTaskById(db, id));
-  ipcMain.handle('tasks:getActive', (_event, params?: PaginationParams & { sortBy?: TaskSortBy }) => getActiveTasks(db, params));
-  ipcMain.handle('tasks:getDone', (_event, params?: PaginationParams & { sortBy?: TaskSortBy }) => getDoneTasks(db, params));
+  ipcMain.handle('tasks:getActive', (_event, params?: TaskQueryParams) => getActiveTasks(db, params));
+  ipcMain.handle('tasks:getDone', (_event, params?: TaskQueryParams) => getDoneTasks(db, params));
   ipcMain.handle('tasks:create', (_event, input: CreateTaskInput) => createTask(db, input));
   ipcMain.handle('tasks:update', (_event, id: string, updates: UpdateTaskInput) => updateTask(db, id, updates));
   ipcMain.handle('tasks:delete', (_event, id: string) => deleteTask(db, id));

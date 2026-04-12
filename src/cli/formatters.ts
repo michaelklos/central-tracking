@@ -40,23 +40,27 @@ interface TaskLike {
   createdAt: string;
 }
 
-export function formatTaskTable(tasks: TaskLike[]): string {
+export function formatTaskTable(tasks: TaskLike[], options?: { fullId?: boolean }): string {
   if (tasks.length === 0) return 'No tasks found.';
 
+  const full = options?.fullId ?? false;
+  const idWidth = full ? 38 : 10;
+  const titleWidth = full ? 30 : 52;
+
   const rows = tasks.map((t) => ({
-    id: t.id.slice(0, 8),
-    title: truncate(t.title, 50),
+    id: full ? t.id : t.id.slice(0, 8),
+    title: truncate(t.title, titleWidth - 2),
     status: t.status,
     source: t.source,
     today: formatDuration(t.todayTimeSeconds),
     total: formatDuration(t.totalTimeSeconds),
   }));
 
-  const header = `${padRight('ID', 10)}${padRight('Title', 52)}${padRight('Status', 14)}${padRight('Source', 12)}${padLeft('Today', 8)}${padLeft('Total', 8)}`;
+  const header = `${padRight('ID', idWidth)}${padRight('Title', titleWidth)}${padRight('Status', 14)}${padRight('Source', 12)}${padLeft('Today', 8)}${padLeft('Total', 8)}`;
   const separator = '-'.repeat(header.length);
   const lines = rows.map(
     (r) =>
-      `${padRight(r.id, 10)}${padRight(r.title, 52)}${padRight(r.status, 14)}${padRight(r.source, 12)}${padLeft(r.today, 8)}${padLeft(r.total, 8)}`
+      `${padRight(r.id, idWidth)}${padRight(r.title, titleWidth)}${padRight(r.status, 14)}${padRight(r.source, 12)}${padLeft(r.today, 8)}${padLeft(r.total, 8)}`
   );
 
   return [header, separator, ...lines].join('\n');

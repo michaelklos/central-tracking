@@ -145,6 +145,15 @@ export interface PaginationParams {
   limit?: number;
 }
 
+export interface TaskFilterParams {
+  search?: string;
+  status?: string;
+  source?: string;
+  categoryId?: string;
+}
+
+export type TaskQueryParams = PaginationParams & TaskFilterParams & { sortBy?: TaskSortBy };
+
 // ─── Report Mode ────────────────────────────────────────────────────────────
 
 export type ReportMode = 'chart' | 'summary' | 'categories';
@@ -217,8 +226,8 @@ export interface CentralTrackingAPI {
   tasks: {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
-    getActive(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
-    getDone(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
+    getActive(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
+    getDone(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
     delete(id: string): Promise<void>;
