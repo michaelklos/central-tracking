@@ -45,6 +45,22 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     refreshTodayTotal();
   }, [refreshActive, refreshTodayTotal]);
 
+  // Refresh when CLI or other external process modifies data
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const unsubscribe = window.api.onDataChanged(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refreshActive();
+        refreshTodayTotal();
+      }, 100);
+    });
+    return () => {
+      clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [refreshActive, refreshTodayTotal]);
+
   // Tick the elapsed counter every second while timer is active
   useEffect(() => {
     if (intervalRef.current) {

@@ -83,22 +83,9 @@ export function TaskList() {
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
 
-  // Apply filters to active tasks
-  const applyFilter = (task: Task) => {
-    if (filter.status && task.status !== filter.status) return false;
-    if (filter.source && task.source !== filter.source) return false;
-    if (filter.categoryId && !task.categoryIds.includes(filter.categoryId)) return false;
-    if (filter.search) {
-      const q = filter.search.toLowerCase();
-      if (!task.title.toLowerCase().includes(q) && !task.description.toLowerCase().includes(q)) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const filteredActiveTasks = useMemo(() => activeTasks.filter(applyFilter), [activeTasks, filter]);
-  const filteredDoneTasks = useMemo(() => doneTasks.filter(applyFilter), [doneTasks, filter]);
+  // Filters are now applied server-side; use loaded tasks directly
+  const filteredActiveTasks = activeTasks;
+  const filteredDoneTasks = doneTasks;
 
   // For non-grouped and source-grouped views, combine active + done
   const allFilteredTasks = useMemo(

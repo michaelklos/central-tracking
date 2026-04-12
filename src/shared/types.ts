@@ -145,6 +145,15 @@ export interface PaginationParams {
   limit?: number;
 }
 
+export interface TaskFilterParams {
+  search?: string;
+  status?: string;
+  source?: string;
+  categoryId?: string;
+}
+
+export type TaskQueryParams = PaginationParams & TaskFilterParams & { sortBy?: TaskSortBy };
+
 // ─── Report Mode ────────────────────────────────────────────────────────────
 
 export type ReportMode = 'chart' | 'summary' | 'categories';
@@ -171,29 +180,6 @@ export interface SummaryReportEntry {
 export interface TimeEntryWithTask extends TimeEntry {
   taskTitle: string;
   taskSource: TaskSource;
-}
-
-// ─── Plugin ──────────────────────────────────────────────────────────────────
-
-export interface PluginInfo {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  configFields: PluginConfigField[];
-}
-
-export interface PluginConfigField {
-  key: string;
-  label: string;
-  type: 'string' | 'password' | 'url' | 'number' | 'boolean';
-  required: boolean;
-}
-
-export interface PluginSyncResult {
-  created: number;
-  updated: number;
-  errors: string[];
 }
 
 // ─── Import ─────────────────────────────────────────────────────────────────
@@ -240,8 +226,8 @@ export interface CentralTrackingAPI {
   tasks: {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
-    getActive(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
-    getDone(params?: PaginationParams & { sortBy?: TaskSortBy }): Promise<PaginatedResponse<Task>>;
+    getActive(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
+    getDone(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
     delete(id: string): Promise<void>;
@@ -281,10 +267,6 @@ export interface CentralTrackingAPI {
     delete(id: string): Promise<void>;
     assignToTask(taskId: string, categoryIds: string[]): Promise<void>;
   };
-  plugins: {
-    list(): Promise<PluginInfo[]>;
-    sync(pluginId: string): Promise<PluginSyncResult>;
-  };
   window: {
     setAlwaysOnTop(flag: boolean): Promise<void>;
     getAlwaysOnTop(): Promise<boolean>;
@@ -296,4 +278,5 @@ export interface CentralTrackingAPI {
     selectAndParse(): Promise<ImportPreview | null>;
     execute(items: ImportPreviewItem[]): Promise<ImportResult>;
   };
+  onDataChanged(callback: () => void): () => void;
 }

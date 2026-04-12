@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "description": "Extensible task and time tracking application with plugin architecture for external source integration",
   "main": "dist/main/main.js",
+  "bin": {
+    "ct": "dist/cli/cli/main.js"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
     "dev:renderer": "webpack serve --config webpack.renderer.config.js --mode development",
     "build:main": "tsc -p tsconfig.main.json",
+    "build:cli": "tsc -p tsconfig.cli.json",
     "build:renderer": "webpack --config webpack.renderer.config.js --mode production",
-    "build": "npm run build:main && npm run build:renderer",
+    "build": "npm run build:main && npm run build:renderer && npm run build:cli",
     "start": "electron dist/main/main.js",
     "start:debug": "electron dist/main/main.js --debug",
     "pack": "npm run build && electron-builder --dir",
@@ -17,7 +21,9 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
+    "pretest": "node scripts/ensure-node-sqlite.js",
     "test": "vitest run",
+    "posttest": "npx electron-rebuild -f -w better-sqlite3 2>/dev/null; exit 0",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint 'src/**/*.{ts,tsx}'"
@@ -82,12 +88,14 @@
     }
   },
   "dependencies": {
+    "@types/yargs": "17.0.35",
     "better-sqlite3": "^12.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",
     "recharts": "^3.7.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "yargs": "18.0.0"
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
@@ -102,7 +110,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "concurrently": "^8.2.2",
     "css-loader": "^7.1.2",
-    "electron": "^41.0.0",
+    "electron": "41.2.0",
     "electron-builder": "^26.8.1",
     "eslint": "^9.8.0",
     "html-webpack-plugin": "^5.6.0",

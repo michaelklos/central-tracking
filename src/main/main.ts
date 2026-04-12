@@ -7,14 +7,14 @@ import { registerCommentHandlers } from './ipc/commentHandlers';
 import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
-import { PluginManager } from './plugins/pluginManager';
 import { startMouseMover, stopMouseMover } from './activityMonitor';
+import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 
 const mmEnabled = process.argv.includes('--mm');
 
 let mainWindow: BrowserWindow | null = null;
 let database: Database;
-let pluginManager: PluginManager;
+let httpServer: HttpServerInstance | null = null;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -46,8 +46,6 @@ app.whenReady().then(() => {
   const dbPath = path.join(app.getPath('userData'), 'central-tracking.db');
   database = new Database(dbPath);
 
-  pluginManager = new PluginManager(database);
-
   registerTaskHandlers(ipcMain, database);
   registerTimeEntryHandlers(ipcMain, database);
   registerCommentHandlers(ipcMain, database);
@@ -69,10 +67,13 @@ app.whenReady().then(() => {
     return mainWindow?.isAlwaysOnTop() ?? false;
   });
 
-  // Plugin IPC handlers
-  ipcMain.handle('plugins:list', () => pluginManager.listPlugins());
-  ipcMain.handle('plugins:sync', async (_event, pluginId: string) => {
-    return pluginManager.syncPlugin(pluginId);
+  // Start HTTP server for CLI access
+  const userDataPath = app.getPath('userData');
+  startHttpServer(database, userDataPath, () => mainWindow).then((server) => {
+    httpServer = server;
+    console.log(`CLI server listening on port ${server.port}`);
+  }).catch((err) => {
+    console.error('Failed to start CLI server:', err);
   });
 
   createWindow();
@@ -91,5 +92,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  httpServer?.close();
   database?.close();
 });

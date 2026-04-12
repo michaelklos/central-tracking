@@ -47,10 +47,7 @@ export function createMockApi(): CentralTrackingAPI {
       delete: vi.fn().mockResolvedValue(undefined),
       assignToTask: vi.fn().mockResolvedValue(undefined),
     },
-    plugins: {
-      list: vi.fn().mockResolvedValue([]),
-      sync: vi.fn().mockResolvedValue({ created: 0, updated: 0, errors: [] }),
-    },
+    onDataChanged: vi.fn().mockReturnValue(() => {}),
     window: {
       setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
       getAlwaysOnTop: vi.fn().mockResolvedValue(false),
