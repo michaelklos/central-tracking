@@ -173,29 +173,6 @@ export interface TimeEntryWithTask extends TimeEntry {
   taskSource: TaskSource;
 }
 
-// ─── Plugin ──────────────────────────────────────────────────────────────────
-
-export interface PluginInfo {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  configFields: PluginConfigField[];
-}
-
-export interface PluginConfigField {
-  key: string;
-  label: string;
-  type: 'string' | 'password' | 'url' | 'number' | 'boolean';
-  required: boolean;
-}
-
-export interface PluginSyncResult {
-  created: number;
-  updated: number;
-  errors: string[];
-}
-
 // ─── Import ─────────────────────────────────────────────────────────────────
 
 export interface ParsedImportItem {
@@ -281,10 +258,6 @@ export interface CentralTrackingAPI {
     delete(id: string): Promise<void>;
     assignToTask(taskId: string, categoryIds: string[]): Promise<void>;
   };
-  plugins: {
-    list(): Promise<PluginInfo[]>;
-    sync(pluginId: string): Promise<PluginSyncResult>;
-  };
   window: {
     setAlwaysOnTop(flag: boolean): Promise<void>;
     getAlwaysOnTop(): Promise<boolean>;
@@ -296,4 +269,5 @@ export interface CentralTrackingAPI {
     selectAndParse(): Promise<ImportPreview | null>;
     execute(items: ImportPreviewItem[]): Promise<ImportResult>;
   };
+  onDataChanged(callback: () => void): () => void;
 }

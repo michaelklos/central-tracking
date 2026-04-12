@@ -1,6 +1,6 @@
 # Central Tracking
 
-A desktop task and time tracking application built with Electron, React, and TypeScript. Designed as a personal productivity hub that consolidates tasks from multiple sources — ad-hoc items, email follow-ups, meeting prep — alongside a plugin system for syncing with external tools like Azure DevOps and Jira.
+A desktop task and time tracking application built with Electron, React, and TypeScript. Designed as a personal productivity hub that consolidates tasks from multiple sources — ad-hoc items, email follow-ups, meeting prep — with a CLI (`ct`) for programmatic access by AI agents and scripts.
 
 ## Features
 
@@ -14,7 +14,8 @@ A desktop task and time tracking application built with Electron, React, and Typ
 - **Reporting** — Date range picker, stacked bar chart visualization (recharts), CSV export
 - **Filtering** — Search tasks by text, filter by status, source, or category
 - **UI productivity** — Split action button, always-on-top pin, settings menu, scrollable panels
-- **Plugin architecture** — Extensible system for integrating with external task/ticket systems (ADO and Jira scaffolds included)
+- **CLI (`ct`)** — Full-featured command-line interface for all operations; changes appear in the UI in real-time. Supports `--json` for machine-readable output.
+- **Agent-friendly** — External integrations (ADO, Jira, custom scripts) use CLI commands rather than in-process plugins
 - **Debug mode** — Verbose logging with `--debug` flag
 - **Local-first** — All data stored in a local SQLite database; no account or cloud service required
 
@@ -65,6 +66,36 @@ The renderer dev server runs on `http://localhost:3000` with hot reloading. Elec
 npm run build
 npm start
 ```
+
+### CLI
+
+Build and link the CLI:
+
+```bash
+npm run build:cli     # Compile CLI to dist/cli/
+npm link              # Makes `ct` available globally
+```
+
+Or run directly:
+
+```bash
+node dist/cli/cli/main.js --help
+```
+
+The CLI requires the Electron app to be running. It discovers the server via `{userData}/ct-server.json`.
+
+```bash
+ct status                           # Check if app is running
+ct task list                        # List active tasks
+ct task create "New task"           # Create a task (appears in UI)
+ct timer start <task-id>            # Start timer (UI updates)
+ct timer stop                       # Stop timer
+ct report summary --from 2026-04-01 --to 2026-04-11  # Text report
+ct report export --from 2026-04-01 --to 2026-04-11 --out report.csv
+ct task list --json                 # Machine-readable output
+```
+
+See `ct --help` or `ct <command> --help` for full usage.
 
 ### Debug Mode
 
@@ -176,12 +207,19 @@ npm run test:coverage # Run with coverage report
 ```
 src/
   main/              # Electron main process
-    main.ts          # App bootstrap, window creation
+    main.ts          # App bootstrap, window creation, HTTP server startup
     preload.ts       # Context bridge API
     logger.ts        # Debug logger
     database/        # SQLite database + migrations
     ipc/             # IPC handlers by domain (tasks, timeEntries, comments, categories, reports)
-    plugins/         # Plugin system (interface + implementations)
+    server/          # Local HTTP server for CLI communication
+    reports/         # Pure report generation (CSV)
+    import/          # Import parsing and execution
+  cli/               # CLI tool (`ct`)
+    main.ts          # Entry point, yargs command tree
+    client.ts        # Server discovery and HTTP client
+    formatters.ts    # Human-readable output formatting
+    commands/        # Command modules (task, timer, time, report, comment, category, import, status)
   renderer/          # React UI
     App.tsx          # Root component with HashRouter
     components/      # Layout, Sidebar, TaskList, TaskDetail, TimerBar,

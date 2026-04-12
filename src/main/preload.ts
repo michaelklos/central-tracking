@@ -63,12 +63,6 @@ const api = {
       ipcRenderer.invoke('categories:assignToTask', taskId, categoryIds),
   },
 
-  // Plugins
-  plugins: {
-    list: () => ipcRenderer.invoke('plugins:list'),
-    sync: (pluginId: string) => ipcRenderer.invoke('plugins:sync', pluginId),
-  },
-
   // Window management
   window: {
     setAlwaysOnTop: (flag: boolean) => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
@@ -85,6 +79,15 @@ const api = {
   import: {
     selectAndParse: () => ipcRenderer.invoke('import:selectAndParse'),
     execute: (items: unknown[]) => ipcRenderer.invoke('import:execute', items),
+  },
+
+  // Data change notifications (pushed from main process when CLI makes changes)
+  onDataChanged: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('ct:data-changed', handler);
+    return () => {
+      ipcRenderer.removeListener('ct:data-changed', handler);
+    };
   },
 };
 

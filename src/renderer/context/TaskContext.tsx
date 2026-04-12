@@ -207,6 +207,24 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     refreshCategories();
   }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories]);
 
+  // Refresh when CLI or other external process modifies data
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    const unsubscribe = window.api.onDataChanged(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refreshActiveTasks();
+        refreshDoneCount();
+        refreshDeletedCount();
+        refreshCategories();
+      }, 100);
+    });
+    return () => {
+      clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories]);
+
   const createTask = useCallback(async (input: CreateTaskInput) => {
     const task = await window.api.tasks.create(input);
     await refreshActiveTasks();
