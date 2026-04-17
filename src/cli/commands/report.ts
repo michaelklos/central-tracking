@@ -1,9 +1,8 @@
 import * as fs from 'fs';
 import type { Argv } from 'yargs';
-import { discoverServer, apiRequest } from '../client';
 import { formatSummaryReport, formatTimeEntryTable } from '../formatters';
+import { runCommand, output, say } from '../runtime';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
-import type { SummaryReportEntry, TimeEntryReport, TimeEntryWithTask } from '../../shared/types';
 
 export function registerReportCommands(yargs: Argv): Argv {
   return yargs.command('report', 'Generate reports', (y) =>
@@ -15,17 +14,13 @@ export function registerReportCommands(yargs: Argv): Argv {
           yy
             .option('from', { type: 'string', demandOption: true, describe: 'Start date (YYYY-MM-DD)' })
             .option('to', { type: 'string', demandOption: true, describe: 'End date (YYYY-MM-DD)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const start = toIsoStartOfDay(argv.from);
-          const end = toIsoEndOfDay(argv.to);
-          const entries = await apiRequest<SummaryReportEntry[]>(server, 'timeEntries/getSummaryReport', [start, end]);
-          if (argv.json) {
-            console.log(JSON.stringify(entries, null, 2));
-          } else {
-            console.log(formatSummaryReport(entries));
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const start = toIsoStartOfDay(argv.from);
+            const end = toIsoEndOfDay(argv.to);
+            const entries = await client.timeEntries.getSummaryReport(start, end);
+            output(argv, entries, formatSummaryReport);
+          }),
       )
       .command(
         'detail',
@@ -34,21 +29,14 @@ export function registerReportCommands(yargs: Argv): Argv {
           yy
             .option('from', { type: 'string', demandOption: true })
             .option('to', { type: 'string', demandOption: true }),
-        async (argv) => {
-          const server = discoverServer();
-          const start = toIsoStartOfDay(argv.from);
-          const end = toIsoEndOfDay(argv.to);
-          const entries = await apiRequest<TimeEntryWithTask[]>(server, 'timeEntries/getByDateRangeWithTasks', [start, end]);
-          if (argv.json) {
-            console.log(JSON.stringify(entries, null, 2));
-          } else {
-            const withNotes = entries.map((e) => ({
-              ...e,
-              note: e.note || e.taskTitle,
-            }));
-            console.log(formatTimeEntryTable(withNotes));
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const start = toIsoStartOfDay(argv.from);
+            const end = toIsoEndOfDay(argv.to);
+            const entries = await client.timeEntries.getByDateRangeWithTasks(start, end);
+            const withNotes = entries.map((e) => ({ ...e, note: e.note || e.taskTitle }));
+            output(argv, entries, () => formatTimeEntryTable(withNotes));
+          }),
       )
       .command(
         'chart',
@@ -57,14 +45,14 @@ export function registerReportCommands(yargs: Argv): Argv {
           yy
             .option('from', { type: 'string', demandOption: true })
             .option('to', { type: 'string', demandOption: true }),
-        async (argv) => {
-          const server = discoverServer();
-          const start = toIsoStartOfDay(argv.from);
-          const end = toIsoEndOfDay(argv.to);
-          const data = await apiRequest<TimeEntryReport[]>(server, 'timeEntries/getReport', [start, end]);
-          // Chart data is always JSON (it's meant for programmatic consumption)
-          console.log(JSON.stringify(data, null, 2));
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const start = toIsoStartOfDay(argv.from);
+            const end = toIsoEndOfDay(argv.to);
+            const data = await client.timeEntries.getReport(start, end);
+            // Chart data is always JSON (meant for programmatic consumption).
+            process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+          }),
       )
       .command(
         'export',
@@ -74,18 +62,18 @@ export function registerReportCommands(yargs: Argv): Argv {
             .option('from', { type: 'string', demandOption: true })
             .option('to', { type: 'string', demandOption: true })
             .option('out', { type: 'string', describe: 'Output file path (default: stdout)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const start = toIsoStartOfDay(argv.from);
-          const end = toIsoEndOfDay(argv.to);
-          const csv = await apiRequest<string>(server, 'reports/generateCsv', [start, end]);
-          if (argv.out) {
-            fs.writeFileSync(argv.out, csv, 'utf-8');
-            console.error(`Exported to ${argv.out}`);
-          } else {
-            console.log(csv);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const start = toIsoStartOfDay(argv.from);
+            const end = toIsoEndOfDay(argv.to);
+            const csv = await client.reports.generateCsv(start, end);
+            if (argv.out) {
+              fs.writeFileSync(argv.out, csv, 'utf-8');
+              process.stderr.write(`Exported to ${argv.out}\n`);
+            } else {
+              say(csv);
+            }
+          }),
       )
       .demandCommand(1, 'Specify a report subcommand')
   );

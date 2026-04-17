@@ -3,10 +3,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-interface ServerInfo {
+export interface ServerInfo {
   port: number;
   token: string;
   pid: number;
+}
+
+export interface RequestOptions {
+  /** Request timeout in milliseconds. Default: 10000. */
+  timeoutMs?: number;
+  /** Log request/response to stderr. Default: false. */
+  debug?: boolean;
+  /** How many times to retry on ECONNREFUSED. Default: 1. */
+  retries?: number;
+  /** Base retry backoff in milliseconds. Default: 500. */
+  retryDelayMs?: number;
 }
 
 interface ApiResponse<T = unknown> {
@@ -70,13 +81,22 @@ export function discoverServer(): ServerInfo {
   throw new Error('Central Tracking is not running. Start the app first.');
 }
 
-export function apiRequest<T = unknown>(
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sendOnce<T>(
   server: ServerInfo,
   endpoint: string,
-  args: unknown[] = [],
+  args: unknown[],
+  timeoutMs: number,
+  debug: boolean,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({ args });
+    if (debug) {
+      process.stderr.write(`[ct debug] POST /api/${endpoint} ${data}\n`);
+    }
     const req = http.request(
       {
         hostname: '127.0.0.1',
@@ -95,6 +115,9 @@ export function apiRequest<T = unknown>(
         let body = '';
         res.on('data', (chunk: string) => (body += chunk));
         res.on('end', () => {
+          if (debug) {
+            process.stderr.write(`[ct debug] ${res.statusCode} ${body.slice(0, 500)}\n`);
+          }
           try {
             const response: ApiResponse<T> = JSON.parse(body);
             if (response.ok) {
@@ -108,14 +131,47 @@ export function apiRequest<T = unknown>(
         });
       },
     );
-    req.on('error', (err) => {
-      if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
-        reject(new Error(`Cannot connect to Central Tracking on port ${server.port}. The app may be starting up.`));
-      } else {
-        reject(err);
-      }
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Request to /api/${endpoint} timed out after ${timeoutMs}ms`));
     });
+    req.on('error', (err) => reject(err));
     req.write(data);
     req.end();
   });
+}
+
+export async function apiRequest<T = unknown>(
+  server: ServerInfo,
+  endpoint: string,
+  args: unknown[] = [],
+  options: RequestOptions = {},
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const debug = options.debug ?? false;
+  const retries = options.retries ?? 1;
+  const retryDelayMs = options.retryDelayMs ?? 500;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await sendOnce<T>(server, endpoint, args, timeoutMs, debug);
+    } catch (err) {
+      lastError = err;
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ECONNREFUSED' && attempt < retries) {
+        if (debug) {
+          process.stderr.write(`[ct debug] ECONNREFUSED, retrying in ${retryDelayMs}ms (attempt ${attempt + 1}/${retries})\n`);
+        }
+        await sleep(retryDelayMs);
+        continue;
+      }
+      break;
+    }
+  }
+
+  const code = (lastError as NodeJS.ErrnoException)?.code;
+  if (code === 'ECONNREFUSED') {
+    throw new Error(`Cannot connect to Central Tracking on port ${server.port}. The app may be starting up.`);
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }

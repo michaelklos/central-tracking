@@ -12,12 +12,24 @@ import { registerStatusCommands } from './commands/status';
 
 const cli: Argv = yargs(hideBin(process.argv))
   .scriptName('ct')
-  .usage('$0 [--json] <command> [subcommand] [args]')
+  .usage('$0 [--json] [--debug] [--timeout=SECONDS] <command> [subcommand] [args]')
   .option('json', {
     type: 'boolean',
     global: true,
     default: false,
     describe: 'Output in JSON format',
+  })
+  .option('debug', {
+    type: 'boolean',
+    global: true,
+    default: false,
+    describe: 'Log HTTP request/response to stderr',
+  })
+  .option('timeout', {
+    type: 'number',
+    global: true,
+    default: 10,
+    describe: 'Request timeout in seconds',
   })
   .strict();
 
