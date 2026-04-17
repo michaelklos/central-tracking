@@ -9,6 +9,7 @@ import { registerCommentCommands } from './commands/comment';
 import { registerCategoryCommands } from './commands/category';
 import { registerImportCommands } from './commands/import';
 import { registerStatusCommands } from './commands/status';
+import { registerPluginCommands } from './commands/plugin';
 
 const cli: Argv = yargs(hideBin(process.argv))
   .scriptName('ct')
@@ -42,6 +43,7 @@ registerCommentCommands(cli);
 registerCategoryCommands(cli);
 registerImportCommands(cli);
 registerStatusCommands(cli);
+registerPluginCommands(cli);
 
 cli
   .demandCommand(1, 'Specify a command. Use --help for available commands.')

@@ -80,6 +80,18 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
   INSERT OR IGNORE INTO schema_version (version) VALUES (4);
   `,
+  // Migration 005: Plugin registry (metadata for installed plugins)
+  `
+  CREATE TABLE IF NOT EXISTS plugins (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    manifest TEXT NOT NULL DEFAULT '{}',
+    installed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  INSERT OR IGNORE INTO schema_version (version) VALUES (5);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

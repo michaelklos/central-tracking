@@ -3,6 +3,7 @@ import type { Database } from '../database/database';
 import type { BrowserWindow } from 'electron';
 import { generateToken, writeServerFile, removeServerFile, isValidToken, isValidHost } from './auth';
 import { buildRouteMap } from './apiManifest';
+import { dispatchEvent } from './webhooks';
 
 export { apiManifest, buildRouteMap } from './apiManifest';
 export type { ApiRoute } from './apiManifest';
@@ -95,6 +96,15 @@ export async function startHttpServer(
         const win = getMainWindow();
         if (win && !win.isDestroyed()) {
           win.webContents.send('ct:data-changed');
+        }
+        // Dispatch plugin webhook events (fire-and-forget; never blocks response)
+        if (route.event) {
+          void dispatchEvent(
+            db,
+            token,
+            { event: route.event, route: route.route, data: result, timestamp: new Date().toISOString() },
+            (msg) => process.stderr.write(`${msg}\n`),
+          );
         }
       }
     } catch (err) {

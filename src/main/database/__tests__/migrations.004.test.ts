@@ -41,13 +41,14 @@ describe('Migration 004 - Soft-delete (recycle bin)', () => {
     db.close();
   });
 
-  it('sets schema_version to 4', () => {
+  it('migration 004 row is present in schema_version', () => {
     const db = new BetterSqlite3(':memory:');
     db.pragma('foreign_keys = ON');
     runMigrations(db);
 
-    const row = db.prepare('SELECT MAX(version) as version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(4);
+    const rows = db.prepare('SELECT version FROM schema_version ORDER BY version').all() as { version: number }[];
+    const versions = rows.map((r) => r.version);
+    expect(versions).toContain(4);
     db.close();
   });
 });

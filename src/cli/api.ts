@@ -21,6 +21,9 @@ import type {
   ImportPreviewItem,
   ImportResult,
   ImportError,
+  Plugin,
+  PluginManifest,
+  PluginConfigEntry,
 } from '../shared/types';
 
 export type RawRequest = <T = unknown>(endpoint: string, args?: unknown[]) => Promise<T>;
@@ -76,6 +79,17 @@ export interface ApiClient {
   import: {
     parseContent(content: string): Promise<{ items: ImportPreviewItem[]; errors: ImportError[] }>;
     execute(items: ImportPreviewItem[]): Promise<ImportResult>;
+  };
+  plugins: {
+    list(): Promise<Plugin[]>;
+    get(id: string): Promise<Plugin | null>;
+    install(manifest: PluginManifest): Promise<Plugin>;
+    uninstall(id: string): Promise<void>;
+    setEnabled(id: string, enabled: boolean): Promise<Plugin>;
+    getConfig(id: string, key: string): Promise<string | null>;
+    listConfig(id: string): Promise<PluginConfigEntry[]>;
+    setConfig(id: string, key: string, value: string): Promise<void>;
+    deleteConfig(id: string, key: string): Promise<void>;
   };
 }
 
@@ -136,6 +150,17 @@ export function createApiClient(request: RawRequest): ApiClient {
       parseContent: (content) =>
         request<{ items: ImportPreviewItem[]; errors: ImportError[] }>('import/parseContent', [content]),
       execute: (items) => request<ImportResult>('import/execute', [items]),
+    },
+    plugins: {
+      list: () => request<Plugin[]>('plugins/list'),
+      get: (id) => request<Plugin | null>('plugins/get', [id]),
+      install: (manifest) => request<Plugin>('plugins/install', [manifest]),
+      uninstall: (id) => request<void>('plugins/uninstall', [id]),
+      setEnabled: (id, enabled) => request<Plugin>('plugins/setEnabled', [id, enabled]),
+      getConfig: (id, key) => request<string | null>('plugins/getConfig', [id, key]),
+      listConfig: (id) => request<PluginConfigEntry[]>('plugins/listConfig', [id]),
+      setConfig: (id, key, value) => request<void>('plugins/setConfig', [id, key, value]),
+      deleteConfig: (id, key) => request<void>('plugins/deleteConfig', [id, key]),
     },
   };
 }

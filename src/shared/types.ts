@@ -222,6 +222,46 @@ export interface ImportResult {
   errors: string[];
 }
 
+// ─── Plugins ────────────────────────────────────────────────────────────────
+
+/**
+ * Plugin manifest loaded from `plugin.json`. Supplied by the plugin author;
+ * `ct plugin install` validates and persists a snapshot into the plugins table.
+ */
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  /** Command to run (e.g. "node sync.js" or "./bin/my-plugin"). Used by `ct plugin run`. */
+  entrypoint?: string;
+  /** Event names this plugin subscribes to (e.g. "task.created"). '*' matches all. */
+  events?: string[];
+  /** Loopback webhook URL that receives POSTed events. */
+  webhook?: { url: string };
+}
+
+export interface Plugin {
+  id: string;
+  name: string;
+  version: string;
+  enabled: boolean;
+  manifest: PluginManifest;
+  installedAt: string;
+}
+
+export interface PluginConfigEntry {
+  pluginId: string;
+  key: string;
+  value: string;
+}
+
+export interface WebhookEvent {
+  event: string;        // e.g. "task.created"
+  route: string;        // e.g. "tasks/create"
+  data: unknown;        // handler return value
+  timestamp: string;    // ISO timestamp
+}
+
 // ─── API bridge type (exposed via preload) ───────────────────────────────────
 
 export interface CentralTrackingAPI {

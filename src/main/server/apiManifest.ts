@@ -26,6 +26,11 @@ import {
 import { generateCsvContent } from '../reports/csvGenerator';
 import { parseImportContent, executeImport } from '../import/importExecutor';
 
+import {
+  installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
+  getPluginConfig, setPluginConfig, deletePluginConfig, listPluginConfig,
+} from '../ipc/pluginHandlers';
+
 export type ApiHandler = (db: Database, ...args: unknown[]) => unknown;
 
 export interface ApiRoute {
@@ -92,6 +97,17 @@ export const apiManifest: readonly ApiRoute[] = [
   // Import — HTTP uses the pure content parser; the `import:selectAndParse` IPC is UI-only (opens file dialog).
   { route: 'import/parseContent', ipcChannel: null,             mutates: false, handler: (db, content) => parseImportContent(db, content as string) },
   { route: 'import/execute',      ipcChannel: 'import:execute', mutates: true,  event: 'import.executed', handler: (db, items) => executeImport(db, items as never[]) },
+
+  // Plugins — CLI-only surface (no IPC, no UI). Webhook dispatch reads from the plugins table.
+  { route: 'plugins/list',         ipcChannel: null, mutates: false, handler: (db) => listPlugins(db) },
+  { route: 'plugins/get',          ipcChannel: null, mutates: false, handler: (db, id) => getPlugin(db, id as string) },
+  { route: 'plugins/install',      ipcChannel: null, mutates: true,  event: 'plugin.installed',   handler: (db, manifest) => installPlugin(db, manifest) },
+  { route: 'plugins/uninstall',    ipcChannel: null, mutates: true,  event: 'plugin.uninstalled', handler: (db, id) => uninstallPlugin(db, id as string) },
+  { route: 'plugins/setEnabled',   ipcChannel: null, mutates: true,  event: 'plugin.updated',     handler: (db, id, enabled) => setPluginEnabled(db, id as string, enabled as boolean) },
+  { route: 'plugins/getConfig',    ipcChannel: null, mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
+  { route: 'plugins/listConfig',   ipcChannel: null, mutates: false, handler: (db, id) => listPluginConfig(db, id as string) },
+  { route: 'plugins/setConfig',    ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value) => setPluginConfig(db, id as string, key as string, value as string) },
+  { route: 'plugins/deleteConfig', ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key) => deletePluginConfig(db, id as string, key as string) },
 ];
 
 /** Route key (e.g. "tasks/getAll") → route entry. Used by the HTTP server. */
