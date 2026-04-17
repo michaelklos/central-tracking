@@ -26,7 +26,9 @@
     "posttest": "npx electron-rebuild -f -w better-sqlite3 2>/dev/null; exit 0",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint 'src/**/*.{ts,tsx}'"
+    "lint": "eslint 'src/**/*.{ts,tsx}'",
+    "docs": "npm run build:cli && node scripts/generate-cli-docs.js",
+    "docs:check": "npm run build:cli && node scripts/generate-cli-docs.js --check"
   },
   "build": {
     "appId": "com.centraltracking.app",
