@@ -2,34 +2,8 @@ import * as fs from 'fs';
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatSummaryReport, formatTimeEntryTable } from '../formatters';
-
-interface SummaryReportEntry {
-  date: string;
-  taskId: string;
-  taskTitle: string;
-  taskSource: string;
-  taskStatus: string;
-  categoryIds: string[];
-  totalSeconds: number;
-}
-
-interface TimeEntryReport {
-  date: string;
-  taskId: string;
-  taskTitle: string;
-  totalSeconds: number;
-}
-
-interface TimeEntryWithTask {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-  taskTitle: string;
-  taskSource: string;
-}
+import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
+import type { SummaryReportEntry, TimeEntryReport, TimeEntryWithTask } from '../../shared/types';
 
 export function registerReportCommands(yargs: Argv): Argv {
   return yargs.command('report', 'Generate reports', (y) =>
@@ -43,8 +17,8 @@ export function registerReportCommands(yargs: Argv): Argv {
             .option('to', { type: 'string', demandOption: true, describe: 'End date (YYYY-MM-DD)' }),
         async (argv) => {
           const server = discoverServer();
-          const start = `${argv.from}T00:00:00.000Z`;
-          const end = `${argv.to}T23:59:59.999Z`;
+          const start = toIsoStartOfDay(argv.from);
+          const end = toIsoEndOfDay(argv.to);
           const entries = await apiRequest<SummaryReportEntry[]>(server, 'timeEntries/getSummaryReport', [start, end]);
           if (argv.json) {
             console.log(JSON.stringify(entries, null, 2));
@@ -62,8 +36,8 @@ export function registerReportCommands(yargs: Argv): Argv {
             .option('to', { type: 'string', demandOption: true }),
         async (argv) => {
           const server = discoverServer();
-          const start = `${argv.from}T00:00:00.000Z`;
-          const end = `${argv.to}T23:59:59.999Z`;
+          const start = toIsoStartOfDay(argv.from);
+          const end = toIsoEndOfDay(argv.to);
           const entries = await apiRequest<TimeEntryWithTask[]>(server, 'timeEntries/getByDateRangeWithTasks', [start, end]);
           if (argv.json) {
             console.log(JSON.stringify(entries, null, 2));
@@ -85,8 +59,8 @@ export function registerReportCommands(yargs: Argv): Argv {
             .option('to', { type: 'string', demandOption: true }),
         async (argv) => {
           const server = discoverServer();
-          const start = `${argv.from}T00:00:00.000Z`;
-          const end = `${argv.to}T23:59:59.999Z`;
+          const start = toIsoStartOfDay(argv.from);
+          const end = toIsoEndOfDay(argv.to);
           const data = await apiRequest<TimeEntryReport[]>(server, 'timeEntries/getReport', [start, end]);
           // Chart data is always JSON (it's meant for programmatic consumption)
           console.log(JSON.stringify(data, null, 2));
@@ -102,8 +76,8 @@ export function registerReportCommands(yargs: Argv): Argv {
             .option('out', { type: 'string', describe: 'Output file path (default: stdout)' }),
         async (argv) => {
           const server = discoverServer();
-          const start = `${argv.from}T00:00:00.000Z`;
-          const end = `${argv.to}T23:59:59.999Z`;
+          const start = toIsoStartOfDay(argv.from);
+          const end = toIsoEndOfDay(argv.to);
           const csv = await apiRequest<string>(server, 'reports/generateCsv', [start, end]);
           if (argv.out) {
             fs.writeFileSync(argv.out, csv, 'utf-8');

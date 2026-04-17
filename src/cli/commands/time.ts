@@ -1,32 +1,8 @@
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatDuration, formatTimeEntryTable } from '../formatters';
-
-interface TimeEntry {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-}
-
-interface PaginatedResponse {
-  items: TimeEntry[];
-  total: number;
-  hasMore: boolean;
-}
-
-function parseDuration(durationStr: string): number {
-  let total = 0;
-  const hourMatch = durationStr.match(/(\d+)h/);
-  const minMatch = durationStr.match(/(\d+)m/);
-  const secMatch = durationStr.match(/(\d+)s/);
-  if (hourMatch) total += parseInt(hourMatch[1]) * 3600;
-  if (minMatch) total += parseInt(minMatch[1]) * 60;
-  if (secMatch) total += parseInt(secMatch[1]);
-  return total;
-}
+import { parseDuration } from '../../shared/duration';
+import type { TimeEntry, PaginatedResponse } from '../../shared/types';
 
 export function registerTimeCommands(yargs: Argv): Argv {
   return yargs.command('time', 'Manage time entries', (y) =>
@@ -41,7 +17,7 @@ export function registerTimeCommands(yargs: Argv): Argv {
             .option('offset', { type: 'number', default: 0 }),
         async (argv) => {
           const server = discoverServer();
-          const result = await apiRequest<PaginatedResponse>(server, 'timeEntries/getByTaskPaginated', [
+          const result = await apiRequest<PaginatedResponse<TimeEntry>>(server, 'timeEntries/getByTaskPaginated', [
             argv['task-id'],
             { offset: argv.offset, limit: argv.limit },
           ]);
@@ -71,6 +47,10 @@ export function registerTimeCommands(yargs: Argv): Argv {
 
           if (argv.duration) {
             const durationSec = parseDuration(argv.duration);
+            if (durationSec === null) {
+              console.error(`Invalid duration "${argv.duration}". Examples: 1h30m, 1:30, 90 (minutes).`);
+              process.exit(1);
+            }
             if (argv.start) {
               input.startTime = argv.start;
               input.endTime = new Date(new Date(argv.start).getTime() + durationSec * 1000).toISOString();

@@ -1,14 +1,7 @@
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatCategoryList } from '../formatters';
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Category } from '../../shared/types';
 
 export function registerCategoryCommands(yargs: Argv): Argv {
   return yargs.command('category', 'Manage categories', (y) =>

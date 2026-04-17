@@ -1,8 +1,10 @@
 // ─── Task ────────────────────────────────────────────────────────────────────
 
-export type TaskSource = 'ad-hoc' | 'email' | 'meeting-prep' | 'plugin';
+export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const;
+export type TaskSource = typeof TASK_SOURCES[number];
 
-export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
+export const TASK_STATUSES = ['todo', 'in-progress', 'done', 'blocked'] as const;
+export type TaskStatus = typeof TASK_STATUSES[number];
 
 export interface Task {
   id: string;

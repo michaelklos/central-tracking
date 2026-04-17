@@ -1,26 +1,8 @@
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatTaskTable } from '../formatters';
-
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  source: string;
-  totalTimeSeconds: number;
-  todayTimeSeconds: number;
-  categoryIds: string[];
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PaginatedResponse {
-  items: Task[];
-  total: number;
-  hasMore: boolean;
-}
+import { TASK_STATUSES, TASK_SOURCES } from '../../shared/types';
+import type { Task, PaginatedResponse } from '../../shared/types';
 
 export function registerTaskCommands(yargs: Argv): Argv {
   return yargs.command('task', 'Manage tasks', (y) =>
@@ -78,7 +60,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
             args = [params];
           }
 
-          const result = await apiRequest<PaginatedResponse>(server, endpoint, args);
+          const result = await apiRequest<PaginatedResponse<Task>>(server, endpoint, args);
           if (json) {
             console.log(JSON.stringify(result, null, 2));
           } else {
@@ -122,8 +104,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
           yy
             .positional('title', { type: 'string', demandOption: true })
             .option('description', { type: 'string', alias: 'd' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('category', { type: 'string', array: true, describe: 'Category ID(s)' }),
         async (argv) => {
           const server = discoverServer();
@@ -149,8 +131,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .option('title', { type: 'string' })
             .option('description', { type: 'string', alias: 'd' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('notes', { type: 'string' })
             .option('category', { type: 'string', array: true, describe: 'Category ID(s)' }),
         async (argv) => {
@@ -244,8 +226,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
         (yy) =>
           yy
             .positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('category', { type: 'string', array: true }),
         async (argv) => {
           const server = discoverServer();

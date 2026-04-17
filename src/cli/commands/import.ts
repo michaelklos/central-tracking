@@ -1,28 +1,16 @@
 import * as fs from 'fs';
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
+import type { ImportPreviewItem as SharedImportPreviewItem, ImportResult, ImportError } from '../../shared/types';
 
-interface ImportPreviewItem {
-  title: string;
-  source: string;
-  externalId: string;
-  pluginId: string;
-  startDateTime: string;
-  endDateTime: string;
-  durationSeconds: number;
-  existingTask: { id: string; title: string } | null;
+// CLI extends the server's action set with 'update' for the --update-existing flow.
+type ImportPreviewItem = Omit<SharedImportPreviewItem, 'action'> & {
   action: 'create' | 'skip' | 'update';
-}
+};
 
 interface ImportParseResult {
   items: ImportPreviewItem[];
-  errors: string[];
-}
-
-interface ImportResult {
-  created: number;
-  skipped: number;
-  errors: string[];
+  errors: ImportError[];
 }
 
 function readInput(filePath: string): string {

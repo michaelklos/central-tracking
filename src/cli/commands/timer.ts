@@ -1,15 +1,7 @@
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatDuration } from '../formatters';
-
-interface TimeEntry {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-}
+import type { TimeEntry } from '../../shared/types';
 
 export function registerTimerCommands(yargs: Argv): Argv {
   return yargs.command('timer', 'Control the timer', (y) =>

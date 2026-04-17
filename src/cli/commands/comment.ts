@@ -1,16 +1,7 @@
 import type { Argv } from 'yargs';
 import { discoverServer, apiRequest } from '../client';
 import { formatCommentList } from '../formatters';
-
-interface Comment {
-  id: string;
-  taskId: string;
-  body: string;
-  syncable: boolean;
-  synced: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Comment } from '../../shared/types';
 
 export function registerCommentCommands(yargs: Argv): Argv {
   return yargs.command('comment', 'Manage comments', (y) =>
