@@ -27,7 +27,7 @@ describe('formatDuration', () => {
   });
 
   it('formats hours with no remaining minutes', () => {
-    expect(formatDuration(7200)).toBe('2h 0m');
+    expect(formatDuration(7200)).toBe('2h');
   });
 });
 
@@ -132,7 +132,7 @@ describe('formatSummaryReport', () => {
     const result = formatSummaryReport(entries);
     expect(result).toContain('## 2026-04-11');
     expect(result).toContain('## 2026-04-12');
-    expect(result).toContain('Task A: 1h 0m');
+    expect(result).toContain('Task A: 1h');
     expect(result).toContain('Task B: 30m');
     expect(result).toContain('**Total:');
   });

@@ -1,26 +1,15 @@
 import type { Argv } from 'yargs';
-import { discoverServer, apiRequest } from '../client';
 import { formatTaskTable } from '../formatters';
-
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  source: string;
-  totalTimeSeconds: number;
-  todayTimeSeconds: number;
-  categoryIds: string[];
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PaginatedResponse {
-  items: Task[];
-  total: number;
-  hasMore: boolean;
-}
+import { runCommand, output, say, fail } from '../runtime';
+import { TASK_STATUSES, TASK_SOURCES } from '../../shared/types';
+import type {
+  CreateTaskInput,
+  UpdateTaskInput,
+  BatchUpdateInput,
+  TaskQueryParams,
+  TaskStatus,
+  TaskSource,
+} from '../../shared/types';
 
 export function registerTaskCommands(yargs: Argv): Argv {
   return yargs.command('task', 'Manage tasks', (y) =>
@@ -41,79 +30,60 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .option('limit', { type: 'number', default: 50, describe: 'Max results' })
             .option('offset', { type: 'number', default: 0, describe: 'Skip results' })
             .option('full-id', { type: 'boolean', default: false, describe: 'Show full UUID instead of prefix' }),
-        async (argv) => {
-          const server = discoverServer();
-          const json = argv.json as boolean;
-          let endpoint: string;
-          let args: unknown[];
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const fullId = argv['full-id'] as boolean;
 
-          if (argv.all) {
-            const result = await apiRequest<Task[]>(server, 'tasks/getAll');
-            if (json) {
-              console.log(JSON.stringify(result, null, 2));
-            } else {
-              console.log(formatTaskTable(result, { fullId: argv['full-id'] as boolean }));
+            if (argv.all) {
+              const tasks = await client.tasks.getAll();
+              output(argv, tasks, (t) => formatTaskTable(t, { fullId }));
+              return;
             }
-            return;
-          }
 
-          const params: Record<string, unknown> = {
-            offset: argv.offset,
-            limit: argv.limit,
-            sortBy: argv.sort,
-          };
-          if (argv.search) params.search = argv.search;
-          if (argv.status) params.status = argv.status;
-          if (argv.source) params.source = argv.source;
-          if (argv.category) params.categoryId = argv.category;
+            const params: TaskQueryParams = {
+              offset: argv.offset,
+              limit: argv.limit,
+              sortBy: argv.sort as TaskQueryParams['sortBy'],
+            };
+            if (argv.search) params.search = argv.search;
+            if (argv.status) params.status = argv.status;
+            if (argv.source) params.source = argv.source;
+            if (argv.category) params.categoryId = argv.category;
 
-          if (argv.deleted) {
-            endpoint = 'tasks/getDeleted';
-            args = [{ offset: argv.offset, limit: argv.limit }];
-          } else if (argv.done) {
-            endpoint = 'tasks/getDone';
-            args = [params];
-          } else {
-            endpoint = 'tasks/getActive';
-            args = [params];
-          }
+            const result = argv.deleted
+              ? await client.tasks.getDeleted({ offset: argv.offset, limit: argv.limit })
+              : argv.done
+                ? await client.tasks.getDone(params)
+                : await client.tasks.getActive(params);
 
-          const result = await apiRequest<PaginatedResponse>(server, endpoint, args);
-          if (json) {
-            console.log(JSON.stringify(result, null, 2));
-          } else {
-            console.log(formatTaskTable(result.items, { fullId: argv['full-id'] as boolean }));
-            if (result.hasMore) {
-              console.log(`\nShowing ${result.items.length} of ${result.total} tasks. Use --offset to see more.`);
-            }
-          }
-        },
+            output(argv, result, (r) => {
+              const table = formatTaskTable(r.items, { fullId });
+              return r.hasMore
+                ? `${table}\n\nShowing ${r.items.length} of ${r.total} tasks. Use --offset to see more.`
+                : table;
+            });
+          }),
       )
       .command(
         'get <id>',
         'Get a task by ID',
         (yy) => yy.positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
-        async (argv) => {
-          const server = discoverServer();
-          const task = await apiRequest<Task | null>(server, 'tasks/getById', [argv.id]);
-          if (!task) {
-            console.error(`Task ${argv.id} not found.`);
-            process.exit(1);
-          }
-          if (argv.json) {
-            console.log(JSON.stringify(task, null, 2));
-          } else {
-            console.log(`ID:          ${task.id}`);
-            console.log(`Title:       ${task.title}`);
-            console.log(`Status:      ${task.status}`);
-            console.log(`Source:      ${task.source}`);
-            console.log(`Description: ${task.description || '(none)'}`);
-            console.log(`Notes:       ${task.notes || '(none)'}`);
-            console.log(`Categories:  ${task.categoryIds.length > 0 ? task.categoryIds.join(', ') : '(none)'}`);
-            console.log(`Created:     ${task.createdAt}`);
-            console.log(`Updated:     ${task.updatedAt}`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const task = await client.tasks.getById(argv.id as string);
+            if (!task) fail(`Task ${argv.id} not found.`);
+            output(argv, task, (t) => [
+              `ID:          ${t.id}`,
+              `Title:       ${t.title}`,
+              `Status:      ${t.status}`,
+              `Source:      ${t.source}`,
+              `Description: ${t.description || '(none)'}`,
+              `Notes:       ${t.notes || '(none)'}`,
+              `Categories:  ${t.categoryIds.length > 0 ? t.categoryIds.join(', ') : '(none)'}`,
+              `Created:     ${t.createdAt}`,
+              `Updated:     ${t.updatedAt}`,
+            ].join('\n'));
+          }),
       )
       .command(
         'create <title>',
@@ -122,24 +92,20 @@ export function registerTaskCommands(yargs: Argv): Argv {
           yy
             .positional('title', { type: 'string', demandOption: true })
             .option('description', { type: 'string', alias: 'd' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('category', { type: 'string', array: true, describe: 'Category ID(s)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const input: Record<string, unknown> = { title: argv.title };
-          if (argv.description) input.description = argv.description;
-          if (argv.status) input.status = argv.status;
-          if (argv.source) input.source = argv.source;
-          if (argv.category) input.categoryIds = argv.category;
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const input: CreateTaskInput = { title: argv.title as string };
+            if (argv.description) input.description = argv.description;
+            if (argv.status) input.status = argv.status as TaskStatus;
+            if (argv.source) input.source = argv.source as TaskSource;
+            if (argv.category) input.categoryIds = argv.category as string[];
 
-          const task = await apiRequest<Task>(server, 'tasks/create', [input]);
-          if (argv.json) {
-            console.log(JSON.stringify(task, null, 2));
-          } else {
-            console.log(`Created task ${task.id} — "${task.title}"`);
-          }
-        },
+            const task = await client.tasks.create(input);
+            output(argv, task, (t) => `Created task ${t.id} — "${t.title}"`);
+          }),
       )
       .command(
         'update <id>',
@@ -149,63 +115,55 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .option('title', { type: 'string' })
             .option('description', { type: 'string', alias: 'd' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('notes', { type: 'string' })
             .option('category', { type: 'string', array: true, describe: 'Category ID(s)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const updates: Record<string, unknown> = {};
-          if (argv.title) updates.title = argv.title;
-          if (argv.description !== undefined) updates.description = argv.description;
-          if (argv.status) updates.status = argv.status;
-          if (argv.source) updates.source = argv.source;
-          if (argv.notes !== undefined) updates.notes = argv.notes;
-          if (argv.category) updates.categoryIds = argv.category;
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const updates: UpdateTaskInput = {};
+            if (argv.title) updates.title = argv.title;
+            if (argv.description !== undefined) updates.description = argv.description;
+            if (argv.status) updates.status = argv.status as TaskStatus;
+            if (argv.source) updates.source = argv.source as TaskSource;
+            if (argv.notes !== undefined) updates.notes = argv.notes;
+            if (argv.category) updates.categoryIds = argv.category as string[];
 
-          const task = await apiRequest<Task>(server, 'tasks/update', [argv.id, updates]);
-          if (argv.json) {
-            console.log(JSON.stringify(task, null, 2));
-          } else {
-            console.log(`Updated task ${task.id}`);
-          }
-        },
+            const task = await client.tasks.update(argv.id as string, updates);
+            output(argv, task, (t) => `Updated task ${t.id}`);
+          }),
       )
       .command(
         'delete <ids..>',
         'Soft-delete task(s)',
         (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const ids = argv.ids as string[];
-          if (ids.length === 1) {
-            await apiRequest(server, 'tasks/delete', [ids[0]]);
-            console.log(`Deleted task ${ids[0]}`);
-          } else {
-            const result = await apiRequest<{ deletedCount: number }>(server, 'tasks/batchSoftDelete', [ids]);
-            console.log(`Deleted ${result.deletedCount} tasks`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const ids = argv.ids as string[];
+            if (ids.length === 1) {
+              await client.tasks.delete(ids[0]);
+              say(`Deleted task ${ids[0]}`);
+            } else {
+              const result = await client.tasks.batchSoftDelete(ids);
+              say(`Deleted ${result.deletedCount} tasks`);
+            }
+          }),
       )
       .command(
         'restore <ids..>',
         'Restore deleted task(s)',
         (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const ids = argv.ids as string[];
-          if (ids.length === 1) {
-            const task = await apiRequest<Task>(server, 'tasks/restore', [ids[0]]);
-            if (argv.json) {
-              console.log(JSON.stringify(task, null, 2));
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const ids = argv.ids as string[];
+            if (ids.length === 1) {
+              const task = await client.tasks.restore(ids[0]);
+              output(argv, task, (t) => `Restored task "${t.title}"`);
             } else {
-              console.log(`Restored task "${task.title}"`);
+              const result = await client.tasks.batchRestore(ids);
+              say(`Restored ${result.restoredCount} tasks`);
             }
-          } else {
-            const result = await apiRequest<{ restoredCount: number }>(server, 'tasks/batchRestore', [ids]);
-            console.log(`Restored ${result.restoredCount} tasks`);
-          }
-        },
+          }),
       )
       .command(
         'purge',
@@ -214,29 +172,29 @@ export function registerTaskCommands(yargs: Argv): Argv {
           yy
             .option('all', { type: 'boolean', describe: 'Empty recycle bin' })
             .option('id', { type: 'string', describe: 'UUID, prefix, or name substring' }),
-        async (argv) => {
-          const server = discoverServer();
-          if (argv.all) {
-            await apiRequest(server, 'tasks/emptyRecycleBin');
-            console.log('Recycle bin emptied.');
-          } else if (argv.id) {
-            await apiRequest(server, 'tasks/purgeDeleted', [argv.id]);
-            console.log(`Purged task ${argv.id}`);
-          } else {
-            console.error('Specify --id <taskId> or --all');
-            process.exit(1);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            if (argv.all) {
+              await client.tasks.emptyRecycleBin();
+              say('Recycle bin emptied.');
+            } else if (argv.id) {
+              await client.tasks.purgeDeleted(argv.id);
+              say(`Purged task ${argv.id}`);
+            } else {
+              fail('Specify --id <taskId> or --all');
+            }
+          }),
       )
       .command(
         'reorder <ids..>',
         'Set task sort order',
         (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
-        async (argv) => {
-          const server = discoverServer();
-          await apiRequest(server, 'tasks/reorder', [argv.ids]);
-          console.log(`Reordered ${(argv.ids as string[]).length} tasks`);
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const ids = argv.ids as string[];
+            await client.tasks.reorder(ids);
+            say(`Reordered ${ids.length} tasks`);
+          }),
       )
       .command(
         'batch-update <ids..>',
@@ -244,20 +202,20 @@ export function registerTaskCommands(yargs: Argv): Argv {
         (yy) =>
           yy
             .positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' })
-            .option('status', { type: 'string', choices: ['todo', 'in-progress', 'done', 'blocked'] as const })
-            .option('source', { type: 'string', choices: ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const })
+            .option('status', { type: 'string', choices: TASK_STATUSES })
+            .option('source', { type: 'string', choices: TASK_SOURCES })
             .option('category', { type: 'string', array: true }),
-        async (argv) => {
-          const server = discoverServer();
-          const input: Record<string, unknown> = {};
-          if (argv.status) input.status = argv.status;
-          if (argv.source) input.source = argv.source;
-          if (argv.category) input.categoryIds = argv.category;
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const input: BatchUpdateInput = {};
+            if (argv.status) input.status = argv.status as TaskStatus;
+            if (argv.source) input.source = argv.source as TaskSource;
+            if (argv.category) input.categoryIds = argv.category as string[];
 
-          const ids = argv.ids as string[];
-          const result = await apiRequest<{ updatedCount: number }>(server, 'tasks/batchUpdate', [ids, input]);
-          console.log(`Updated ${result.updatedCount} tasks`);
-        },
+            const ids = argv.ids as string[];
+            const result = await client.tasks.batchUpdate(ids, input);
+            say(`Updated ${result.updatedCount} tasks`);
+          }),
       )
       .demandCommand(1, 'Specify a task subcommand')
   );

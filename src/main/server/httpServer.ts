@@ -2,100 +2,15 @@ import * as http from 'http';
 import type { Database } from '../database/database';
 import type { BrowserWindow } from 'electron';
 import { generateToken, writeServerFile, removeServerFile, isValidToken, isValidHost } from './auth';
+import { buildRouteMap } from './apiManifest';
+import { dispatchEvent } from './webhooks';
 
-import {
-  getAllTasks, getTaskById, getActiveTasks, getDoneTasks,
-  createTask, updateTask, deleteTask, reorderTasks,
-  batchUpdateTasks, batchSoftDeleteTasks, getDeletedTasks,
-  restoreTask, batchRestoreTasks, purgeDeletedTask, emptyRecycleBin,
-} from '../ipc/taskHandlers';
-
-import {
-  getTimeEntriesByTask, getTimeEntriesByTaskPaginated,
-  createTimeEntry, updateTimeEntry, deleteTimeEntry,
-  getActiveTimeEntry, stopActiveTimeEntry, getTodayTotal,
-  getTimeEntriesByDateRange, getTimeEntryReport, getSummaryReport,
-  getTimeEntriesByDateRangeWithTasks,
-} from '../ipc/timeEntryHandlers';
-
-import {
-  getCommentsByTask, createComment, updateComment, deleteComment,
-} from '../ipc/commentHandlers';
-
-import {
-  getAllCategories, createCategory, updateCategory, deleteCategory, assignCategoriesToTask,
-} from '../ipc/categoryHandlers';
-
-import { generateCsvContent } from '../reports/csvGenerator';
-
-import { parseImportContent, executeImport } from '../import/importExecutor';
+export { apiManifest, buildRouteMap } from './apiManifest';
+export type { ApiRoute } from './apiManifest';
 
 const MAX_BODY_SIZE = 1024 * 1024; // 1MB
 const DEFAULT_PORT = 19532;
 const MAX_PORT_ATTEMPTS = 5;
-
-type HandlerFn = (db: Database, ...args: unknown[]) => unknown;
-
-interface RouteEntry {
-  handler: HandlerFn;
-  mutates: boolean;
-}
-
-// Route table mapping "domain/operation" to handler functions
-function buildRouteTable(): Record<string, RouteEntry> {
-  return {
-    // Tasks
-    'tasks/getAll': { handler: (db) => getAllTasks(db), mutates: false },
-    'tasks/getById': { handler: (db, id) => getTaskById(db, id as string), mutates: false },
-    'tasks/getActive': { handler: (db, params) => getActiveTasks(db, params as never), mutates: false },
-    'tasks/getDone': { handler: (db, params) => getDoneTasks(db, params as never), mutates: false },
-    'tasks/create': { handler: (db, input) => createTask(db, input as never), mutates: true },
-    'tasks/update': { handler: (db, id, updates) => updateTask(db, id as string, updates as never), mutates: true },
-    'tasks/delete': { handler: (db, id) => deleteTask(db, id as string), mutates: true },
-    'tasks/reorder': { handler: (db, ids) => reorderTasks(db, ids as string[]), mutates: true },
-    'tasks/batchUpdate': { handler: (db, ids, input) => batchUpdateTasks(db, ids as string[], input as never), mutates: true },
-    'tasks/batchSoftDelete': { handler: (db, ids) => batchSoftDeleteTasks(db, ids as string[]), mutates: true },
-    'tasks/getDeleted': { handler: (db, params) => getDeletedTasks(db, params as never), mutates: false },
-    'tasks/restore': { handler: (db, id) => restoreTask(db, id as string), mutates: true },
-    'tasks/batchRestore': { handler: (db, ids) => batchRestoreTasks(db, ids as string[]), mutates: true },
-    'tasks/purgeDeleted': { handler: (db, id) => purgeDeletedTask(db, id as string), mutates: true },
-    'tasks/emptyRecycleBin': { handler: (db) => emptyRecycleBin(db), mutates: true },
-
-    // Time entries
-    'timeEntries/getByTask': { handler: (db, taskId) => getTimeEntriesByTask(db, taskId as string), mutates: false },
-    'timeEntries/getByTaskPaginated': { handler: (db, taskId, params) => getTimeEntriesByTaskPaginated(db, taskId as string, params as never), mutates: false },
-    'timeEntries/create': { handler: (db, input) => createTimeEntry(db, input as never), mutates: true },
-    'timeEntries/update': { handler: (db, id, updates) => updateTimeEntry(db, id as string, updates as never), mutates: true },
-    'timeEntries/delete': { handler: (db, id) => deleteTimeEntry(db, id as string), mutates: true },
-    'timeEntries/getActive': { handler: (db) => getActiveTimeEntry(db), mutates: false },
-    'timeEntries/stopActive': { handler: (db) => stopActiveTimeEntry(db), mutates: true },
-    'timeEntries/getTodayTotal': { handler: (db) => getTodayTotal(db), mutates: false },
-    'timeEntries/getByDateRange': { handler: (db, start, end) => getTimeEntriesByDateRange(db, start as string, end as string), mutates: false },
-    'timeEntries/getReport': { handler: (db, start, end) => getTimeEntryReport(db, start as string, end as string), mutates: false },
-    'timeEntries/getSummaryReport': { handler: (db, start, end) => getSummaryReport(db, start as string, end as string), mutates: false },
-    'timeEntries/getByDateRangeWithTasks': { handler: (db, start, end) => getTimeEntriesByDateRangeWithTasks(db, start as string, end as string), mutates: false },
-
-    // Comments
-    'comments/getByTask': { handler: (db, taskId) => getCommentsByTask(db, taskId as string), mutates: false },
-    'comments/create': { handler: (db, input) => createComment(db, input as never), mutates: true },
-    'comments/update': { handler: (db, id, updates) => updateComment(db, id as string, updates as never), mutates: true },
-    'comments/delete': { handler: (db, id) => deleteComment(db, id as string), mutates: true },
-
-    // Categories
-    'categories/getAll': { handler: (db) => getAllCategories(db), mutates: false },
-    'categories/create': { handler: (db, input) => createCategory(db, input as never), mutates: true },
-    'categories/update': { handler: (db, id, updates) => updateCategory(db, id as string, updates as never), mutates: true },
-    'categories/delete': { handler: (db, id) => deleteCategory(db, id as string), mutates: true },
-    'categories/assignToTask': { handler: (db, taskId, catIds) => assignCategoriesToTask(db, taskId as string, catIds as string[]), mutates: true },
-
-    // Reports
-    'reports/generateCsv': { handler: (db, start, end) => generateCsvContent(db, start as string, end as string), mutates: false },
-
-    // Import
-    'import/parseContent': { handler: (db, content) => parseImportContent(db, content as string), mutates: false },
-    'import/execute': { handler: (db, items) => executeImport(db, items as never[]), mutates: true },
-  };
-}
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -136,7 +51,7 @@ export async function startHttpServer(
   getMainWindow: () => BrowserWindow | null,
 ): Promise<HttpServerInstance> {
   const token = generateToken();
-  const routes = buildRouteTable();
+  const routes = buildRouteMap();
 
   const server = http.createServer(async (req, res) => {
     // Drain request body before sending any error response to avoid ECONNRESET
@@ -181,6 +96,15 @@ export async function startHttpServer(
         const win = getMainWindow();
         if (win && !win.isDestroyed()) {
           win.webContents.send('ct:data-changed');
+        }
+        // Dispatch plugin webhook events (fire-and-forget; never blocks response)
+        if (route.event) {
+          void dispatchEvent(
+            db,
+            token,
+            { event: route.event, route: route.route, data: result, timestamp: new Date().toISOString() },
+            (msg) => process.stderr.write(`${msg}\n`),
+          );
         }
       }
     } catch (err) {

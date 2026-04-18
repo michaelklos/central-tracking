@@ -1,11 +1,7 @@
-export function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
+import { formatDurationHuman } from '../shared/duration';
+import type { Task, TimeEntry, Comment, Category, SummaryReportEntry } from '../shared/types';
+
+export { formatDurationHuman as formatDuration };
 
 export function formatDate(isoString: string): string {
   return isoString.split('T')[0];
@@ -29,18 +25,9 @@ export function padLeft(str: string, len: number): string {
   return str.length >= len ? str : ' '.repeat(len - str.length) + str;
 }
 
-interface TaskLike {
-  id: string;
-  title: string;
-  status: string;
-  source: string;
-  totalTimeSeconds: number;
-  todayTimeSeconds: number;
-  categoryIds: string[];
-  createdAt: string;
-}
+type TaskRow = Pick<Task, 'id' | 'title' | 'status' | 'source' | 'totalTimeSeconds' | 'todayTimeSeconds'>;
 
-export function formatTaskTable(tasks: TaskLike[], options?: { fullId?: boolean }): string {
+export function formatTaskTable(tasks: TaskRow[], options?: { fullId?: boolean }): string {
   if (tasks.length === 0) return 'No tasks found.';
 
   const full = options?.fullId ?? false;
@@ -52,8 +39,8 @@ export function formatTaskTable(tasks: TaskLike[], options?: { fullId?: boolean 
     title: truncate(t.title, titleWidth - 2),
     status: t.status,
     source: t.source,
-    today: formatDuration(t.todayTimeSeconds),
-    total: formatDuration(t.totalTimeSeconds),
+    today: formatDurationHuman(t.todayTimeSeconds),
+    total: formatDurationHuman(t.totalTimeSeconds),
   }));
 
   const header = `${padRight('ID', idWidth)}${padRight('Title', titleWidth)}${padRight('Status', 14)}${padRight('Source', 12)}${padLeft('Today', 8)}${padLeft('Total', 8)}`;
@@ -66,16 +53,9 @@ export function formatTaskTable(tasks: TaskLike[], options?: { fullId?: boolean 
   return [header, separator, ...lines].join('\n');
 }
 
-interface TimeEntryLike {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-}
+type TimeEntryRow = Pick<TimeEntry, 'id' | 'startTime' | 'endTime' | 'durationSeconds' | 'note'>;
 
-export function formatTimeEntryTable(entries: TimeEntryLike[]): string {
+export function formatTimeEntryTable(entries: TimeEntryRow[]): string {
   if (entries.length === 0) return 'No time entries found.';
 
   const rows = entries.map((e) => ({
@@ -83,7 +63,7 @@ export function formatTimeEntryTable(entries: TimeEntryLike[]): string {
     date: formatDate(e.startTime),
     start: formatTime(e.startTime),
     end: e.endTime ? formatTime(e.endTime) : 'running',
-    duration: e.durationSeconds ? formatDuration(e.durationSeconds) : '-',
+    duration: e.durationSeconds ? formatDurationHuman(e.durationSeconds) : '-',
     note: truncate(e.note || '-', 30),
   }));
 
@@ -97,19 +77,12 @@ export function formatTimeEntryTable(entries: TimeEntryLike[]): string {
   return [header, separator, ...lines].join('\n');
 }
 
-interface SummaryEntry {
-  date: string;
-  taskTitle: string;
-  totalSeconds: number;
-  taskSource: string;
-  taskStatus: string;
-}
+type SummaryRow = Pick<SummaryReportEntry, 'date' | 'taskTitle' | 'totalSeconds'>;
 
-export function formatSummaryReport(entries: SummaryEntry[]): string {
+export function formatSummaryReport(entries: SummaryRow[]): string {
   if (entries.length === 0) return 'No time entries in this date range.';
 
-  // Group by date
-  const byDate = new Map<string, SummaryEntry[]>();
+  const byDate = new Map<string, SummaryRow[]>();
   for (const entry of entries) {
     const existing = byDate.get(entry.date) || [];
     existing.push(entry);
@@ -122,26 +95,21 @@ export function formatSummaryReport(entries: SummaryEntry[]): string {
   for (const [date, dayEntries] of byDate) {
     const dayTotal = dayEntries.reduce((sum, e) => sum + e.totalSeconds, 0);
     grandTotal += dayTotal;
-    lines.push(`## ${date} (${formatDuration(dayTotal)})`);
+    lines.push(`## ${date} (${formatDurationHuman(dayTotal)})`);
     lines.push('');
     for (const entry of dayEntries) {
-      lines.push(`- ${entry.taskTitle}: ${formatDuration(entry.totalSeconds)}`);
+      lines.push(`- ${entry.taskTitle}: ${formatDurationHuman(entry.totalSeconds)}`);
     }
     lines.push('');
   }
 
-  lines.push(`**Total: ${formatDuration(grandTotal)}**`);
+  lines.push(`**Total: ${formatDurationHuman(grandTotal)}**`);
   return lines.join('\n');
 }
 
-interface CommentLike {
-  id: string;
-  body: string;
-  syncable: boolean;
-  createdAt: string;
-}
+type CommentRow = Pick<Comment, 'id' | 'body' | 'syncable' | 'createdAt'>;
 
-export function formatCommentList(comments: CommentLike[]): string {
+export function formatCommentList(comments: CommentRow[]): string {
   if (comments.length === 0) return 'No comments.';
 
   return comments.map((c) => {
@@ -151,13 +119,9 @@ export function formatCommentList(comments: CommentLike[]): string {
   }).join('\n\n');
 }
 
-interface CategoryLike {
-  id: string;
-  name: string;
-  color: string;
-}
+type CategoryRow = Pick<Category, 'id' | 'name' | 'color'>;
 
-export function formatCategoryList(categories: CategoryLike[]): string {
+export function formatCategoryList(categories: CategoryRow[]): string {
   if (categories.length === 0) return 'No categories.';
 
   return categories.map((c) =>

@@ -1,15 +1,6 @@
 import type { Argv } from 'yargs';
-import { discoverServer, apiRequest } from '../client';
 import { formatDuration } from '../formatters';
-
-interface TimeEntry {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-}
+import { runCommand, output, say } from '../runtime';
 
 export function registerTimerCommands(yargs: Argv): Argv {
   return yargs.command('timer', 'Control the timer', (y) =>
@@ -18,56 +9,46 @@ export function registerTimerCommands(yargs: Argv): Argv {
         'start <task-id>',
         'Start timer for a task',
         (yy) => yy.positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
-        async (argv) => {
-          const server = discoverServer();
-          const entry = await apiRequest<TimeEntry>(server, 'timeEntries/create', [
-            { taskId: argv['task-id'] },
-          ]);
-          if (argv.json) {
-            console.log(JSON.stringify(entry, null, 2));
-          } else {
-            console.log(`Timer started for task ${entry.taskId} (entry ${entry.id})`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const entry = await client.timeEntries.create({ taskId: argv['task-id'] as string });
+            output(argv, entry, (e) => `Timer started for task ${e.taskId} (entry ${e.id})`);
+          }),
       )
       .command(
         'stop',
         'Stop the active timer',
         () => {},
-        async (argv) => {
-          const server = discoverServer();
-          const entry = await apiRequest<TimeEntry | null>(server, 'timeEntries/stopActive');
-          if (!entry) {
-            console.log('No active timer.');
-            return;
-          }
-          if (argv.json) {
-            console.log(JSON.stringify(entry, null, 2));
-          } else {
-            console.log(`Timer stopped. Duration: ${formatDuration(entry.durationSeconds ?? 0)}`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const entry = await client.timeEntries.stopActive();
+            if (!entry) {
+              say('No active timer.');
+              return;
+            }
+            output(argv, entry, (e) => `Timer stopped. Duration: ${formatDuration(e.durationSeconds ?? 0)}`);
+          }),
       )
       .command(
         'status',
         'Show active timer',
         () => {},
-        async (argv) => {
-          const server = discoverServer();
-          const entry = await apiRequest<TimeEntry | null>(server, 'timeEntries/getActive');
-          if (!entry) {
-            console.log('No active timer.');
-            return;
-          }
-          const elapsed = Math.floor((Date.now() - new Date(entry.startTime).getTime()) / 1000);
-          if (argv.json) {
-            console.log(JSON.stringify({ ...entry, elapsedSeconds: elapsed }, null, 2));
-          } else {
-            console.log(`Task:    ${entry.taskId}`);
-            console.log(`Started: ${entry.startTime}`);
-            console.log(`Elapsed: ${formatDuration(elapsed)}`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const entry = await client.timeEntries.getActive();
+            if (!entry) {
+              say('No active timer.');
+              return;
+            }
+            const elapsedSeconds = Math.floor((Date.now() - new Date(entry.startTime).getTime()) / 1000);
+            output(argv, { ...entry, elapsedSeconds }, (e) =>
+              [
+                `Task:    ${e.taskId}`,
+                `Started: ${e.startTime}`,
+                `Elapsed: ${formatDuration(elapsedSeconds)}`,
+              ].join('\n'),
+            );
+          }),
       )
       .demandCommand(1, 'Specify a timer subcommand')
   );

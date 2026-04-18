@@ -1,14 +1,7 @@
 import type { Argv } from 'yargs';
-import { discoverServer, apiRequest } from '../client';
 import { formatCategoryList } from '../formatters';
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { runCommand, output, say } from '../runtime';
+import type { UpdateCategoryInput } from '../../shared/types';
 
 export function registerCategoryCommands(yargs: Argv): Argv {
   return yargs.command('category', 'Manage categories', (y) =>
@@ -17,15 +10,11 @@ export function registerCategoryCommands(yargs: Argv): Argv {
         'list',
         'List all categories',
         () => {},
-        async (argv) => {
-          const server = discoverServer();
-          const categories = await apiRequest<Category[]>(server, 'categories/getAll');
-          if (argv.json) {
-            console.log(JSON.stringify(categories, null, 2));
-          } else {
-            console.log(formatCategoryList(categories));
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const categories = await client.categories.getAll();
+            output(argv, categories, formatCategoryList);
+          }),
       )
       .command(
         'create <name>',
@@ -34,17 +23,14 @@ export function registerCategoryCommands(yargs: Argv): Argv {
           yy
             .positional('name', { type: 'string', demandOption: true })
             .option('color', { type: 'string', default: '#888888', describe: 'Hex color (e.g., #ff0000)' }),
-        async (argv) => {
-          const server = discoverServer();
-          const category = await apiRequest<Category>(server, 'categories/create', [
-            { name: argv.name, color: argv.color },
-          ]);
-          if (argv.json) {
-            console.log(JSON.stringify(category, null, 2));
-          } else {
-            console.log(`Created category ${category.id} — "${category.name}"`);
-          }
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const category = await client.categories.create({
+              name: argv.name as string,
+              color: argv.color as string,
+            });
+            output(argv, category, (c) => `Created category ${c.id} — "${c.name}"`);
+          }),
       )
       .command(
         'update <id>',
@@ -54,29 +40,25 @@ export function registerCategoryCommands(yargs: Argv): Argv {
             .positional('id', { type: 'string', demandOption: true })
             .option('name', { type: 'string' })
             .option('color', { type: 'string' }),
-        async (argv) => {
-          const server = discoverServer();
-          const updates: Record<string, unknown> = {};
-          if (argv.name) updates.name = argv.name;
-          if (argv.color) updates.color = argv.color;
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const updates: UpdateCategoryInput = {};
+            if (argv.name) updates.name = argv.name;
+            if (argv.color) updates.color = argv.color;
 
-          const category = await apiRequest<Category>(server, 'categories/update', [argv.id, updates]);
-          if (argv.json) {
-            console.log(JSON.stringify(category, null, 2));
-          } else {
-            console.log(`Updated category ${category.id}`);
-          }
-        },
+            const category = await client.categories.update(argv.id as string, updates);
+            output(argv, category, (c) => `Updated category ${c.id}`);
+          }),
       )
       .command(
         'delete <id>',
         'Delete a category',
         (yy) => yy.positional('id', { type: 'string', demandOption: true }),
-        async (argv) => {
-          const server = discoverServer();
-          await apiRequest(server, 'categories/delete', [argv.id]);
-          console.log(`Deleted category ${argv.id}`);
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            await client.categories.delete(argv.id as string);
+            say(`Deleted category ${argv.id}`);
+          }),
       )
       .command(
         'assign <task-id> <category-ids..>',
@@ -85,12 +67,12 @@ export function registerCategoryCommands(yargs: Argv): Argv {
           yy
             .positional('task-id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' })
             .positional('category-ids', { type: 'string', array: true, demandOption: true }),
-        async (argv) => {
-          const server = discoverServer();
-          const catIds = argv['category-ids'] as string[];
-          await apiRequest(server, 'categories/assignToTask', [argv['task-id'], catIds]);
-          console.log(`Assigned ${catIds.length} category/categories to task ${argv['task-id']}`);
-        },
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const catIds = argv['category-ids'] as string[];
+            await client.categories.assignToTask(argv['task-id'] as string, catIds);
+            say(`Assigned ${catIds.length} category/categories to task ${argv['task-id']}`);
+          }),
       )
       .demandCommand(1, 'Specify a category subcommand')
   );
