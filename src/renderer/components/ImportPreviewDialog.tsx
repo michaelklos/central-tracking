@@ -99,6 +99,20 @@ export function ImportPreviewDialog({
                 </li>
               ))}
             </ul>
+            <details className="import-dialog__format-hint">
+              <summary>Expected file format</summary>
+              <pre>{`# YYYY-MM-DD
+* Task Name: HH:MM (duration)
+* [TICKET] Task Name: HH:MM (1h 30m)
+
+// Lines starting with // are comments`}</pre>
+              <ul>
+                <li><strong>Date header</strong> — one per day block, e.g. <code># 2024-03-20</code></li>
+                <li><strong>Start time</strong> — 24-hour format, e.g. <code>09:00</code> or <code>14:30</code></li>
+                <li><strong>Duration</strong> — e.g. <code>45m</code>, <code>1h</code>, <code>1h 30m</code>, <code>2 hours</code></li>
+                <li><strong>Ticket</strong> (optional) — plain number for ADO, <code>ABC-123</code> format for Jira</li>
+              </ul>
+            </details>
           </div>
         )}
 

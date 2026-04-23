@@ -8,6 +8,7 @@ import { DateRangePicker } from './DateRangePicker';
 import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
 import { BatchActionBar } from './BatchActionBar';
+import { HelpPopover } from './HelpPopover';
 import type { ImportPreview, ImportPreviewItem, ImportResult, ReportMode, TaskStatus, TaskSource } from '../../shared/types';
 import './Sidebar.css';
 
@@ -330,9 +331,24 @@ export function Sidebar() {
                 </div>
 
                 <div className="sidebar__import">
-                  <button className="sidebar__import-btn" onClick={handleImportClick}>
-                    Import Tasks
-                  </button>
+                  <div className="sidebar__import-row">
+                    <button className="sidebar__import-btn" onClick={handleImportClick}>
+                      Import Tasks
+                    </button>
+                    <HelpPopover title="Import File Format">
+                      <p>Select a <code>.md</code> or <code>.txt</code> file with this structure:</p>
+                      <pre>{`# YYYY-MM-DD
+* Task Name: HH:MM (duration)
+* [TICKET] Task Name: HH:MM (1h 30m)`}</pre>
+                      <ul>
+                        <li><strong>Date header</strong> — <code># 2024-03-20</code></li>
+                        <li><strong>Start time</strong> — 24-hour, e.g. <code>14:30</code></li>
+                        <li><strong>Duration</strong> — e.g. <code>45m</code>, <code>1h</code>, <code>1h 30m</code></li>
+                        <li><strong>Ticket</strong> (optional) — number for ADO, <code>ABC-123</code> for Jira</li>
+                      </ul>
+                      <p>Lines starting with <code>//</code> are treated as comments.</p>
+                    </HelpPopover>
+                  </div>
                   <button className="sidebar__batch-btn" onClick={enterBatchMode}>
                     Select Tasks
                   </button>
