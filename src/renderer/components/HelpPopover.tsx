@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './HelpPopover.css';
 
 interface HelpPopoverProps {
@@ -6,34 +6,70 @@ interface HelpPopoverProps {
   title?: string;
 }
 
+interface PanelStyle {
+  bottom: number;
+  right: number;
+  maxWidth: number;
+}
+
 export function HelpPopover({ children, title }: HelpPopoverProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<PanelStyle | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const computeStyle = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPanelStyle({
+      bottom: window.innerHeight - rect.top + 8,
+      right: window.innerWidth - rect.right,
+      maxWidth: Math.min(300, rect.right - 12),
+    });
+  }, []);
+
+  const handleToggle = () => {
+    if (!open) computeStyle();
+    setOpen((v) => !v);
+  };
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', () => setOpen(false), { once: true });
+    return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
   return (
-    <div className="help-popover" ref={ref}>
+    <div className="help-popover">
       <button
+        ref={triggerRef}
         className="help-popover__trigger"
-        onClick={() => setOpen((v) => !v)}
-        title="Show format help"
+        onClick={handleToggle}
+        title="Show help"
         type="button"
       >
         ?
       </button>
-      {open && (
-        <div className="help-popover__panel">
+      {open && panelStyle && (
+        <div
+          ref={panelRef}
+          className="help-popover__panel"
+          style={{
+            position: 'fixed',
+            bottom: panelStyle.bottom,
+            right: panelStyle.right,
+            maxWidth: panelStyle.maxWidth,
+          }}
+        >
           {title && <div className="help-popover__title">{title}</div>}
           <div className="help-popover__content">{children}</div>
         </div>

@@ -30,15 +30,12 @@
 }
 
 .help-popover__panel {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  width: 320px;
+  width: 300px;
   background: var(--color-surface-2, #2a2a2a);
   border: 1px solid var(--color-border, #444);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 200;
+  z-index: 9999;
   padding: 12px 14px;
   font-size: 12px;
   color: var(--color-text, #e0e0e0);
@@ -81,7 +78,8 @@
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 11px;
   line-height: 1.6;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .help-popover__content p {

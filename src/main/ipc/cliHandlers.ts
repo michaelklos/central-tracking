@@ -1,9 +1,11 @@
 import { app, dialog } from 'electron';
 import type { IpcMain, BrowserWindow } from 'electron';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
-const SYMLINK_PATH = '/usr/local/bin/ct';
+const PREFERRED_SYMLINK = '/usr/local/bin/ct';
+const FALLBACK_SYMLINK = path.join(os.homedir(), '.local', 'bin', 'ct');
 
 function getWrapperPath(): string {
   return path.join(app.getPath('userData'), 'ct-wrapper.sh');
@@ -13,20 +15,27 @@ function getCliScriptPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'cli', 'main.js');
   }
-  return path.join(app.getAppPath(), 'dist', 'cli', 'main.js');
+  // __dirname is dist/main/ipc/ — go up to dist/ then into cli/
+  return path.join(__dirname, '..', '..', 'cli', 'main.js');
 }
 
 function buildWrapperScript(): string {
   return `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${getCliScriptPath()}" "$@"\n`;
 }
 
-export function isCliInstalled(): boolean {
+function getSymlinkPath(): string {
   try {
-    fs.accessSync(SYMLINK_PATH);
-    return true;
+    fs.accessSync(path.dirname(PREFERRED_SYMLINK), fs.constants.W_OK);
+    return PREFERRED_SYMLINK;
   } catch {
-    return false;
+    return FALLBACK_SYMLINK;
   }
+}
+
+export function isCliInstalled(): boolean {
+  return [PREFERRED_SYMLINK, FALLBACK_SYMLINK].some((p) => {
+    try { fs.accessSync(p); return true; } catch { return false; }
+  });
 }
 
 // Regenerate wrapper with current paths — call on each launch to stay current after updates
@@ -40,21 +49,22 @@ export function refreshCliWrapper(): void {
   }
 }
 
+function placeSymlink(symlinkPath: string, wrapperPath: string): void {
+  const binDir = path.dirname(symlinkPath);
+  if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
+
+  try { fs.unlinkSync(symlinkPath); } catch (e: unknown) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
+
+  fs.symlinkSync(wrapperPath, symlinkPath);
+}
+
 export function installCli(): { ok: boolean; error?: string } {
   try {
     const wrapperPath = getWrapperPath();
     fs.writeFileSync(wrapperPath, buildWrapperScript(), { mode: 0o755 });
-
-    const binDir = path.dirname(SYMLINK_PATH);
-    if (!fs.existsSync(binDir)) {
-      fs.mkdirSync(binDir, { recursive: true });
-    }
-
-    if (fs.existsSync(SYMLINK_PATH) || fs.lstatSync(SYMLINK_PATH).isSymbolicLink()) {
-      fs.unlinkSync(SYMLINK_PATH);
-    }
-
-    fs.symlinkSync(wrapperPath, SYMLINK_PATH);
+    placeSymlink(getSymlinkPath(), wrapperPath);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -63,25 +73,16 @@ export function installCli(): { ok: boolean; error?: string } {
 
 export function uninstallCli(): { ok: boolean; error?: string } {
   try {
-    if (fs.existsSync(SYMLINK_PATH) || isSymlinkBroken(SYMLINK_PATH)) {
-      fs.unlinkSync(SYMLINK_PATH);
+    for (const p of [PREFERRED_SYMLINK, FALLBACK_SYMLINK]) {
+      try { fs.unlinkSync(p); } catch (e: unknown) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      }
     }
     const wrapperPath = getWrapperPath();
-    if (fs.existsSync(wrapperPath)) {
-      fs.unlinkSync(wrapperPath);
-    }
+    if (fs.existsSync(wrapperPath)) fs.unlinkSync(wrapperPath);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-function isSymlinkBroken(p: string): boolean {
-  try {
-    fs.lstatSync(p);
-    return true;
-  } catch {
-    return false;
   }
 }
 

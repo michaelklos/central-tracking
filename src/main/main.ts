@@ -11,6 +11,9 @@ import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from '.
 import { startMouseMover, stopMouseMover } from './activityMonitor';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 
+// Ensure consistent userData path in both dev and packaged modes
+app.setName('central-tracking');
+
 const mmEnabled = process.argv.includes('--mm');
 
 let mainWindow: BrowserWindow | null = null;
