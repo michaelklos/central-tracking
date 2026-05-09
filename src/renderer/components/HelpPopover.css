@@ -32,8 +32,7 @@
 .help-popover__panel {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
   width: 320px;
   background: var(--color-surface-2, #2a2a2a);
   border: 1px solid var(--color-border, #444);
@@ -49,8 +48,7 @@
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 3px;
   border: 6px solid transparent;
   border-top-color: var(--color-border, #444);
 }

@@ -150,7 +150,7 @@
 }
 
 .sidebar__batch-btn {
-  width: 100%;
+  width: calc(100% - 24px); /* 18px help icon + 6px gap — matches Import Tasks button width */
   margin-top: 4px;
   padding: 6px;
   font-size: 12px;
