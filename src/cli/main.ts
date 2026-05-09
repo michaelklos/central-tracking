@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import yargs, { type Argv } from 'yargs';
-import { hideBin } from 'yargs/helpers';
 import { registerTaskCommands } from './commands/task';
 import { registerTimerCommands } from './commands/timer';
 import { registerTimeCommands } from './commands/time';
@@ -11,7 +10,9 @@ import { registerImportCommands } from './commands/import';
 import { registerStatusCommands } from './commands/status';
 import { registerPluginCommands } from './commands/plugin';
 
-const cli: Argv = yargs(hideBin(process.argv))
+const args = process.argv.slice(2);
+
+const cli: Argv = yargs(args)
   .scriptName('ct')
   .usage('$0 [--json] [--debug] [--timeout=SECONDS] <command> [subcommand] [args]')
   .option('json', {
@@ -44,6 +45,11 @@ registerCategoryCommands(cli);
 registerImportCommands(cli);
 registerStatusCommands(cli);
 registerPluginCommands(cli);
+
+if (args.length === 0) {
+  cli.showHelp();
+  process.exit(0);
+}
 
 cli
   .demandCommand(1, 'Specify a command. Use --help for available commands.')
