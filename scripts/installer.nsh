@@ -1,17 +1,20 @@
 ; Custom NSIS installer hooks for Central Tracking
 ; Writes a ct.cmd wrapper and adds the install directory to the user PATH.
 
+!include "StrFunc.nsh"
+${StrStr} ; Declare StrStr for use below
+
 !macro customInstall
   ; Write ct.cmd so the CLI is accessible from any terminal
   FileOpen $0 "$INSTDIR\ct.cmd" w
   FileWrite $0 "@echo off$\r$\n"
   FileWrite $0 "set ELECTRON_RUN_AS_NODE=1$\r$\n"
-  FileWrite $0 '"$INSTDIR\Central Tracking.exe" "$INSTDIR\resources\app.asar.unpacked\dist\cli\main.js" %*$\r$\n'
+  FileWrite $0 '"$INSTDIR\Central Tracking.exe" "$INSTDIR\resources\app.asar.unpacked\dist\cli\cli\main.js" %*$\r$\n'
   FileClose $0
 
   ; Add install directory to user PATH if not already present
   ReadRegStr $R0 HKCU "Environment" "PATH"
-  StrStr $R1 "$R0" "$INSTDIR"
+  ${StrStr} $R1 "$R0" "$INSTDIR"
   StrCmp $R1 "" 0 ct_path_done
     StrCmp $R0 "" ct_path_empty ct_path_append
     ct_path_empty:
