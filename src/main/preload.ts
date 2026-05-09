@@ -81,6 +81,15 @@ const api = {
     execute: (items: unknown[]) => ipcRenderer.invoke('import:execute', items),
   },
 
+  // CLI tool installation (Mac only; Windows handled by NSIS installer)
+  cli: {
+    isInstalled: () => ipcRenderer.invoke('cli:isInstalled'),
+    install: () => ipcRenderer.invoke('cli:install'),
+    uninstall: () => ipcRenderer.invoke('cli:uninstall'),
+  },
+
+  platform: process.platform,
+
   // Data change notifications (pushed from main process when CLI makes changes)
   onDataChanged: (callback: () => void) => {
     const handler = () => callback();

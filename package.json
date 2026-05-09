@@ -40,7 +40,8 @@
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**/*",
       "**/node_modules/bindings/**/*",
-      "**/node_modules/file-uri-to-path/**/*"
+      "**/node_modules/file-uri-to-path/**/*",
+      "dist/cli/**/*"
     ],
     "directories": {
       "output": "release",
@@ -84,9 +85,11 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "include": "scripts/installer.nsh"
     }
   },
   "dependencies": {

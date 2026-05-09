@@ -320,5 +320,11 @@ export interface CentralTrackingAPI {
     selectAndParse(): Promise<ImportPreview | null>;
     execute(items: ImportPreviewItem[]): Promise<ImportResult>;
   };
+  cli: {
+    isInstalled(): Promise<boolean>;
+    install(): Promise<{ ok: boolean; error?: string }>;
+    uninstall(): Promise<{ ok: boolean; error?: string }>;
+  };
+  platform: string;
   onDataChanged(callback: () => void): () => void;
 }

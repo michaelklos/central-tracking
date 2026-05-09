@@ -7,6 +7,7 @@ import { registerCommentHandlers } from './ipc/commentHandlers';
 import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
+import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
 import { startMouseMover, stopMouseMover } from './activityMonitor';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 
@@ -52,6 +53,8 @@ app.whenReady().then(() => {
   registerCategoryHandlers(ipcMain, database);
   registerReportHandlers(ipcMain, database);
   registerImportHandlers(ipcMain, database);
+  registerCliHandlers(ipcMain);
+  refreshCliWrapper();
 
   // Auto-purge tasks deleted more than 30 days ago
   database.instance.prepare(
@@ -82,6 +85,10 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
+  });
+
+  mainWindow!.webContents.once('did-finish-load', () => {
+    if (mainWindow) maybePromptCliInstall(mainWindow);
   });
 });
 

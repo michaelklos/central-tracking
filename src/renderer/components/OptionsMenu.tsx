@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './OptionsMenu.css';
 
 interface Option {
@@ -43,7 +43,33 @@ const TIMELINE_SETTINGS: StringSetting[] = [
   { key: 'ct-option-gap-label', label: 'Gap label', type: 'text', defaultValue: 'gap' },
 ];
 
+const isMac = window.api.platform === 'darwin';
+
 export function OptionsMenu() {
+  const [cliInstalled, setCliInstalled] = useState<boolean | null>(null);
+  const [cliError, setCliError] = useState<string | null>(null);
+  const [cliPending, setCliPending] = useState(false);
+
+  useEffect(() => {
+    if (!isMac) return;
+    window.api.cli.isInstalled().then(setCliInstalled);
+  }, []);
+
+  const toggleCli = async () => {
+    if (cliInstalled === null || cliPending) return;
+    setCliPending(true);
+    setCliError(null);
+    const result = cliInstalled
+      ? await window.api.cli.uninstall()
+      : await window.api.cli.install();
+    if (result.ok) {
+      setCliInstalled(!cliInstalled);
+    } else {
+      setCliError(result.error ?? 'Unknown error');
+    }
+    setCliPending(false);
+  };
+
   const [values, setValues] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const opt of OPTIONS) {
@@ -115,6 +141,26 @@ export function OptionsMenu() {
           </label>
         ))}
       </div>
+
+      {isMac && cliInstalled !== null && (
+        <>
+          <h3 className="options-menu__title options-menu__title--section">CLI</h3>
+          <div className="options-menu__list">
+            <label className="options-menu__item">
+              <input
+                type="checkbox"
+                checked={cliInstalled}
+                onChange={toggleCli}
+                disabled={cliPending}
+              />
+              <span>Enable <code>ct</code> command-line tool</span>
+            </label>
+            {cliError && (
+              <p className="options-menu__cli-error">{cliError}</p>
+            )}
+          </div>
+        </>
+      )}
 
       <h3 className="options-menu__title options-menu__title--section">Timeline</h3>
       <div className="options-menu__list">

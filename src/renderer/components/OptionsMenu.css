@@ -67,3 +67,10 @@
 .options-menu__field-input[type='text'] {
   width: 70px;
 }
+
+.options-menu__cli-error {
+  font-size: 11px;
+  color: var(--color-error, #c0392b);
+  margin: 0;
+  padding-left: 22px;
+}
