@@ -97,7 +97,7 @@ export async function maybePromptCliInstall(win: BrowserWindow): Promise<void> {
     type: 'question',
     title: 'Install CLI Tool',
     message: 'Install the `ct` command-line tool?',
-    detail: 'This lets you control Central Tracking from your terminal. You can change this later in Settings.',
+    detail: 'This lets you control Central Tracking from your terminal. You can change this later in Settings.\n\nOpen a new terminal window to use `ct` after installing.',
     buttons: ['Install', 'Not Now'],
     defaultId: 0,
     cancelId: 1,
