@@ -68,6 +68,16 @@
   width: 70px;
 }
 
+.options-menu__item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.options-menu__item-row .options-menu__item {
+  flex: 1;
+}
+
 .options-menu__cli-error {
   font-size: 11px;
   color: var(--color-error, #c0392b);

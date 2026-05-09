@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HelpPopover } from './HelpPopover';
 import './OptionsMenu.css';
 
 interface Option {
@@ -146,15 +147,28 @@ export function OptionsMenu() {
         <>
           <h3 className="options-menu__title options-menu__title--section">CLI</h3>
           <div className="options-menu__list">
-            <label className="options-menu__item">
-              <input
-                type="checkbox"
-                checked={cliInstalled}
-                onChange={toggleCli}
-                disabled={cliPending}
-              />
-              <span>Enable <code>ct</code> command-line tool</span>
-            </label>
+            <div className="options-menu__item-row">
+              <label className="options-menu__item">
+                <input
+                  type="checkbox"
+                  checked={cliInstalled}
+                  onChange={toggleCli}
+                  disabled={cliPending}
+                />
+                <span>Enable <code>ct</code> command-line tool</span>
+              </label>
+              <HelpPopover title="ct CLI Tool">
+                <p>Controls Central Tracking from any terminal — useful for scripting, automation, and AI agents.</p>
+                <pre>{`ct task list
+ct task create "My task" --status in-progress
+ct timer start <id>
+ct report summary --from 2024-01-01 --to 2024-01-31`}</pre>
+                <p>Get help for any command:</p>
+                <pre>{`ct --help
+ct task --help`}</pre>
+                <p>Open a new terminal window after enabling.</p>
+              </HelpPopover>
+            </div>
             {cliError && (
               <p className="options-menu__cli-error">{cliError}</p>
             )}
