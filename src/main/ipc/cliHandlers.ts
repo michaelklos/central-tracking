@@ -13,10 +13,10 @@ function getWrapperPath(): string {
 
 function getCliScriptPath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'cli', 'main.js');
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'cli', 'cli', 'main.js');
   }
-  // __dirname is dist/main/ipc/ — go up to dist/ then into cli/
-  return path.join(__dirname, '..', '..', 'cli', 'main.js');
+  // __dirname is dist/main/ipc/ — go up to dist/ then into cli/cli/ (rootDir:src preserved)
+  return path.join(__dirname, '..', '..', 'cli', 'cli', 'main.js');
 }
 
 function buildWrapperScript(): string {
