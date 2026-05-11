@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Converts assets/central-tracking-icon.svg into platform icon files.
-// Run once locally after changing the SVG, then commit the outputs:
+// Converts assets/icon-source.png into platform icon files.
+// Run once locally after changing the source image, then commit the outputs:
 //
 //   npm run build:icons
 //   git add assets/icon.png assets/mac/ assets/win/
@@ -8,22 +8,25 @@
 //
 // Requires macOS to generate the .icns (uses built-in iconutil).
 
-const { Resvg } = require('@resvg/resvg-js');
 const toIco = require('png-to-ico');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const svgPath = path.join(root, 'assets', 'central-tracking-icon.svg');
-const svg = fs.readFileSync(svgPath);
+const sourcePath = path.join(root, 'assets', 'icon-source.png');
 
+// Use sips (built-in on macOS) to resize; falls back to a raw copy for the
+// largest size so the script also works on Linux/Windows for the .ico step.
 function renderPng(size) {
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: size } });
-  return resvg.render().asPng();
+  const tmp = path.join(root, 'assets', `_tmp_${size}.png`);
+  execSync(`sips -z ${size} ${size} "${sourcePath}" --out "${tmp}" --setProperty format png`, { stdio: 'pipe' });
+  const buf = fs.readFileSync(tmp);
+  fs.unlinkSync(tmp);
+  return buf;
 }
 
-// Save a 1024px PNG for reference
+// Save a 1024px PNG for reference / electron-builder default icon
 fs.writeFileSync(path.join(root, 'assets', 'icon.png'), renderPng(1024));
 console.log('  → assets/icon.png');
 
@@ -63,5 +66,5 @@ toIco([16, 32, 48, 256].map(renderPng))
   .then(buf => {
     fs.writeFileSync(path.join(root, 'assets', 'win', 'icon.ico'), buf);
     console.log('  → assets/win/icon.ico');
-    console.log('Done. Commit assets/icon.png, assets/mac/, and assets/win/');
+    console.log('Done. Commit assets/icon.png, assets/mac/icon.icns, and assets/win/icon.ico');
   });
