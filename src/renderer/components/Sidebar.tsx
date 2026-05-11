@@ -213,7 +213,7 @@ export function Sidebar() {
     >
       {!collapsed && (
         <div className="sidebar__header">
-          <h1 className="sidebar__title">Central Tracking</h1>
+          <h1 className="sidebar__title">Central Tracking <span className="sidebar__version">v{__APP_VERSION__}</span></h1>
           <div className="sidebar__today">
             <span className="sidebar__today-label">Today:</span>{' '}
             <span className="sidebar__today-value">{formatDuration(todayDisplay)}</span>
