@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
+import { useMarkdownTextarea } from '../hooks/useMarkdownTextarea';
 import { TimeEntryEditor } from './TimeEntryEditor';
 import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -228,6 +229,10 @@ export function TaskDetail() {
     navigate('/timeline?date=' + date);
   };
 
+  const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });
+  const notesMd = useMarkdownTextarea({ value: notesDraft, onChange: setNotesDraft, onSave: handleSaveNotes });
+  const commentMd = useMarkdownTextarea({ value: newComment, onChange: setNewComment, onSave: handleAddComment });
+
   const running = isRunningForTask(task.id);
   const todayDisplay = running ? task.todayTimeSeconds + elapsedSeconds : task.todayTimeSeconds;
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
@@ -347,6 +352,7 @@ export function TaskDetail() {
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
                 onBlur={handleSaveDesc}
+                onKeyDown={descMd.onKeyDown}
                 placeholder="Add a description..."
               />
             </div>
@@ -433,6 +439,7 @@ export function TaskDetail() {
                 placeholder="Add a comment..."
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={commentMd.onKeyDown}
               />
               <div className="task-detail__comment-actions">
                 <label className="task-detail__sync-toggle">
@@ -488,10 +495,11 @@ export function TaskDetail() {
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               onBlur={handleSaveNotes}
+              onKeyDown={notesMd.onKeyDown}
               placeholder="Add notes..."
             />
             <div className="task-detail__notes-hint">
-              Notes auto-save when you click away.
+              Auto-saves on blur. ⌘S saves immediately.
             </div>
           </div>
         )}
