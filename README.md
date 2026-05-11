@@ -23,7 +23,7 @@ A desktop task and time tracking application built with Electron, React, and Typ
 
 | Layer | Technology |
 |---|---|
-| Desktop shell | Electron 31 |
+| Desktop shell | Electron 41 |
 | Frontend | React 18, TypeScript 5.5 |
 | Bundler | Webpack 5 (with webpack-dev-server for HMR) |
 | Database | SQLite via better-sqlite3 |
@@ -1171,6 +1171,29 @@ npm run dist:win    # Windows: NSIS installer (x64)
 
 Output goes to `release/`. Unsigned builds run fine for local testing; macOS will show a Gatekeeper warning and Windows may show a SmartScreen prompt.
 
+## Upgrading
+
+User data (database, CLI wrapper, settings) is stored outside the application bundle and survives upgrades on all platforms.
+
+| Platform | Data location |
+|---|---|
+| macOS | `~/Library/Application Support/central-tracking/` |
+| Windows | `%APPDATA%\central-tracking\` |
+
+### macOS
+
+**Pre-compiled (.dmg):** Download the new `.dmg`, open it, and drag the app onto `/Applications` to replace the existing version. The `ct` CLI updates itself automatically on first launch via the wrapper script.
+
+**Code-built:** `git pull && npm install && npm run build && npm start`
+
+### Windows
+
+**Pre-compiled (.exe):** Run the new NSIS installer — it overwrites the existing installation in place. The `ct.cmd` wrapper is rewritten by the installer.
+
+**Code-built:** `git pull && npm install && npm run build`
+
+---
+
 ## Releases
 
 Releases are built by GitHub Actions (`.github/workflows/release.yml`). Push a version tag to trigger a build on both platforms, sign/notarize the artifacts, and publish a GitHub Release:
@@ -1294,4 +1317,4 @@ See [TODO.md](./TODO.md) for planned features and known work items.
 
 ## License
 
-Private — not yet licensed for distribution.
+MIT

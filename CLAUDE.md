@@ -13,7 +13,7 @@ src/
     preload.ts       # Context bridge (exposes CentralTrackingAPI to renderer)
     logger.ts        # Debug logger (--debug flag)
     database/        # SQLite database class + migrations
-    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, reports, import
+    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, reports, import, cli
     server/          # Local HTTP server for CLI communication
       httpServer.ts  # HTTP server with route table mapping to handler functions
       auth.ts        # Token generation, server file management, validation
@@ -33,8 +33,10 @@ src/
     App.tsx          # Root component, wraps providers + HashRouter
     components/      # Layout, Sidebar, TaskList, TaskDetail, TimerBar,
                      # ReportView, DateRangePicker, SplitButton, OptionsMenu,
-                     # TimeEntryEditor
+                     # TimeEntryEditor, HelpPopover, ConfirmDialog
     context/         # TaskContext (CRUD + filtering), TimerContext (active timer)
+    hooks/           # useMarkdownTextarea (Cmd+S save, markdown list continuation)
+                     # useIntersectionObserver (infinite scroll sentinel)
     utils/           # Helpers (time formatting, duration parsing, validation)
   shared/
     types.ts         # Shared TypeScript types (Task, TimeEntry, Comment, etc.)
@@ -138,6 +140,9 @@ npm run start:debug      # Launches with --debug flag
 - Migrations are sequential SQL strings in `src/main/database/migrations.ts`
 - **Migration 001**: Initial schema (all tables)
 - **Migration 002**: `ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT '';`
+- **Migration 003**: Indexes for paginated queries
+- **Migration 004**: Soft-delete support (`deleted_at` column on tasks)
+- **Migration 005**: Plugin registry (`plugins` table for installed plugin metadata)
 
 ## IPC API Surface
 
@@ -150,6 +155,7 @@ npm run start:debug      # Launches with --debug flag
 | `comments:*` | Comment CRUD |
 | `categories:*` | Category CRUD + assignToTask |
 | `reports:exportCsv` | CSV export with save dialog |
+| `cli:isInstalled`, `cli:install`, `cli:uninstall` | CLI tool install/uninstall (macOS only) |
 | `window:setAlwaysOnTop`, `window:getAlwaysOnTop` | Window management |
 
 ## HTTP API Surface
