@@ -31,18 +31,18 @@ function getUserDataPaths(): string[] {
   const home = os.homedir();
   if (platform === 'darwin') {
     return [
-      path.join(home, 'Library', 'Application Support', 'Central Tracking'),
+      path.join(home, 'Library', 'Application Support', 'central-tracking'),
       path.join(home, 'Library', 'Application Support', 'Electron'), // dev mode (unpackaged)
     ];
   } else if (platform === 'win32') {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
     return [
-      path.join(appData, 'Central Tracking'),
+      path.join(appData, 'central-tracking'),
       path.join(appData, 'Electron'),
     ];
   }
   return [
-    path.join(home, '.config', 'Central Tracking'),
+    path.join(home, '.config', 'central-tracking'),
     path.join(home, '.config', 'Electron'),
   ];
 }
