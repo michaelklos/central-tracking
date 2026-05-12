@@ -147,6 +147,16 @@ export function getTaskById(db: Database, id: string): Task | null {
   return row ? rowToTask(db, row) : null;
 }
 
+export function getActiveTaskIds(db: Database, params?: TaskQueryParams): string[] {
+  const { clauses, values } = buildFilterClauses(params);
+  const baseWhere = "status != 'done' AND deleted_at IS NULL";
+  const where = clauses.length > 0 ? `${baseWhere} AND ${clauses.join(' AND ')}` : baseWhere;
+  const rows = db.instance
+    .prepare(`SELECT id FROM tasks WHERE ${where}`)
+    .all(...values) as { id: string }[];
+  return rows.map((r) => r.id);
+}
+
 export function getActiveTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
   const offset = params?.offset ?? 0;
   const limit = params?.limit ?? 50;
@@ -428,12 +438,37 @@ export function emptyRecycleBin(db: Database): void {
     .run();
 }
 
+export function restoreAllDeleted(db: Database): { restoredCount: number } {
+  const result = db.instance
+    .prepare("UPDATE tasks SET deleted_at = NULL, updated_at = datetime('now') WHERE deleted_at IS NOT NULL")
+    .run();
+  return { restoredCount: result.changes };
+}
+
+export function deleteAllTasks(db: Database): { deletedCount: number } {
+  const result = db.instance
+    .prepare("UPDATE tasks SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE deleted_at IS NULL")
+    .run();
+  return { deletedCount: result.changes };
+}
+
+export function resetApp(db: Database): void {
+  db.instance.transaction(() => {
+    db.instance.prepare('DELETE FROM task_categories').run();
+    db.instance.prepare('DELETE FROM time_entries').run();
+    db.instance.prepare('DELETE FROM comments').run();
+    db.instance.prepare('DELETE FROM tasks').run();
+    db.instance.prepare('DELETE FROM categories').run();
+  })();
+}
+
 // ─── IPC registration (thin wrappers around exported functions) ─────
 
 export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:getAll', () => getAllTasks(db));
   ipcMain.handle('tasks:getById', (_event, id: string) => getTaskById(db, id));
   ipcMain.handle('tasks:getActive', (_event, params?: TaskQueryParams) => getActiveTasks(db, params));
+  ipcMain.handle('tasks:getActiveIds', (_event, params?: TaskQueryParams) => getActiveTaskIds(db, params));
   ipcMain.handle('tasks:getDone', (_event, params?: TaskQueryParams) => getDoneTasks(db, params));
   ipcMain.handle('tasks:create', (_event, input: CreateTaskInput) => createTask(db, input));
   ipcMain.handle('tasks:update', (_event, id: string, updates: UpdateTaskInput) => updateTask(db, id, updates));
@@ -446,4 +481,7 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:batchRestore', (_event, ids: string[]) => batchRestoreTasks(db, ids));
   ipcMain.handle('tasks:purgeDeleted', (_event, id: string) => purgeDeletedTask(db, id));
   ipcMain.handle('tasks:emptyRecycleBin', () => emptyRecycleBin(db));
+  ipcMain.handle('tasks:restoreAll', () => restoreAllDeleted(db));
+  ipcMain.handle('tasks:deleteAll', () => deleteAllTasks(db));
+  ipcMain.handle('tasks:resetApp', () => resetApp(db));
 }

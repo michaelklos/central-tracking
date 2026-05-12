@@ -7,6 +7,7 @@ export function createMockApi(): CentralTrackingAPI {
       getAll: vi.fn().mockResolvedValue([]),
       getById: vi.fn().mockResolvedValue(null),
       getActive: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, hasMore: false }),
+      getActiveIds: vi.fn().mockResolvedValue([]),
       getDone: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, hasMore: false }),
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
@@ -19,6 +20,9 @@ export function createMockApi(): CentralTrackingAPI {
       batchRestore: vi.fn().mockResolvedValue({ restoredCount: 0 }),
       purgeDeleted: vi.fn().mockResolvedValue(undefined),
       emptyRecycleBin: vi.fn().mockResolvedValue(undefined),
+      restoreAll: vi.fn().mockResolvedValue({ restoredCount: 0 }),
+      deleteAll: vi.fn().mockResolvedValue({ deletedCount: 0 }),
+      resetApp: vi.fn().mockResolvedValue(undefined),
     },
     timeEntries: {
       getByTask: vi.fn().mockResolvedValue([]),
@@ -47,6 +51,12 @@ export function createMockApi(): CentralTrackingAPI {
       delete: vi.fn().mockResolvedValue(undefined),
       assignToTask: vi.fn().mockResolvedValue(undefined),
     },
+    cli: {
+      isInstalled: vi.fn().mockResolvedValue(false),
+      install: vi.fn().mockResolvedValue({ ok: true }),
+      uninstall: vi.fn().mockResolvedValue({ ok: true }),
+    },
+    platform: 'darwin',
     onDataChanged: vi.fn().mockReturnValue(() => {}),
     window: {
       setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),

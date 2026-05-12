@@ -90,19 +90,6 @@ describe('Sidebar', () => {
     expect(screen.getAllByText('Feature').length).toBeGreaterThan(0);
   });
 
-  it('creates a new category', async () => {
-    const user = userEvent.setup();
-    render(<Sidebar />);
-
-    const input = screen.getByPlaceholderText('New category...');
-    await user.type(input, 'New Cat');
-    await user.click(screen.getByText('+'));
-
-    expect(mockTaskContext.createCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'New Cat' })
-    );
-  });
-
   it('Settings tab shows OptionsMenu', async () => {
     const user = userEvent.setup();
     render(<Sidebar />);

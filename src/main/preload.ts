@@ -7,6 +7,8 @@ const api = {
     getById: (id: string) => ipcRenderer.invoke('tasks:getById', id),
     getActive: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
       ipcRenderer.invoke('tasks:getActive', params),
+    getActiveIds: (params?: { search?: string; status?: string; source?: string; categoryId?: string }) =>
+      ipcRenderer.invoke('tasks:getActiveIds', params),
     getDone: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
       ipcRenderer.invoke('tasks:getDone', params),
     create: (task: unknown) => ipcRenderer.invoke('tasks:create', task),
@@ -22,6 +24,9 @@ const api = {
     batchRestore: (ids: string[]) => ipcRenderer.invoke('tasks:batchRestore', ids),
     purgeDeleted: (id: string) => ipcRenderer.invoke('tasks:purgeDeleted', id),
     emptyRecycleBin: () => ipcRenderer.invoke('tasks:emptyRecycleBin'),
+    restoreAll: () => ipcRenderer.invoke('tasks:restoreAll'),
+    deleteAll: () => ipcRenderer.invoke('tasks:deleteAll'),
+    resetApp: () => ipcRenderer.invoke('tasks:resetApp'),
   },
 
   // Time entries

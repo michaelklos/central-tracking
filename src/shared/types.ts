@@ -201,7 +201,8 @@ export interface ParsedImportItem {
 
 export interface ImportPreviewItem extends ParsedImportItem {
   existingTask: { id: string; title: string } | null;
-  action: 'create' | 'skip';
+  /** create = new task+entry, update = add entry to existing task, skip = do nothing */
+  action: 'create' | 'update' | 'skip';
 }
 
 export interface ImportPreview {
@@ -269,6 +270,7 @@ export interface CentralTrackingAPI {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
     getActive(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
+    getActiveIds(params?: TaskQueryParams): Promise<string[]>;
     getDone(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
@@ -281,6 +283,9 @@ export interface CentralTrackingAPI {
     batchRestore(ids: string[]): Promise<{ restoredCount: number }>;
     purgeDeleted(id: string): Promise<void>;
     emptyRecycleBin(): Promise<void>;
+    restoreAll(): Promise<{ restoredCount: number }>;
+    deleteAll(): Promise<{ deletedCount: number }>;
+    resetApp(): Promise<void>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;

@@ -34,6 +34,7 @@ type GroupBy = 'none' | 'status' | 'source';
 export function TaskList() {
   const {
     activeTasks,
+    activeTasksTotal,
     activeTasksHasMore,
     doneTasks,
     doneTasksTotal,
@@ -48,6 +49,7 @@ export function TaskList() {
     toggleTaskSelection,
     selectAllTasks,
     deselectAllTasks,
+    selectAllActiveTasks,
     filter,
     selectedTaskId,
     selectTask,
@@ -62,6 +64,7 @@ export function TaskList() {
     restoreTask,
     purgeTask,
     emptyRecycleBin,
+    restoreAllDeleted,
     categories,
     sortBy,
     setSortBy,
@@ -79,6 +82,7 @@ export function TaskList() {
   const [loadingDeleted, setLoadingDeleted] = useState(false);
   const [loadingMoreDeleted, setLoadingMoreDeleted] = useState(false);
   const [emptyBinConfirm, setEmptyBinConfirm] = useState(false);
+  const [restoreAllConfirm, setRestoreAllConfirm] = useState(false);
   const [purgeConfirmId, setPurgeConfirmId] = useState<string | null>(null);
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
@@ -269,6 +273,11 @@ export function TaskList() {
     await emptyRecycleBin();
   };
 
+  const handleRestoreAll = async () => {
+    setRestoreAllConfirm(false);
+    await restoreAllDeleted();
+  };
+
   const handlePurge = async (id: string) => {
     setPurgeConfirmId(null);
     await purgeTask(id);
@@ -298,6 +307,10 @@ export function TaskList() {
     }
   };
 
+  const handleSelectAllActive = async () => {
+    await selectAllActiveTasks();
+  };
+
   // Determine the count to show on the Done group header
   const getDoneGroupCount = (group: string) => {
     if (group === 'Done' && groupBy === 'status') {
@@ -312,17 +325,27 @@ export function TaskList() {
     <div className="task-list">
       <div className="task-list__toolbar">
         {batchMode ? (
-          <label className="task-list__select-all">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={handleSelectAllToggle}
-            />
-            <span>Select All</span>
+          <div className="task-list__batch-header">
+            <label className="task-list__select-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={handleSelectAllToggle}
+              />
+              <span>Select All</span>
+            </label>
             <span className="task-list__select-count">
-              {selectedTaskIds.size} of {allVisibleIds.length} selected
+              {selectedTaskIds.size} of {activeTasksTotal} selected
             </span>
-          </label>
+            {activeTasksHasMore && selectedTaskIds.size < activeTasksTotal && (
+              <button
+                className="task-list__select-all-btn"
+                onClick={handleSelectAllActive}
+              >
+                Select all {activeTasksTotal}
+              </button>
+            )}
+          </div>
         ) : (
           <div className="task-list__add">
             <input
@@ -535,18 +558,36 @@ export function TaskList() {
                   <div className="task-list__loading">Loading...</div>
                 )}
                 {deletedTasks.length > 0 && (
-                  <button
-                    className="task-list__empty-bin"
-                    onClick={() => setEmptyBinConfirm(true)}
-                  >
-                    Empty Recycle Bin
-                  </button>
+                  <div className="task-list__bin-actions">
+                    <button
+                      className="task-list__restore-all-btn"
+                      onClick={() => setRestoreAllConfirm(true)}
+                    >
+                      Restore All
+                    </button>
+                    <button
+                      className="task-list__empty-bin"
+                      onClick={() => setEmptyBinConfirm(true)}
+                    >
+                      Empty Recycle Bin
+                    </button>
+                  </div>
                 )}
               </>
             )}
           </div>
         )}
       </div>
+
+      {restoreAllConfirm && (
+        <ConfirmDialog
+          title="Restore All"
+          message={`Restore all ${deletedTasksTotal} task${deletedTasksTotal !== 1 ? 's' : ''} from the recycle bin?`}
+          confirmLabel="Restore All"
+          onConfirm={handleRestoreAll}
+          onCancel={() => setRestoreAllConfirm(false)}
+        />
+      )}
 
       {emptyBinConfirm && (
         <ConfirmDialog

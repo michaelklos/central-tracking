@@ -44,7 +44,7 @@ describe('ImportPreviewDialog', () => {
 
   it('shows create/skip summary', () => {
     render(<ImportPreviewDialog {...defaultProps} />);
-    expect(screen.getByText('2 to create, 0 to skip')).toBeInTheDocument();
+    expect(screen.getByText(/2 to create/)).toBeInTheDocument();
   });
 
   it('shows file path', () => {
@@ -80,25 +80,25 @@ describe('ImportPreviewDialog', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  it('disables confirm button when no items to create', () => {
+  it('disables confirm button when no items to create or update', () => {
     const items = defaultProps.items.map((i) => ({ ...i, action: 'skip' as const }));
     render(<ImportPreviewDialog {...defaultProps} items={items} />);
 
-    const btn = screen.getByText('Import 0 Tasks');
+    const btn = screen.getByRole('button', { name: /Import/i });
     expect(btn).toBeDisabled();
   });
 
-  it('shows duplicate warning for existing tasks', () => {
+  it('shows existing badge for tasks with a match', () => {
     const items = [
       makeItem({
         title: '[TK-101] Fix bug',
         externalId: 'TK-101',
         existingTask: { id: 'abc', title: '[TK-101] Old task' },
-        action: 'skip',
+        action: 'update',
       }),
     ];
     render(<ImportPreviewDialog {...defaultProps} items={items} />);
-    expect(screen.getByText('duplicate')).toBeInTheDocument();
+    expect(screen.getByText('existing')).toBeInTheDocument();
   });
 
   it('renders parse errors section', () => {

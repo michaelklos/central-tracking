@@ -42,6 +42,7 @@ const mockTaskContext = {
   createCategory: vi.fn(),
   deleteCategory: vi.fn(),
   refreshCategories: vi.fn(),
+  refreshActiveTasks: vi.fn().mockResolvedValue(undefined),
   pendingTimeEntry: null,
   setPendingTimeEntry: vi.fn(),
 };

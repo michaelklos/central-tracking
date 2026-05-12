@@ -296,19 +296,38 @@
 
 /* ─── Select All (batch mode) ────────────────────────────────── */
 
+.task-list__batch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
 .task-list__select-all {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   cursor: pointer;
-  flex: 1;
 }
 
 .task-list__select-count {
   font-size: 11px;
   color: var(--color-text-secondary);
-  margin-left: auto;
+}
+
+.task-list__select-all-btn {
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.task-list__select-all-btn:hover {
+  color: var(--color-primary-hover);
 }
 
 /* ─── Selection circle ───────────────────────────────────────── */
@@ -390,17 +409,37 @@
   background: rgba(220, 38, 38, 0.1);
 }
 
+.task-list__bin-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.task-list__restore-all-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: none;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-list__restore-all-btn:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
 .task-list__empty-bin {
-  display: block;
-  width: 100%;
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: none;
   border: none;
   color: var(--color-danger, #dc2626);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  text-align: center;
 }
 
 .task-list__empty-bin:hover {

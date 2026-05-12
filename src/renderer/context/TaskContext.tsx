@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, TaskSortBy } from '../../shared/types';
+import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy } from '../../shared/types';
 
 const ACTIVE_TASKS_LIMIT = 50;
 const DONE_TASKS_LIMIT = 50;
@@ -44,6 +44,8 @@ interface TaskContextValue {
   batchRestoreTasks(ids: string[]): Promise<void>;
   purgeTask(id: string): Promise<void>;
   emptyRecycleBin(): Promise<void>;
+  restoreAllDeleted(): Promise<void>;
+  resetApp(): Promise<void>;
 
   categories: Category[];
   selectedTaskId: string | null;
@@ -65,8 +67,11 @@ interface TaskContextValue {
   loadMoreDoneTasks(): Promise<void>;
 
   createCategory(input: CreateCategoryInput): Promise<Category>;
+  updateCategory(id: string, updates: UpdateCategoryInput): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
   refreshCategories(): Promise<void>;
+
+  selectAllActiveTasks(): Promise<void>;
 
   sortBy: TaskSortBy;
   setSortBy(sortBy: TaskSortBy): void;
@@ -282,6 +287,22 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     return cat;
   }, [refreshCategories]);
 
+  const updateCategory = useCallback(async (id: string, updates: UpdateCategoryInput) => {
+    const cat = await window.api.categories.update(id, updates);
+    await refreshCategories();
+    return cat;
+  }, [refreshCategories]);
+
+  const selectAllActiveTasks = useCallback(async () => {
+    const ids = await window.api.tasks.getActiveIds({
+      search: filter.search,
+      status: filter.status,
+      source: filter.source,
+      categoryId: filter.categoryId,
+    });
+    setSelectedTaskIds(new Set(ids));
+  }, [filter]);
+
   // ─── Batch mode ──────────────────────────────────────────────────────
 
   const enterBatchMode = useCallback(() => {
@@ -393,6 +414,24 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setDeletedTasksHasMore(false);
   }, []);
 
+  const restoreAllDeleted = useCallback(async () => {
+    await window.api.tasks.restoreAll();
+    setDeletedTasks([]);
+    setDeletedTasksTotal(0);
+    setDeletedTasksHasMore(false);
+    await refreshActiveTasks();
+    if (doneTasksLoaded) await loadDoneTasks();
+  }, [refreshActiveTasks, doneTasksLoaded, loadDoneTasks]);
+
+  const resetApp = useCallback(async () => {
+    await window.api.tasks.resetApp();
+    await refreshActiveTasks();
+    setDeletedTasks([]);
+    setDeletedTasksTotal(0);
+    setDeletedTasksHasMore(false);
+    setDeletedTasksLoaded(false);
+  }, [refreshActiveTasks]);
+
   const deleteCategory = useCallback(async (id: string) => {
     await window.api.categories.delete(id);
     await refreshCategories();
@@ -427,6 +466,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     batchRestoreTasks,
     purgeTask,
     emptyRecycleBin,
+    restoreAllDeleted,
+    resetApp,
     categories,
     selectedTaskId,
     filter,
@@ -442,8 +483,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     loadDoneTasks,
     loadMoreDoneTasks,
     createCategory,
+    updateCategory,
     deleteCategory,
     refreshCategories,
+    selectAllActiveTasks,
     sortBy,
     setSortBy,
     pendingTimeEntry,

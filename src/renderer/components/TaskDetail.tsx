@@ -21,7 +21,7 @@ const AUTO_LOAD_MAX_BATCHES = 3;
 
 export function TaskDetail() {
   const navigate = useNavigate();
-  const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
+  const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
@@ -161,10 +161,14 @@ export function TaskDetail() {
   };
 
   const handleComplete = async () => {
-    if (isRunningForTask(task.id)) {
-      await stopTimer();
+    try {
+      if (isRunningForTask(task.id)) {
+        await stopTimer();
+      }
+      await updateTask(task.id, { status: 'done' });
+    } catch (err) {
+      console.error('Failed to complete task:', err);
     }
-    await updateTask(task.id, { status: 'done' });
   };
 
   const handleReactivate = async () => {
@@ -195,34 +199,38 @@ export function TaskDetail() {
 
   const handleDeleteTimeEntry = async (id: string) => {
     await window.api.timeEntries.delete(id);
-    // Inline removal
     setTimeEntries((prev) => prev.filter((e) => e.id !== id));
     setTimeEntriesTotal((prev) => prev - 1);
     await loadSmartDefaults();
+    await refreshActiveTasks();
   };
 
   const handleCreateEntry = async (startTime: string, endTime: string, note: string) => {
     const entry = await window.api.timeEntries.create({ taskId: task.id, startTime, endTime, note });
-    // Inline prepend (newest first)
     setTimeEntries((prev) => [entry, ...prev]);
     setTimeEntriesTotal((prev) => prev + 1);
     await loadSmartDefaults();
+    await refreshActiveTasks();
   };
 
   const handleUpdateEntry = async (id: string, startTime: string, endTime: string, note: string) => {
     const updated = await window.api.timeEntries.update(id, { startTime, endTime, note });
-    // Inline replace
     setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     await loadSmartDefaults();
+    await refreshActiveTasks();
   };
 
   const handleTimerToggle = async () => {
-    if (isRunningForTask(task.id)) {
-      await stopTimer();
-    } else {
-      await startTimer(task.id);
+    try {
+      if (isRunningForTask(task.id)) {
+        await stopTimer();
+      } else {
+        await startTimer(task.id);
+      }
+      await loadTimeEntries();
+    } catch (err) {
+      console.error('Timer toggle failed:', err);
     }
-    await loadTimeEntries();
   };
 
   const handleNavigateToTimeline = (date: string) => {
@@ -499,7 +507,7 @@ export function TaskDetail() {
               placeholder="Add notes..."
             />
             <div className="task-detail__notes-hint">
-              Auto-saves on blur. ⌘S saves immediately.
+              Auto-saves on blur. {window.api.platform === 'darwin' ? '⌘S' : 'Ctrl+S'} saves immediately.
             </div>
           </div>
         )}

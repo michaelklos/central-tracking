@@ -111,6 +111,8 @@ export function createApiClient(request: RawRequest): ApiClient {
       batchRestore: (ids) => request<{ restoredCount: number }>('tasks/batchRestore', [ids]),
       purgeDeleted: (id) => request<void>('tasks/purgeDeleted', [id]),
       emptyRecycleBin: () => request<void>('tasks/emptyRecycleBin'),
+      restoreAll: () => request<{ restoredCount: number }>('tasks/restoreAll'),
+      deleteAll: () => request<{ deletedCount: number }>('tasks/deleteAll'),
     },
     timeEntries: {
       getByTask: (taskId) => request<TimeEntry[]>('timeEntries/getByTask', [taskId]),

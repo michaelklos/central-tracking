@@ -15,7 +15,7 @@ function nudge(): void {
       `[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x + 1}, ${y}); ` +
       `Start-Sleep -Milliseconds 50; ` +
       `[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})`;
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps]);
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps]);
   }
 }
 

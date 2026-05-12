@@ -84,3 +84,112 @@
   margin: 0;
   padding-left: 22px;
 }
+
+.options-menu__cat-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.options-menu__cat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.options-menu__cat-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.options-menu__cat-delete {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.options-menu__cat-item:hover .options-menu__cat-delete {
+  opacity: 1;
+}
+
+.options-menu__cat-delete:hover {
+  color: var(--color-danger);
+}
+
+.options-menu__cat-color {
+  width: 20px;
+  height: 20px;
+  padding: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.options-menu__cat-form {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.options-menu__cat-form input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.options-menu__cat-add {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.options-menu__cat-add:hover {
+  background: var(--color-primary-hover);
+}
+
+.options-menu__title--danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.options-menu__reset-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  background: var(--color-danger, #dc2626);
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
+
+.options-menu__reset-btn:hover {
+  background: #b91c1c;
+}
+
+.options-menu__reset-desc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}

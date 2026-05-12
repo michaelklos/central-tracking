@@ -134,12 +134,23 @@ export function registerTaskCommands(yargs: Argv): Argv {
           }),
       )
       .command(
-        'delete <ids..>',
+        'delete [ids..]',
         'Soft-delete task(s)',
-        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
+        (yy) =>
+          yy
+            .positional('ids', { type: 'string', array: true, describe: 'UUID(s), prefix(es), or name(s)' })
+            .option('all', { type: 'boolean', describe: 'Soft-delete ALL tasks (moves to recycle bin)' })
+            .option('confirm', { type: 'boolean', describe: 'Required when using --all' }),
         (argv) =>
           runCommand(argv, async ({ client }) => {
-            const ids = argv.ids as string[];
+            if (argv.all) {
+              if (!argv.confirm) fail('--confirm is required with --all. Tasks will be moved to the recycle bin and can be restored.');
+              const result = await client.tasks.deleteAll();
+              say(`Moved ${result.deletedCount} tasks to the recycle bin.`);
+              return;
+            }
+            const ids = (argv.ids as string[] | undefined) ?? [];
+            if (ids.length === 0) fail('Specify task ID(s) or use --all.');
             if (ids.length === 1) {
               await client.tasks.delete(ids[0]);
               say(`Deleted task ${ids[0]}`);
@@ -150,12 +161,21 @@ export function registerTaskCommands(yargs: Argv): Argv {
           }),
       )
       .command(
-        'restore <ids..>',
+        'restore [ids..]',
         'Restore deleted task(s)',
-        (yy) => yy.positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' }),
+        (yy) =>
+          yy
+            .positional('ids', { type: 'string', array: true, describe: 'UUID(s), prefix(es), or name(s)' })
+            .option('all', { type: 'boolean', describe: 'Restore ALL tasks from recycle bin' }),
         (argv) =>
           runCommand(argv, async ({ client }) => {
-            const ids = argv.ids as string[];
+            if (argv.all) {
+              const result = await client.tasks.restoreAll();
+              say(`Restored ${result.restoredCount} tasks.`);
+              return;
+            }
+            const ids = (argv.ids as string[] | undefined) ?? [];
+            if (ids.length === 0) fail('Specify task ID(s) or use --all.');
             if (ids.length === 1) {
               const task = await client.tasks.restore(ids[0]);
               output(argv, task, (t) => `Restored task "${t.title}"`);

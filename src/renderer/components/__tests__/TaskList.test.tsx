@@ -36,6 +36,7 @@ const mockTaskContext = {
   toggleTaskSelection: vi.fn(),
   selectAllTasks: vi.fn(),
   deselectAllTasks: vi.fn(),
+  selectAllActiveTasks: vi.fn().mockResolvedValue(undefined),
   loadDeletedTasks: vi.fn().mockResolvedValue(undefined),
   loadMoreDeletedTasks: vi.fn().mockResolvedValue(undefined),
   restoreTask: vi.fn(),
@@ -110,7 +111,7 @@ describe('TaskList', () => {
     await user.type(input, 'New Task');
     await user.click(screen.getByText('Add'));
 
-    expect(mockTaskContext.createTask).toHaveBeenCalledWith({ title: 'New Task' });
+    expect(mockTaskContext.createTask).toHaveBeenCalledWith({ title: 'New Task', status: 'in-progress' });
   });
 
   it('does not create task with empty title', async () => {

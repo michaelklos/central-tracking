@@ -70,3 +70,37 @@
 .confirm-dialog__confirm--danger:hover {
   background: #b91c1c;
 }
+
+.confirm-dialog__confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.confirm-dialog__phrase {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.confirm-dialog__phrase-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.confirm-dialog__phrase-input {
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: monospace;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.confirm-dialog__phrase-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}

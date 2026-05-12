@@ -9,6 +9,9 @@ export default defineConfig({
       '@renderer': path.resolve(__dirname, 'src/renderer'),
     },
   },
+  define: {
+    __APP_VERSION__: JSON.stringify('0.0.0-test'),
+  },
   test: {
     globals: true,
     environment: 'jsdom',

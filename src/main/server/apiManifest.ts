@@ -5,6 +5,7 @@ import {
   createTask, updateTask, deleteTask, reorderTasks,
   batchUpdateTasks, batchSoftDeleteTasks, getDeletedTasks,
   restoreTask, batchRestoreTasks, purgeDeletedTask, emptyRecycleBin,
+  restoreAllDeleted, deleteAllTasks,
 } from '../ipc/taskHandlers';
 
 import {
@@ -63,6 +64,8 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/batchRestore',     ipcChannel: 'tasks:batchRestore',     mutates: true,  event: 'task.restored',  handler: (db, ids) => batchRestoreTasks(db, ids as string[]) },
   { route: 'tasks/purgeDeleted',     ipcChannel: 'tasks:purgeDeleted',     mutates: true,  event: 'task.purged',    handler: (db, id) => purgeDeletedTask(db, id as string) },
   { route: 'tasks/emptyRecycleBin',  ipcChannel: 'tasks:emptyRecycleBin',  mutates: true,  event: 'task.purged',    handler: (db) => emptyRecycleBin(db) },
+  { route: 'tasks/restoreAll',       ipcChannel: 'tasks:restoreAll',       mutates: true,  event: 'task.restored',  handler: (db) => restoreAllDeleted(db) },
+  { route: 'tasks/deleteAll',        ipcChannel: 'tasks:deleteAll',        mutates: true,  event: 'task.deleted',   handler: (db) => deleteAllTasks(db) },
 
   // Time entries
   { route: 'timeEntries/getByTask',               ipcChannel: 'timeEntries:getByTask',               mutates: false, handler: (db, taskId) => getTimeEntriesByTask(db, taskId as string) },

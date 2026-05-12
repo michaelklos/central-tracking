@@ -11,8 +11,16 @@ export function parseImportContent(db: Database, content: string): { items: Impo
 
     if (item.externalId) {
       const row = db.instance
-        .prepare('SELECT id, title FROM tasks WHERE external_id = ?')
+        .prepare('SELECT id, title FROM tasks WHERE external_id = ? AND deleted_at IS NULL')
         .get(item.externalId) as { id: string; title: string } | undefined;
+      if (row) {
+        existingTask = { id: row.id, title: row.title };
+      }
+    } else {
+      // No ticket — match by exact title to avoid creating duplicates
+      const row = db.instance
+        .prepare('SELECT id, title FROM tasks WHERE title = ? AND deleted_at IS NULL LIMIT 1')
+        .get(item.title) as { id: string; title: string } | undefined;
       if (row) {
         existingTask = { id: row.id, title: row.title };
       }
@@ -21,7 +29,8 @@ export function parseImportContent(db: Database, content: string): { items: Impo
     return {
       ...item,
       existingTask,
-      action: existingTask ? 'skip' as const : 'create' as const,
+      // 'update' = add a time entry to the existing task; 'create' = new task
+      action: existingTask ? 'update' as const : 'create' as const,
     };
   });
 
@@ -29,8 +38,9 @@ export function parseImportContent(db: Database, content: string): { items: Impo
 }
 
 export function executeImport(db: Database, items: ImportPreviewItem[]): ImportResult {
-  const toCreate = items.filter((item) => item.action === 'create');
+  const actionableItems = items.filter((item) => item.action !== 'skip');
   let created = 0;
+  let updated = 0;
   const errors: string[] = [];
 
   const insertTask = db.instance.prepare(
@@ -48,22 +58,42 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
   );
 
   const transaction = db.instance.transaction(() => {
-    for (const item of toCreate) {
-      try {
-        const taskId = uuidv4();
-        const now = new Date().toISOString();
-        const { next: sortOrder } = getMaxOrder.get() as { next: number };
+    // Track titles created in this import run so multiple lines for the same
+    // title don't produce duplicate tasks.
+    const titleToTaskId = new Map<string, string>();
 
-        insertTask.run(
-          taskId,
-          item.title,
-          item.source,
-          item.externalId,
-          item.pluginId,
-          sortOrder,
-          now,
-          now
-        );
+    for (const item of actionableItems) {
+      try {
+        const now = new Date().toISOString();
+        let taskId: string;
+
+        if (item.action === 'update' && item.existingTask) {
+          // Add time entry to an already-existing task
+          taskId = item.existingTask.id;
+          updated++;
+        } else {
+          // 'create' — but check if we already created this title in the current batch
+          const existing = titleToTaskId.get(item.title);
+          if (existing) {
+            taskId = existing;
+            // Counts as another entry on the same newly-created task, not a new task
+          } else {
+            taskId = uuidv4();
+            const { next: sortOrder } = getMaxOrder.get() as { next: number };
+            insertTask.run(
+              taskId,
+              item.title,
+              item.source,
+              item.externalId,
+              item.pluginId,
+              sortOrder,
+              now,
+              now
+            );
+            titleToTaskId.set(item.title, taskId);
+            created++;
+          }
+        }
 
         const timeEntryId = uuidv4();
         insertTimeEntry.run(
@@ -74,10 +104,8 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
           item.durationSeconds,
           now
         );
-
-        created++;
       } catch (err) {
-        errors.push(`Failed to create "${item.title}": ${err instanceof Error ? err.message : String(err)}`);
+        errors.push(`Failed to import "${item.title}": ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   });
@@ -86,7 +114,7 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
 
   return {
     created,
-    skipped: items.length - toCreate.length,
+    skipped: items.length - actionableItems.length,
     errors,
   };
 }

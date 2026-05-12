@@ -46,9 +46,46 @@ function formatPreview(result: ImportParseResult): string {
   return lines.join('\n');
 }
 
+const FORMAT_REFERENCE = `
+Import file format (.md or .txt):
+
+  # YYYY-MM-DD
+  * Task Name: HH:MM (duration)
+  * [TICKET] Task Name: HH:MM (duration)
+
+  // Lines starting with // are comments
+
+Fields:
+  Date header  Required once per day block. Format: # 2024-03-20
+  Task Name    Free-form title. Tasks with the same name share time entries.
+  Ticket       Optional. Plain number → ADO (e.g. 42), KEY-123 format → Jira.
+               When present, title is stored as "[TICKET] Task Name".
+  Start time   24-hour clock. e.g. 09:00 or 14:30
+  Duration     e.g. 45m  1h  1h 30m  90m  2 hours
+
+Example:
+
+  # 2024-03-20
+  * Morning standup: 09:00 (15m)
+  * [PROJ-42] Implement login: 09:30 (2h 30m)
+  * Code review: 12:00 (1h)
+
+  # 2024-03-21
+  * [PROJ-42] Implement login: 09:00 (3h)
+  * Deploy to staging: 14:00 (45m)
+
+Multiple entries for the same task title are merged under one task.
+`.trimStart();
+
 export function registerImportCommands(yargs: Argv): Argv {
   return yargs.command('import', 'Import tasks from file', (y) =>
     y
+      .command(
+        'format',
+        'Show the expected import file format',
+        () => {},
+        () => process.stdout.write(FORMAT_REFERENCE),
+      )
       .command(
         'preview <file>',
         'Parse import file and show preview',

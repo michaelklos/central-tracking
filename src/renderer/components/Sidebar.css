@@ -200,6 +200,23 @@
   width: 100%;
 }
 
+.sidebar__clear-filters {
+  width: 100%;
+  padding: 5px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: center;
+}
+
+.sidebar__clear-filters:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 /* Categories */
 .sidebar__cat-list {
   list-style: none;
@@ -262,6 +279,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+.sidebar__cat-color--inline {
+  width: 18px;
+  height: 18px;
+  padding: 1px;
+  flex-shrink: 0;
 }
 
 .sidebar__cat-add {

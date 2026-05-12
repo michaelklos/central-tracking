@@ -32,6 +32,7 @@ function createWindow(): void {
       nodeIntegration: false,
     },
     title: 'Central Tracking',
+    autoHideMenuBar: true,
   });
 
   if (process.env.NODE_ENV === 'development') {

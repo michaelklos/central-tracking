@@ -27,7 +27,9 @@ export function ImportPreviewDialog({
   onCancel,
 }: ImportPreviewDialogProps) {
   const createCount = items.filter((i) => i.action === 'create').length;
+  const updateCount = items.filter((i) => i.action === 'update').length;
   const skipCount = items.filter((i) => i.action === 'skip').length;
+  const actionableCount = createCount + updateCount;
 
   return (
     <div className="import-overlay" onClick={onCancel}>
@@ -35,7 +37,10 @@ export function ImportPreviewDialog({
         <h2 className="import-dialog__title">Import Preview</h2>
         <p className="import-dialog__file">{filePath}</p>
         <p className="import-dialog__summary">
-          {createCount} to create, {skipCount} to skip
+          {createCount > 0 && <>{createCount} to create</>}
+          {createCount > 0 && updateCount > 0 && ', '}
+          {updateCount > 0 && <>{updateCount} to add to existing</>}
+          {skipCount > 0 && <>, {skipCount} to skip</>}
         </p>
 
         {items.length > 0 && (
@@ -68,7 +73,7 @@ export function ImportPreviewDialog({
                     <td>
                       {item.existingTask ? (
                         <span className="import-dialog__badge import-dialog__badge--duplicate" title={`Existing: ${item.existingTask.title}`}>
-                          duplicate
+                          existing
                         </span>
                       ) : (
                         <span className="import-dialog__badge import-dialog__badge--new">new</span>
@@ -79,7 +84,7 @@ export function ImportPreviewDialog({
                         className={`import-dialog__action-btn import-dialog__action-btn--${item.action}`}
                         onClick={() => onToggleAction(index)}
                       >
-                        {item.action}
+                        {item.action === 'update' ? 'add time' : item.action}
                       </button>
                     </td>
                   </tr>
@@ -123,9 +128,11 @@ export function ImportPreviewDialog({
           <button
             className="import-dialog__confirm"
             onClick={onConfirm}
-            disabled={createCount === 0}
+            disabled={actionableCount === 0}
           >
-            Import {createCount} Task{createCount !== 1 ? 's' : ''}
+            Import {createCount > 0 ? `${createCount} Task${createCount !== 1 ? 's' : ''}` : ''}
+            {createCount > 0 && updateCount > 0 ? ', ' : ''}
+            {updateCount > 0 ? `Add ${updateCount} Entr${updateCount !== 1 ? 'ies' : 'y'}` : ''}
           </button>
         </div>
       </div>

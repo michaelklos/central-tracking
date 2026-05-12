@@ -90,7 +90,8 @@ describe('Import IPC Handlers', () => {
     const preview = await ipc.invoke('import:selectAndParse');
     expect(preview.items[0].existingTask).not.toBeNull();
     expect(preview.items[0].existingTask.title).toBe('[TK-101] Old task');
-    expect(preview.items[0].action).toBe('skip');
+    // Existing task should default to 'update' (add time entry) not 'skip'
+    expect(preview.items[0].action).toBe('update');
     // Other items should still be 'create'
     expect(preview.items[1].action).toBe('create');
     expect(preview.items[2].action).toBe('create');

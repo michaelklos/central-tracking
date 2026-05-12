@@ -71,6 +71,8 @@ describe('apiManifest', () => {
     const UI_ONLY_CHANNELS = new Set([
       'reports:exportCsv',
       'import:selectAndParse',
+      'tasks:getActiveIds',
+      'tasks:resetApp',
     ]);
 
     const registered = collectRegisteredIpcChannels().filter((c) => !UI_ONLY_CHANNELS.has(c));

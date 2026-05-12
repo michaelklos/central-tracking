@@ -72,7 +72,7 @@ const REPORT_MODE_OPTIONS: { value: ReportMode; label: string }[] = [
 ];
 
 export function Sidebar() {
-  const { filter, setFilter, categories, createCategory, deleteCategory, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
+  const { filter, setFilter, categories, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
   const { activeEntry, elapsedSeconds, totalTodaySeconds } = useTimerContext();
 
   let reportContext: ReturnType<typeof useReportContext> | null = null;
@@ -85,8 +85,6 @@ export function Sidebar() {
   const [sidebarWidth, setSidebarWidth] = useState(getStoredWidth);
   const isResizing = useRef(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('#6366f1');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
@@ -159,13 +157,6 @@ export function Sidebar() {
     }
   };
 
-  const handleCreateCategory = async () => {
-    const name = newCatName.trim();
-    if (!name) return;
-    await createCategory({ name, color: newCatColor });
-    setNewCatName('');
-  };
-
   const handleImportClick = async () => {
     const preview = await window.api.import.selectAndParse();
     if (preview) {
@@ -176,11 +167,18 @@ export function Sidebar() {
 
   const handleToggleAction = (index: number) => {
     if (!importPreview) return;
-    const items = importPreview.items.map((item, i) =>
-      i === index
-        ? { ...item, action: (item.action === 'create' ? 'skip' : 'create') as ImportPreviewItem['action'] }
-        : item
-    );
+    const items = importPreview.items.map((item, i) => {
+      if (i !== index) return item;
+      // Items with an existing task toggle between 'update' and 'skip'
+      // New items toggle between 'create' and 'skip'
+      let nextAction: ImportPreviewItem['action'];
+      if (item.existingTask) {
+        nextAction = item.action === 'skip' ? 'update' : 'skip';
+      } else {
+        nextAction = item.action === 'skip' ? 'create' : 'skip';
+      }
+      return { ...item, action: nextAction };
+    });
     setImportPreview({ ...importPreview, items });
   };
 
@@ -260,41 +258,6 @@ export function Sidebar() {
             ) : (
               <>
                 <div className="sidebar__section">
-                  <h3 className="sidebar__section-title">Categories</h3>
-                  <ul className="sidebar__cat-list">
-                    {categories.map((cat) => (
-                      <li key={cat.id} className="sidebar__cat-item">
-                        <span className="sidebar__cat-dot" style={{ background: cat.color }} />
-                        <span className="sidebar__cat-name">{cat.name}</span>
-                        <button
-                          className="sidebar__cat-delete"
-                          onClick={() => deleteCategory(cat.id)}
-                          title="Delete category"
-                        >
-                          &times;
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="sidebar__cat-form">
-                    <input
-                      type="text"
-                      placeholder="New category..."
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
-                    />
-                    <input
-                      type="color"
-                      value={newCatColor}
-                      onChange={(e) => setNewCatColor(e.target.value)}
-                      className="sidebar__cat-color"
-                    />
-                    <button className="sidebar__cat-add" onClick={handleCreateCategory}>+</button>
-                  </div>
-                </div>
-
-                <div className="sidebar__section">
                   <h3 className="sidebar__section-title">Filter</h3>
                   <input
                     className="sidebar__search"
@@ -328,6 +291,14 @@ export function Sidebar() {
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
+                  {(filter.search || filter.status || filter.source || filter.categoryId) && (
+                    <button
+                      className="sidebar__clear-filters"
+                      onClick={() => setFilter({})}
+                    >
+                      Clear filters
+                    </button>
+                  )}
                 </div>
 
                 <div className="sidebar__import">

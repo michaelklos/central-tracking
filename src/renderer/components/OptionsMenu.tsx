@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HelpPopover } from './HelpPopover';
+import { ConfirmDialog } from './ConfirmDialog';
+import { useTaskContext } from '../context/TaskContext';
 import './OptionsMenu.css';
 
 interface Option {
@@ -44,9 +46,19 @@ const TIMELINE_SETTINGS: StringSetting[] = [
   { key: 'ct-option-gap-label', label: 'Gap label', type: 'text', defaultValue: 'gap' },
 ];
 
-const isMac = window.api.platform === 'darwin';
-
 export function OptionsMenu() {
+  const isMac = window.api?.platform === 'darwin';
+  const { categories, createCategory, updateCategory, deleteCategory, resetApp } = useTaskContext();
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#6366f1');
+  const [resetConfirm, setResetConfirm] = useState(false);
+
+  const handleCreateCategory = async () => {
+    const name = newCatName.trim();
+    if (!name) return;
+    await createCategory({ name, color: newCatColor });
+    setNewCatName('');
+  };
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null);
   const [cliError, setCliError] = useState<string | null>(null);
   const [cliPending, setCliPending] = useState(false);
@@ -191,6 +203,66 @@ ct task --help`}</pre>
           </label>
         ))}
       </div>
+      <h3 className="options-menu__title options-menu__title--section">Categories</h3>
+      <div className="options-menu__list">
+        <ul className="options-menu__cat-list">
+          {categories.map((cat) => (
+            <li key={cat.id} className="options-menu__cat-item">
+              <input
+                type="color"
+                value={cat.color}
+                onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
+                className="options-menu__cat-color"
+                title="Change color"
+              />
+              <span className="options-menu__cat-name">{cat.name}</span>
+              <button
+                className="options-menu__cat-delete"
+                onClick={() => deleteCategory(cat.id)}
+                title="Delete category"
+              >
+                &times;
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="options-menu__cat-form">
+          <input
+            type="text"
+            placeholder="New category..."
+            value={newCatName}
+            onChange={(e) => setNewCatName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
+          />
+          <input
+            type="color"
+            value={newCatColor}
+            onChange={(e) => setNewCatColor(e.target.value)}
+            className="options-menu__cat-color"
+          />
+          <button className="options-menu__cat-add" onClick={handleCreateCategory}>+</button>
+        </div>
+      </div>
+
+      <h3 className="options-menu__title options-menu__title--section options-menu__title--danger">Danger Zone</h3>
+      <div className="options-menu__list">
+        <button className="options-menu__reset-btn" onClick={() => setResetConfirm(true)}>
+          Reset App
+        </button>
+        <p className="options-menu__reset-desc">Permanently deletes all tasks, time entries, comments, and categories.</p>
+      </div>
+
+      {resetConfirm && (
+        <ConfirmDialog
+          title="Reset App"
+          message="This will permanently delete all tasks, time entries, comments, and categories. This cannot be undone."
+          confirmLabel="Reset"
+          variant="danger"
+          confirmPhrase="RESET"
+          onConfirm={async () => { setResetConfirm(false); await resetApp(); }}
+          onCancel={() => setResetConfirm(false)}
+        />
+      )}
     </div>
   );
 }
