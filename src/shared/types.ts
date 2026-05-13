@@ -330,6 +330,9 @@ export interface CentralTrackingAPI {
     install(): Promise<{ ok: boolean; error?: string }>;
     uninstall(): Promise<{ ok: boolean; error?: string }>;
   };
+  shell: {
+    openExternal(url: string): Promise<void>;
+  };
   platform: string;
   onDataChanged(callback: () => void): () => void;
 }

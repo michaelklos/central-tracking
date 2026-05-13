@@ -93,6 +93,11 @@ const api = {
     uninstall: () => ipcRenderer.invoke('cli:uninstall'),
   },
 
+  // Shell utilities
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  },
+
   platform: process.platform,
 
   // Data change notifications (pushed from main process when CLI makes changes)

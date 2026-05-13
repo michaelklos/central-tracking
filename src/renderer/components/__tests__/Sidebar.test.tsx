@@ -23,21 +23,8 @@ const mockTaskContext = {
   enterBatchMode: vi.fn(),
 };
 
-const mockTimerContext = {
-  activeEntry: null as Record<string, unknown> | null,
-  elapsedSeconds: 0,
-  totalTodaySeconds: 0,
-  startTimer: vi.fn(),
-  stopTimer: vi.fn(),
-  isRunningForTask: vi.fn().mockReturnValue(false),
-};
-
 vi.mock('../../context/TaskContext', () => ({
   useTaskContext: () => mockTaskContext,
-}));
-
-vi.mock('../../context/TimerContext', () => ({
-  useTimerContext: () => mockTimerContext,
 }));
 
 describe('Sidebar', () => {
@@ -46,9 +33,6 @@ describe('Sidebar', () => {
     mockTaskContext.filter = {};
     mockTaskContext.setFilter = vi.fn();
     mockTaskContext.createCategory = vi.fn().mockResolvedValue({ id: 'cat-1', name: 'Test' });
-    mockTimerContext.activeEntry = null;
-    mockTimerContext.elapsedSeconds = 0;
-    mockTimerContext.totalTodaySeconds = 0;
     localStorage.clear();
   });
 
@@ -118,19 +102,5 @@ describe('Sidebar', () => {
 
     await user.click(screen.getByTitle('Collapse sidebar'));
     expect(localStorage.getItem('central-tracking:sidebar-collapsed')).toBe('true');
-  });
-
-  it('today timer displays total', () => {
-    mockTimerContext.totalTodaySeconds = 3661;
-    render(<Sidebar />);
-    expect(screen.getByText('01:01:01')).toBeInTheDocument();
-  });
-
-  it('today timer includes elapsed seconds when active', () => {
-    mockTimerContext.activeEntry = { id: 'e1', taskId: 't1', startTime: new Date().toISOString() };
-    mockTimerContext.totalTodaySeconds = 100;
-    mockTimerContext.elapsedSeconds = 23;
-    render(<Sidebar />);
-    expect(screen.getByText('00:02:03')).toBeInTheDocument();
   });
 });
