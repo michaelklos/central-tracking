@@ -22,7 +22,7 @@ const AUTO_LOAD_MAX_BATCHES = 3;
 export function TaskDetail() {
   const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
+  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal } = useTimerContext();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -203,6 +203,7 @@ export function TaskDetail() {
     setTimeEntriesTotal((prev) => prev - 1);
     await loadSmartDefaults();
     await refreshActiveTasks();
+    await refreshTodayTotal();
   };
 
   const handleCreateEntry = async (startTime: string, endTime: string, note: string) => {
@@ -211,6 +212,7 @@ export function TaskDetail() {
     setTimeEntriesTotal((prev) => prev + 1);
     await loadSmartDefaults();
     await refreshActiveTasks();
+    await refreshTodayTotal();
   };
 
   const handleUpdateEntry = async (id: string, startTime: string, endTime: string, note: string) => {
@@ -218,6 +220,7 @@ export function TaskDetail() {
     setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     await loadSmartDefaults();
     await refreshActiveTasks();
+    await refreshTodayTotal();
   };
 
   const handleTimerToggle = async () => {

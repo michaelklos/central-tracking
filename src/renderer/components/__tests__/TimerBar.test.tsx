@@ -80,4 +80,20 @@ describe('TimerBar', () => {
     render(<TimerBar />);
     expect(screen.queryByText('Stop')).not.toBeInTheDocument();
   });
+
+  it('today display shows totalTodaySeconds when no timer is active', () => {
+    mockTimerContext.totalTodaySeconds = 3661;
+    render(<TimerBar />);
+    const today = document.querySelector('.timer-bar__today');
+    expect(today?.textContent).toBe('Today: 01:01:01');
+  });
+
+  it('today display adds elapsedSeconds when timer is active', () => {
+    mockTimerContext.activeEntry = { id: 'e1', taskId: 't1', startTime: new Date().toISOString() };
+    mockTimerContext.totalTodaySeconds = 100;
+    mockTimerContext.elapsedSeconds = 23;
+    render(<TimerBar />);
+    const today = document.querySelector('.timer-bar__today');
+    expect(today?.textContent).toBe('Today: 00:02:03');
+  });
 });

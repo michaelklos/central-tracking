@@ -12,6 +12,7 @@ interface TimerContextValue {
   startTimer(taskId: string): Promise<void>;
   stopTimer(): Promise<void>;
   isRunningForTask(taskId: string): boolean;
+  refreshTodayTotal(): Promise<void>;
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
@@ -109,6 +110,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     startTimer,
     stopTimer,
     isRunningForTask,
+    refreshTodayTotal,
   };
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import * as path from 'path';
 import { Database } from './database/database';
 import { registerTaskHandlers } from './ipc/taskHandlers';
@@ -72,6 +72,9 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('window:getAlwaysOnTop', () => {
     return mainWindow?.isAlwaysOnTop() ?? false;
+  });
+  ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    shell.openExternal(url);
   });
 
   // Start HTTP server for CLI access

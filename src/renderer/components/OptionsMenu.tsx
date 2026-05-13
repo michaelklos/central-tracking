@@ -4,6 +4,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { useTaskContext } from '../context/TaskContext';
 import './OptionsMenu.css';
 
+const REPO_URL = 'https://github.com/michaelklos/central-tracking';
+
 interface Option {
   key: string;
   label: string;
@@ -263,6 +265,15 @@ ct task --help`}</pre>
           onCancel={() => setResetConfirm(false)}
         />
       )}
+
+      <div className="options-menu__source">
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); window.api.shell.openExternal(REPO_URL); }}
+        >
+          Central Tracking on GitHub
+        </a>
+      </div>
     </div>
   );
 }

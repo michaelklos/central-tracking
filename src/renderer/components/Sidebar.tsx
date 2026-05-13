@@ -1,9 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTaskContext, type TaskFilter } from '../context/TaskContext';
-import { useTimerContext } from '../context/TimerContext';
 import { useReportContext } from '../context/ReportContext';
-import { formatDuration } from '../utils/time';
 import { DateRangePicker } from './DateRangePicker';
 import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
@@ -73,8 +71,6 @@ const REPORT_MODE_OPTIONS: { value: ReportMode; label: string }[] = [
 
 export function Sidebar() {
   const { filter, setFilter, categories, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
-  const { activeEntry, elapsedSeconds, totalTodaySeconds } = useTimerContext();
-
   let reportContext: ReturnType<typeof useReportContext> | null = null;
   try {
     reportContext = useReportContext();
@@ -100,7 +96,6 @@ export function Sidebar() {
   const isOnReports = location?.pathname.includes('/reports') ?? false;
   const isOnTimeline = location?.pathname.includes('/timeline') ?? false;
   const isOnSubpage = isOnReports || isOnTimeline;
-  const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -212,10 +207,6 @@ export function Sidebar() {
       {!collapsed && (
         <div className="sidebar__header">
           <h1 className="sidebar__title">Central Tracking <span className="sidebar__version">v{__APP_VERSION__}</span></h1>
-          <div className="sidebar__today">
-            <span className="sidebar__today-label">Today:</span>{' '}
-            <span className="sidebar__today-value">{formatDuration(todayDisplay)}</span>
-          </div>
         </div>
       )}
 

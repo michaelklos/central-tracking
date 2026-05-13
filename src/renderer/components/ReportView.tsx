@@ -5,27 +5,22 @@ import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
 import { generateMarkdownReport } from '../utils/markdownReport';
 import { CategoryPieCharts } from './CategoryPieCharts';
-import type { TimeEntryReport, SummaryReportEntry } from '../../shared/types';
+import type { SummaryReportEntry } from '../../shared/types';
 import './ReportView.css';
 
 export function ReportView() {
   const { mode, startDate, endDate, filterStatus, filterSource, filterCategories } = useReportContext();
   const { categories } = useTaskContext();
 
-  const [reportData, setReportData] = useState<TimeEntryReport[]>([]);
   const [summaryData, setSummaryData] = useState<SummaryReportEntry[]>([]);
   const [copied, setCopied] = useState(false);
 
   const loadReport = useCallback(async () => {
+    if (mode === 'categories') return;
     const start = `${startDate}T00:00:00Z`;
     const end = `${endDate}T23:59:59Z`;
-    if (mode === 'chart') {
-      const data = await window.api.timeEntries.getReport(start, end);
-      setReportData(data);
-    } else if (mode === 'summary') {
-      const data = await window.api.timeEntries.getSummaryReport(start, end);
-      setSummaryData(data);
-    }
+    const data = await window.api.timeEntries.getSummaryReport(start, end);
+    setSummaryData(data);
   }, [startDate, endDate, mode]);
 
   useEffect(() => {
@@ -70,7 +65,7 @@ export function ReportView() {
     const byDate: Record<string, Record<string, number>> = {};
     const taskNames = new Set<string>();
 
-    for (const row of reportData) {
+    for (const row of filteredSummary) {
       if (!byDate[row.date]) byDate[row.date] = {};
       byDate[row.date][row.taskTitle] = (byDate[row.date][row.taskTitle] ?? 0) + row.totalSeconds;
       taskNames.add(row.taskTitle);
@@ -89,7 +84,7 @@ export function ReportView() {
 
   const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
 
-  const totalSeconds = reportData.reduce((sum, r) => sum + r.totalSeconds, 0);
+  const totalSeconds = filteredSummary.reduce((sum, r) => sum + r.totalSeconds, 0);
 
   return (
     <div className="report-view">
@@ -108,7 +103,7 @@ export function ReportView() {
         <>
           <div className="report-view__summary">
             <span>Total: {formatDuration(totalSeconds)}</span>
-            <span>{reportData.length} entries across {chartData.taskNames.length} tasks</span>
+            <span>{filteredSummary.length} entries across {chartData.taskNames.length} tasks</span>
           </div>
 
           <div className="report-view__chart" data-testid="report-chart">

@@ -244,7 +244,7 @@ export function CategoryPieCharts({ categories }: Props) {
 
               <div className="category-pie-charts__chart">
                 {slices.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={180}>
+                  <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
                       <Pie
                         data={slices}
@@ -252,7 +252,7 @@ export function CategoryPieCharts({ categories }: Props) {
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        outerRadius={70}
+                        outerRadius={80}
                         label={renderLabel}
                         labelLine={false}
                       >
