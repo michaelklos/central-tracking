@@ -19,7 +19,9 @@ function nudge(): void {
       'public class MouseUtils {\n' +
       '  [DllImport(\\"user32.dll\\")]\n' +
       '  public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);\n' +
-      '}" @; [MouseUtils]::mouse_event(0x0001, 0, 0, 0, 0)';
+      '}\n' +
+      '"@\n' +
+      '[MouseUtils]::mouse_event(0x0001, 0, 0, 0, 0)';
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps]);
   }
 }

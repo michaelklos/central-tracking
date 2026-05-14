@@ -50,7 +50,7 @@ export function TimerBar() {
           onClick={handleTogglePin}
           title={pinned ? 'Unpin window' : 'Pin window on top'}
         >
-          {pinned ? '\u{1F4CC}' : '\u{1F4CD}'}
+          {pinned ? '\u{1F4CD}' : '\u{1F4CC}'}
         </button>
       </div>
     </div>
