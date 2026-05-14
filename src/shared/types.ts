@@ -333,6 +333,10 @@ export interface CentralTrackingAPI {
   shell: {
     openExternal(url: string): Promise<void>;
   };
+  log: {
+    error(message: string): void;
+    warn(message: string): void;
+  };
   platform: string;
   onDataChanged(callback: () => void): () => void;
 }

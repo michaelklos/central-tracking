@@ -100,6 +100,12 @@ const api = {
 
   platform: process.platform,
 
+  // Renderer → main log forwarding (fire-and-forget, persisted to log file)
+  log: {
+    error: (message: string) => ipcRenderer.send('log:renderer', 'error', message),
+    warn: (message: string) => ipcRenderer.send('log:renderer', 'warn', message),
+  },
+
   // Data change notifications (pushed from main process when CLI makes changes)
   onDataChanged: (callback: () => void) => {
     const handler = () => callback();

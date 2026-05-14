@@ -10,6 +10,7 @@ import { registerImportHandlers } from './ipc/importHandlers';
 import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
 import { startMouseMover, stopMouseMover } from './activityMonitor';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
+import { initLogFile, log } from './logger';
 
 // Ensure consistent userData path in both dev and packaged modes
 app.setName('central-tracking');
@@ -50,8 +51,9 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    console.error('Renderer process gone:', details.reason, details.exitCode);
+    log.error(`Renderer process gone — reason: ${details.reason}, exitCode: ${details.exitCode}`);
     if (details.reason !== 'clean-exit') {
+      log.info('Reloading renderer after crash');
       if (process.env.NODE_ENV === 'development') {
         mainWindow?.loadURL('http://localhost:3000');
       } else {
@@ -62,7 +64,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  const dbPath = path.join(app.getPath('userData'), 'central-tracking.db');
+  const userDataPath = app.getPath('userData');
+  initLogFile(path.join(userDataPath, 'central-tracking.log'));
+
+  const dbPath = path.join(userDataPath, 'central-tracking.db');
   database = new Database(dbPath);
 
   registerTaskHandlers(ipcMain, database);
@@ -91,13 +96,18 @@ app.whenReady().then(() => {
     shell.openExternal(url);
   });
 
+  // Renderer log forwarding: renderer sends errors here to persist them in the log file
+  ipcMain.on('log:renderer', (_event, level: string, message: string) => {
+    if (level === 'error') log.error('[RENDERER]', message);
+    else log.warn('[RENDERER]', message);
+  });
+
   // Start HTTP server for CLI access
-  const userDataPath = app.getPath('userData');
   startHttpServer(database, userDataPath, () => mainWindow).then((server) => {
     httpServer = server;
-    console.log(`CLI server listening on port ${server.port}`);
+    log.info(`CLI server listening on port ${server.port}`);
   }).catch((err) => {
-    console.error('Failed to start CLI server:', err);
+    log.error('Failed to start CLI server:', String(err));
   });
 
   createWindow();
