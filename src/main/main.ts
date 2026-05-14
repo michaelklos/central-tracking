@@ -48,6 +48,17 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('Renderer process gone:', details.reason, details.exitCode);
+    if (details.reason !== 'clean-exit') {
+      if (process.env.NODE_ENV === 'development') {
+        mainWindow?.loadURL('http://localhost:3000');
+      } else {
+        mainWindow?.loadFile(path.join(__dirname, '../renderer/index.html'));
+      }
+    }
+  });
 }
 
 app.whenReady().then(() => {

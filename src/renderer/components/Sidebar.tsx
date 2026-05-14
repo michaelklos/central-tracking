@@ -81,6 +81,23 @@ export function Sidebar() {
   const [sidebarWidth, setSidebarWidth] = useState(getStoredWidth);
   const isResizing = useRef(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
+  const [localSearch, setLocalSearch] = useState(filter.search ?? '');
+
+  // Sync local search when filter is cleared externally (e.g. "Clear filters")
+  useEffect(() => {
+    setLocalSearch(filter.search ?? '');
+  }, [filter.search]);
+
+  // Debounce: push search to context only after typing pauses 200ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== (filter.search ?? '')) {
+        setFilter({ ...filter, search: localSearch || undefined });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localSearch]);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
@@ -254,8 +271,8 @@ export function Sidebar() {
                     className="sidebar__search"
                     type="text"
                     placeholder="Search tasks..."
-                    value={filter.search ?? ''}
-                    onChange={(e) => updateFilter({ search: e.target.value })}
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
                   />
                   <select
                     value={filter.status ?? ''}
