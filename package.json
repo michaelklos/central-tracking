@@ -1,6 +1,6 @@
 {
   "name": "central-tracking",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Extensible task and time tracking application with plugin architecture for external source integration",
   "main": "dist/main/main.js",
   "bin": {
