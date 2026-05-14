@@ -11,15 +11,16 @@ function TestConsumer() {
       <span data-testid="mode">{ctx.mode}</span>
       <span data-testid="start">{ctx.startDate}</span>
       <span data-testid="end">{ctx.endDate}</span>
-      <span data-testid="status">{ctx.filterStatus}</span>
-      <span data-testid="source">{ctx.filterSource}</span>
+      <span data-testid="statuses">{ctx.filterStatuses.join(',')}</span>
+      <span data-testid="sources">{ctx.filterSources.join(',')}</span>
       <span data-testid="cats">{ctx.filterCategories.join(',')}</span>
       <button data-testid="set-summary" onClick={() => ctx.setMode('summary')}>Summary</button>
       <button data-testid="set-categories" onClick={() => ctx.setMode('categories')}>Categories</button>
       <button data-testid="set-dates" onClick={() => ctx.setDateRange('2026-01-01', '2026-01-31')}>Set Dates</button>
-      <button data-testid="set-status" onClick={() => ctx.setFilterStatus('done')}>Set Status</button>
-      <button data-testid="set-source" onClick={() => ctx.setFilterSource('email')}>Set Source</button>
-      <button data-testid="toggle-cat" onClick={() => ctx.toggleCategoryFilter('cat-1')}>Toggle Cat</button>
+      <button data-testid="set-status" onClick={() => ctx.setFilterStatuses(['done'])}>Set Status</button>
+      <button data-testid="set-source" onClick={() => ctx.setFilterSources(['email'])}>Set Source</button>
+      <button data-testid="set-cats" onClick={() => ctx.setFilterCategories(['cat-1'])}>Set Cats</button>
+      <button data-testid="clear-cats" onClick={() => ctx.setFilterCategories([])}>Clear Cats</button>
     </div>
   );
 }
@@ -32,8 +33,8 @@ describe('ReportContext', () => {
       </ReportProvider>
     );
     expect(screen.getByTestId('mode').textContent).toBe('chart');
-    expect(screen.getByTestId('status').textContent).toBe('');
-    expect(screen.getByTestId('source').textContent).toBe('');
+    expect(screen.getByTestId('statuses').textContent).toBe('');
+    expect(screen.getByTestId('sources').textContent).toBe('');
     expect(screen.getByTestId('cats').textContent).toBe('');
   });
 
@@ -70,21 +71,21 @@ describe('ReportContext', () => {
       </ReportProvider>
     );
     await user.click(screen.getByTestId('set-status'));
-    expect(screen.getByTestId('status').textContent).toBe('done');
+    expect(screen.getByTestId('statuses').textContent).toBe('done');
     await user.click(screen.getByTestId('set-source'));
-    expect(screen.getByTestId('source').textContent).toBe('email');
+    expect(screen.getByTestId('sources').textContent).toBe('email');
   });
 
-  it('toggles category filter', async () => {
+  it('sets and clears category filter', async () => {
     const user = userEvent.setup();
     render(
       <ReportProvider>
         <TestConsumer />
       </ReportProvider>
     );
-    await user.click(screen.getByTestId('toggle-cat'));
+    await user.click(screen.getByTestId('set-cats'));
     expect(screen.getByTestId('cats').textContent).toBe('cat-1');
-    await user.click(screen.getByTestId('toggle-cat'));
+    await user.click(screen.getByTestId('clear-cats'));
     expect(screen.getByTestId('cats').textContent).toBe('');
   });
 

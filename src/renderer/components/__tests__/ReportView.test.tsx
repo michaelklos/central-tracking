@@ -23,12 +23,12 @@ const mockReportContext = {
   startDate: '2026-03-01',
   endDate: '2026-03-07',
   setDateRange: vi.fn(),
-  filterStatus: '' as const,
-  setFilterStatus: vi.fn(),
-  filterSource: '' as const,
-  setFilterSource: vi.fn(),
+  filterStatuses: [] as string[],
+  setFilterStatuses: vi.fn(),
+  filterSources: [] as string[],
+  setFilterSources: vi.fn(),
   filterCategories: [] as string[],
-  toggleCategoryFilter: vi.fn(),
+  setFilterCategories: vi.fn(),
 };
 
 vi.mock('../../context/ReportContext', () => ({
@@ -66,14 +66,14 @@ describe('ReportView', () => {
   });
 
   it('renders summary mode', () => {
-    mockReportContext.mode = 'summary';
+    mockReportContext.mode = 'summary' as typeof mockReportContext.mode;
     render(<ReportView />);
     expect(screen.getByTestId('summary-preview')).toBeInTheDocument();
     expect(screen.getByText('Copy to Clipboard')).toBeInTheDocument();
   });
 
   it('renders categories mode with pie charts', () => {
-    mockReportContext.mode = 'categories';
+    mockReportContext.mode = 'categories' as typeof mockReportContext.mode;
     render(<ReportView />);
     expect(screen.getByTestId('category-pie-charts')).toBeInTheDocument();
   });

@@ -63,9 +63,9 @@ const SOURCE_OPTIONS = [
 ];
 
 const REPORT_MODE_OPTIONS: { value: ReportMode; label: string }[] = [
-  { value: 'chart', label: 'Chart' },
+  { value: 'chart', label: 'By Day' },
   { value: 'summary', label: 'Summary' },
-  { value: 'categories', label: 'Categories' },
+  { value: 'categories', label: 'By Category' },
 ];
 
 export function Sidebar() {

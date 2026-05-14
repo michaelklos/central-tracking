@@ -82,7 +82,24 @@ export function ReportView() {
     };
   })();
 
-  const colors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const fallbackColors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+
+  // Map each task title to its first category color; fall back to palette for uncategorized tasks
+  const taskColorMap = new Map<string, string>();
+  for (const row of filteredSummary) {
+    if (!taskColorMap.has(row.taskTitle)) {
+      const cat = categories.find((c) => row.categoryIds.includes(c.id));
+      if (cat) taskColorMap.set(row.taskTitle, cat.color);
+    }
+  }
+  let fallbackIndex = 0;
+  const taskColor = (name: string): string => {
+    if (taskColorMap.has(name)) return taskColorMap.get(name)!;
+    const color = fallbackColors[fallbackIndex % fallbackColors.length];
+    taskColorMap.set(name, color);
+    fallbackIndex++;
+    return color;
+  };
 
   const totalSeconds = filteredSummary.reduce((sum, r) => sum + r.totalSeconds, 0);
 
@@ -117,12 +134,12 @@ export function ReportView() {
                   />
                   <Tooltip />
                   <Legend />
-                  {chartData.taskNames.map((name, i) => (
+                  {chartData.taskNames.map((name) => (
                     <Bar
                       key={name}
                       dataKey={name}
                       stackId="a"
-                      fill={colors[i % colors.length]}
+                      fill={taskColor(name)}
                     />
                   ))}
                 </BarChart>
