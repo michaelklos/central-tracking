@@ -14,6 +14,9 @@ import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 // Ensure consistent userData path in both dev and packaged modes
 app.setName('central-tracking');
 
+// Prevent the GPU compositor from blanking the renderer on Windows
+app.disableHardwareAcceleration();
+
 const mmEnabled = process.argv.includes('--mm');
 
 let mainWindow: BrowserWindow | null = null;

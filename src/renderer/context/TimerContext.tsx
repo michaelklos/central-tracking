@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { TimeEntry } from '../../shared/types';
+import { useTaskContext } from './TaskContext';
 
 interface TimerContextValue {
   /** Currently running time entry (null if timer is stopped) */
@@ -24,6 +25,7 @@ export function useTimerContext(): TimerContextValue {
 }
 
 export function TimerProvider({ children }: { children: ReactNode }) {
+  const { refreshActiveTasks } = useTaskContext();
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [totalTodaySeconds, setTotalTodaySeconds] = useState(0);
@@ -88,15 +90,15 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const startTimer = useCallback(async (taskId: string) => {
     const entry = await window.api.timeEntries.create({ taskId });
     setActiveEntry(entry);
-    await refreshTodayTotal();
-  }, [refreshTodayTotal]);
+    await Promise.all([refreshTodayTotal(), refreshActiveTasks()]);
+  }, [refreshTodayTotal, refreshActiveTasks]);
 
   const stopTimer = useCallback(async () => {
     await window.api.timeEntries.stopActive();
     setActiveEntry(null);
     setElapsedSeconds(0);
-    await refreshTodayTotal();
-  }, [refreshTodayTotal]);
+    await Promise.all([refreshTodayTotal(), refreshActiveTasks()]);
+  }, [refreshTodayTotal, refreshActiveTasks]);
 
   const isRunningForTask = useCallback(
     (taskId: string) => activeEntry?.taskId === taskId,
