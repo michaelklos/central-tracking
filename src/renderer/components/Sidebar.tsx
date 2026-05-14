@@ -16,6 +16,7 @@ type SidebarTab = 'tasks' | 'settings';
 const COLLAPSE_KEY = 'central-tracking:sidebar-collapsed';
 const TAB_KEY = 'central-tracking:sidebar-tab';
 const WIDTH_KEY = 'central-tracking:sidebar-width';
+const SEARCH_MODE_KEY = 'central-tracking:search-mode';
 const COLLAPSED_WIDTH = 40;
 const DEFAULT_WIDTH = 300;
 const MIN_WIDTH = 200;
@@ -47,6 +48,20 @@ function getStoredTab(): SidebarTab {
   } catch { /* ignore */ }
   return 'tasks';
 }
+
+type SearchMode = 'title' | 'all';
+function getStoredSearchMode(): SearchMode {
+  try {
+    const stored = localStorage.getItem(SEARCH_MODE_KEY);
+    if (stored === 'title' || stored === 'all') return stored;
+  } catch { /* ignore */ }
+  return 'title';
+}
+
+const SEARCH_MODE_OPTIONS: { value: SearchMode; trigger: string; menu: string }[] = [
+  { value: 'title', trigger: 'Title', menu: 'Title only' },
+  { value: 'all', trigger: 'All', menu: 'Title, description, & notes' },
+];
 
 const STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -81,22 +96,50 @@ export function Sidebar() {
   const isResizing = useRef(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>(getStoredTab);
   const [localSearch, setLocalSearch] = useState(filter.search ?? '');
+  const [searchMode, setSearchMode] = useState<SearchMode>(getStoredSearchMode);
+  const [searchModeOpen, setSearchModeOpen] = useState(false);
+  const searchModeRef = useRef<HTMLDivElement>(null);
 
   // Sync local search when filter is cleared externally (e.g. "Clear filters")
   useEffect(() => {
     setLocalSearch(filter.search ?? '');
   }, [filter.search]);
 
-  // Debounce: push search to context only after typing pauses 200ms
+  // Debounce: push search to context only after typing pauses 200ms.
+  // Uses a functional setFilter so it merges with any concurrent filter changes
+  // (e.g., category selection) instead of clobbering them via a stale closure.
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (localSearch !== (filter.search ?? '')) {
-        setFilter({ ...filter, search: localSearch || undefined });
-      }
+      setFilter((prev) => {
+        if ((prev.search ?? '') === localSearch) return prev;
+        return { ...prev, search: localSearch || undefined };
+      });
     }, 200);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localSearch]);
+  }, [localSearch, setFilter]);
+
+  // Push search mode into filter whenever it changes, and persist it.
+  useEffect(() => {
+    try { localStorage.setItem(SEARCH_MODE_KEY, searchMode); } catch { /* ignore */ }
+    setFilter((prev) => (prev.searchIn === searchMode ? prev : { ...prev, searchIn: searchMode }));
+  }, [searchMode, setFilter]);
+
+  // Close search-mode dropdown on outside click / Escape
+  useEffect(() => {
+    if (!searchModeOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (searchModeRef.current && !searchModeRef.current.contains(e.target as Node)) {
+        setSearchModeOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSearchModeOpen(false); };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [searchModeOpen]);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
@@ -266,13 +309,41 @@ export function Sidebar() {
               <>
                 <div className="sidebar__section">
                   <h3 className="sidebar__section-title">Filter</h3>
-                  <input
-                    className="sidebar__search"
-                    type="text"
-                    placeholder="Search tasks..."
-                    value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
-                  />
+                  <div className="sidebar__search-row">
+                    <input
+                      className="sidebar__search"
+                      type="text"
+                      placeholder={searchMode === 'all' ? 'Search title, description, notes...' : 'Search task titles...'}
+                      value={localSearch}
+                      onChange={(e) => setLocalSearch(e.target.value)}
+                    />
+                    <div className="sidebar__search-mode" ref={searchModeRef}>
+                      <button
+                        type="button"
+                        className="sidebar__search-mode-btn"
+                        onClick={() => setSearchModeOpen((o) => !o)}
+                        title="Change search scope"
+                      >
+                        {SEARCH_MODE_OPTIONS.find((o) => o.value === searchMode)?.trigger}
+                        <span className="sidebar__search-mode-chevron">{searchModeOpen ? '▴' : '▾'}</span>
+                      </button>
+                      {searchModeOpen && (
+                        <div className="sidebar__search-mode-menu">
+                          {SEARCH_MODE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              className={`sidebar__search-mode-item ${opt.value === searchMode ? 'sidebar__search-mode-item--active' : ''}`}
+                              onClick={() => { setSearchMode(opt.value); setSearchModeOpen(false); }}
+                            >
+                              <span className="sidebar__search-mode-check">{opt.value === searchMode ? '✓' : ' '}</span>
+                              {opt.menu}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <MultiSelectDropdown
                     label="Status"
                     options={STATUS_OPTIONS}

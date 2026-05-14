@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 import { Database } from './database/database';
 import { registerTaskHandlers } from './ipc/taskHandlers';
@@ -8,7 +9,7 @@ import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
-import { startMouseMover, stopMouseMover } from './activityMonitor';
+import { startDisplayKeepalive, stopDisplayKeepalive } from './displayKeepalive';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 import { initLogFile, log } from './logger';
 
@@ -18,7 +19,7 @@ app.setName('central-tracking');
 // Prevent the GPU compositor from blanking the renderer on Windows
 app.disableHardwareAcceleration();
 
-const mmEnabled = process.argv.includes('--mm');
+let keepaliveEnabled = false;
 
 let mainWindow: BrowserWindow | null = null;
 let database: Database;
@@ -67,6 +68,14 @@ app.whenReady().then(() => {
   const userDataPath = app.getPath('userData');
   initLogFile(path.join(userDataPath, 'central-tracking.log'));
 
+  try {
+    const prefsPath = path.join(userDataPath, 'preferences.json');
+    const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+    keepaliveEnabled = prefs?.keepDisplayAwake === true;
+  } catch {
+    // file absent or unreadable — leave default
+  }
+
   const dbPath = path.join(userDataPath, 'central-tracking.db');
   database = new Database(dbPath);
 
@@ -87,7 +96,7 @@ app.whenReady().then(() => {
   // Window management IPC handlers
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean) => {
     if (mainWindow) mainWindow.setAlwaysOnTop(flag);
-    if (mmEnabled) flag ? startMouseMover() : stopMouseMover();
+    if (keepaliveEnabled) flag ? startDisplayKeepalive() : stopDisplayKeepalive();
   });
   ipcMain.handle('window:getAlwaysOnTop', () => {
     return mainWindow?.isAlwaysOnTop() ?? false;

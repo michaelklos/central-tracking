@@ -149,6 +149,7 @@ export interface PaginationParams {
 
 export interface TaskFilterParams {
   search?: string;
+  searchIn?: 'title' | 'all';
   status?: string | string[];
   source?: string | string[];
   categoryId?: string | string[];

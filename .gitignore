@@ -17,3 +17,4 @@ coverage/
 .eslintcache
 *.swp
 *.swo
+localdocs/

@@ -95,9 +95,14 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
   const values: unknown[] = [];
 
   if (params?.search) {
-    clauses.push('(title LIKE ? OR description LIKE ?)');
     const pattern = `%${params.search}%`;
-    values.push(pattern, pattern);
+    if (params.searchIn === 'all') {
+      clauses.push('(title LIKE ? OR description LIKE ? OR notes LIKE ?)');
+      values.push(pattern, pattern, pattern);
+    } else {
+      clauses.push('title LIKE ?');
+      values.push(pattern);
+    }
   }
 
   const statuses = toArray(params?.status);

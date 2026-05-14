@@ -50,28 +50,34 @@ describe('Sidebar', () => {
 
   it('renders search input in Tasks tab', () => {
     render(<Sidebar />);
-    expect(screen.getByPlaceholderText('Search tasks...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search task titles...')).toBeInTheDocument();
   });
 
   it('search input fires filter callback', async () => {
     const user = userEvent.setup();
     render(<Sidebar />);
 
-    const searchInput = screen.getByPlaceholderText('Search tasks...');
+    const searchInput = screen.getByPlaceholderText('Search task titles...');
     await user.type(searchInput, 'test');
 
     expect(mockTaskContext.setFilter).toHaveBeenCalled();
   });
 
-  it('renders categories in Tasks tab', () => {
+  it('renders categories in the Category filter dropdown', async () => {
+    const user = userEvent.setup();
     mockTaskContext.categories = [
       { id: 'cat-1', name: 'Bug', color: '#ff0000', createdAt: '2024-01-01' },
       { id: 'cat-2', name: 'Feature', color: '#00ff00', createdAt: '2024-01-01' },
     ];
 
     render(<Sidebar />);
-    expect(screen.getAllByText('Bug').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Feature').length).toBeGreaterThan(0);
+
+    // Categories are now inside a MultiSelectDropdown — open it to assert the
+    // names render. The trigger button shows "Category" when nothing is selected.
+    await user.click(screen.getByRole('button', { name: /Category/ }));
+
+    expect(screen.getByText('Bug')).toBeInTheDocument();
+    expect(screen.getByText('Feature')).toBeInTheDocument();
   });
 
   it('Settings tab shows OptionsMenu', async () => {

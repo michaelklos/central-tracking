@@ -134,6 +134,37 @@ export function TaskDetail() {
     }
   }, [pendingTimeEntry, selectedTaskId, setPendingTimeEntry]);
 
+  // These three handlers feed useMarkdownTextarea below, which must be called
+  // unconditionally every render. They're defined as useCallback (and therefore
+  // also count as hooks) BEFORE the early return so React's hook counter stays
+  // consistent across renders where `task` toggles between defined and null.
+  const handleSaveDesc = useCallback(async () => {
+    if (!task) return;
+    if (descDraft !== task.description) {
+      await updateTask(task.id, { description: descDraft });
+    }
+  }, [task, descDraft, updateTask]);
+
+  const handleSaveNotes = useCallback(async () => {
+    if (!task) return;
+    if (notesDraft !== (task.notes ?? '')) {
+      await updateTask(task.id, { notes: notesDraft });
+    }
+  }, [task, notesDraft, updateTask]);
+
+  const handleAddComment = useCallback(async () => {
+    if (!task) return;
+    const body = newComment.trim();
+    if (!body) return;
+    await window.api.comments.create({ taskId: task.id, body, syncable: commentSyncable });
+    setNewComment('');
+    await loadComments();
+  }, [task, newComment, commentSyncable, loadComments]);
+
+  const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });
+  const notesMd = useMarkdownTextarea({ value: notesDraft, onChange: setNotesDraft, onSave: handleSaveNotes });
+  const commentMd = useMarkdownTextarea({ value: newComment, onChange: setNewComment, onSave: handleAddComment });
+
   if (!task) return null;
 
   const handleSaveTitle = async () => {
@@ -142,18 +173,6 @@ export function TaskDetail() {
       await updateTask(task.id, { title: trimmed });
     }
     setEditingTitle(false);
-  };
-
-  const handleSaveDesc = async () => {
-    if (descDraft !== task.description) {
-      await updateTask(task.id, { description: descDraft });
-    }
-  };
-
-  const handleSaveNotes = async () => {
-    if (notesDraft !== (task.notes ?? '')) {
-      await updateTask(task.id, { notes: notesDraft });
-    }
   };
 
   const handleStatusChange = async (status: TaskStatus) => {
@@ -182,14 +201,6 @@ export function TaskDetail() {
       ? current.filter((id) => id !== catId)
       : [...current, catId];
     await updateTask(task.id, { categoryIds: next });
-  };
-
-  const handleAddComment = async () => {
-    const body = newComment.trim();
-    if (!body) return;
-    await window.api.comments.create({ taskId: task.id, body, syncable: commentSyncable });
-    setNewComment('');
-    await loadComments();
   };
 
   const handleDeleteComment = async (id: string) => {
@@ -239,10 +250,6 @@ export function TaskDetail() {
   const handleNavigateToTimeline = (date: string) => {
     navigate('/timeline?date=' + date);
   };
-
-  const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });
-  const notesMd = useMarkdownTextarea({ value: notesDraft, onChange: setNotesDraft, onSave: handleSaveNotes });
-  const commentMd = useMarkdownTextarea({ value: newComment, onChange: setNewComment, onSave: handleAddComment });
 
   const running = isRunningForTask(task.id);
   const todayDisplay = running ? task.todayTimeSeconds + elapsedSeconds : task.todayTimeSeconds;

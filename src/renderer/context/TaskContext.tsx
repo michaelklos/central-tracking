@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode, type Dispatch, type SetStateAction } from 'react';
 import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy } from '../../shared/types';
 
 const ACTIVE_TASKS_LIMIT = 50;
@@ -52,7 +52,7 @@ interface TaskContextValue {
   filter: TaskFilter;
 
   selectTask(id: string | null): void;
-  setFilter(filter: TaskFilter): void;
+  setFilter: Dispatch<SetStateAction<TaskFilter>>;
 
   createTask(input: CreateTaskInput): Promise<Task>;
   updateTask(id: string, input: UpdateTaskInput): Promise<Task>;
@@ -85,6 +85,7 @@ export interface TaskFilter {
   sources?: string[];
   categoryIds?: string[];
   search?: string;
+  searchIn?: 'title' | 'all';
 }
 
 const TaskContext = createContext<TaskContextValue | null>(null);
@@ -138,7 +139,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const refreshActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      search: filter.search, searchIn: filter.searchIn,
+      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
@@ -148,7 +150,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const loadMoreActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      search: filter.search, searchIn: filter.searchIn,
+      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
@@ -158,7 +161,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const loadDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: 0, limit: DONE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      search: filter.search, searchIn: filter.searchIn,
+      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
@@ -169,18 +173,23 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const loadMoreDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+      search: filter.search, searchIn: filter.searchIn,
+      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setDoneTasks((prev) => [...prev, ...res.items]);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
-  }, [doneTasks.length, sortBy]);
+  }, [doneTasks.length, sortBy, filter]);
 
   // Also refresh the done total count (for badge) even when done tasks aren't loaded
   const refreshDoneCount = useCallback(async () => {
-    const res = await window.api.tasks.getDone({ offset: 0, limit: 0, sortBy });
+    const res = await window.api.tasks.getDone({
+      offset: 0, limit: 0, sortBy,
+      search: filter.search, searchIn: filter.searchIn,
+      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+    });
     setDoneTasksTotal(res.total);
-  }, [sortBy]);
+  }, [sortBy, filter]);
 
   // Deleted tasks (recycle bin) loading
   const loadDeletedTasks = useCallback(async () => {
@@ -219,10 +228,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshActiveTasks();
-    refreshDoneCount();
+    // When done tasks have been loaded, re-fetch them so the visible list reflects
+    // current filters; otherwise just refresh the count badge.
+    if (doneTasksLoaded) {
+      loadDoneTasks();
+    } else {
+      refreshDoneCount();
+    }
     refreshDeletedCount();
     refreshCategories();
-  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories]);
+  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories, doneTasksLoaded, loadDoneTasks]);
 
   // Refresh when CLI or other external process modifies data
   useEffect(() => {
@@ -231,7 +246,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         refreshActiveTasks();
-        refreshDoneCount();
+        if (doneTasksLoaded) {
+          loadDoneTasks();
+        } else {
+          refreshDoneCount();
+        }
         refreshDeletedCount();
         refreshCategories();
       }, 100);
@@ -240,7 +259,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       clearTimeout(debounceTimer);
       unsubscribe();
     };
-  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories]);
+  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories, doneTasksLoaded, loadDoneTasks]);
 
   const createTask = useCallback(async (input: CreateTaskInput) => {
     const task = await window.api.tasks.create(input);
@@ -296,6 +315,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const selectAllActiveTasks = useCallback(async () => {
     const ids = await window.api.tasks.getActiveIds({
       search: filter.search,
+      searchIn: filter.searchIn,
       status: filter.statuses,
       source: filter.sources,
       categoryId: filter.categoryIds,

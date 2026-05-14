@@ -41,6 +41,7 @@
       "**/node_modules/better-sqlite3/**/*",
       "**/node_modules/bindings/**/*",
       "**/node_modules/file-uri-to-path/**/*",
+      "**/node_modules/koffi/**/*",
       "dist/cli/cli/**/*"
     ],
     "directories": {
@@ -95,6 +96,7 @@
   "dependencies": {
     "@types/yargs": "17.0.35",
     "better-sqlite3": "^12.0.0",
+    "koffi": "^2.16.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",
