@@ -371,7 +371,7 @@ export function TaskList() {
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as TaskSortBy)}>
             <option value="manual">Manual</option>
             <option value="recent">Recent</option>
-            <option value="created">Newest</option>
+            <option value="created">Created</option>
             <option value="alphabetical">A-Z</option>
             <option value="most-time-today">Most Time Today</option>
           </select>
