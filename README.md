@@ -1159,6 +1159,27 @@ Options:
 npm run start:debug
 ```
 
+### Troubleshooting
+
+#### Log file
+
+The app writes a persistent log to:
+
+| Platform | Path |
+|---|---|
+| Windows | `%APPDATA%\central-tracking\central-tracking.log` |
+| macOS | `~/Library/Application Support/central-tracking/central-tracking.log` |
+
+The file is trimmed to the last 2000 lines on each startup. It captures:
+
+- **`[INFO] ── session start`** — written on every launch; use this to find the relevant session
+- **`[ERROR] Renderer process gone`** — written when the renderer crashes, includes `reason` (e.g. `crashed`, `oom`, `launch-failed`) and `exitCode`
+- **`[ERROR] [RENDERER] Unhandled promise rejection`** — async errors from IPC calls or React effects, with stack trace
+- **`[ERROR] [RENDERER] Uncaught error`** — synchronous JS errors in the renderer
+- **`[ERROR] [RENDERER] React render error`** — errors caught by the React error boundary, with component stack
+
+Running with `--debug` adds `[DEBUG]` lines for HTTP traffic between the CLI and the app.
+
 ### Packaging
 
 Builds unsigned distributable(s) locally:

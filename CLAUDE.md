@@ -86,6 +86,27 @@ On startup, the Electron app writes `{userData}/ct-server.json` containing `{ po
 - 1MB request body limit
 - Token rotates on each app restart
 
+## Troubleshooting
+
+### Log file
+
+The app writes a persistent timestamped log to `{userData}/central-tracking.log` (trimmed to 2000 lines on startup). Locations:
+
+- **Windows:** `%APPDATA%\central-tracking\central-tracking.log`
+- **macOS:** `~/Library/Application Support/central-tracking/central-tracking.log`
+
+Key entries to look for:
+
+| Entry | Meaning |
+|---|---|
+| `[INFO] ── session start` | Start of a new app session |
+| `[ERROR] Renderer process gone — reason: X, exitCode: Y` | Renderer crashed; `reason` values: `crashed`, `oom`, `launch-failed`, `killed`, `clean-exit` |
+| `[ERROR] [RENDERER] Unhandled promise rejection: ...` | Async error (failed IPC call, rejected Promise) with stack |
+| `[ERROR] [RENDERER] Uncaught error: ...` | Synchronous JS error in renderer with stack |
+| `[ERROR] [RENDERER] React render error: ...` | Component threw during render; includes React component stack |
+
+Renderer errors are forwarded to the main process via `ipcRenderer.send('log:renderer', level, message)` before the process has a chance to crash, so they survive even if the renderer dies immediately after.
+
 ## Development
 
 ```bash
