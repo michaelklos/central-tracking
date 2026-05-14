@@ -53,29 +53,39 @@ export function TaskDetail() {
 
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
+  // Track which task is currently selected via a ref so async loaders can
+  // detect stale completions (user clicked a different task while a fetch was
+  // in flight) and bail before calling setState with the wrong task's data.
+  const currentTaskIdRef = useRef<string | null>(selectedTaskId);
+  currentTaskIdRef.current = selectedTaskId;
+
   const loadTimeEntries = useCallback(async () => {
-    if (!selectedTaskId) return;
+    const taskId = selectedTaskId;
+    if (!taskId) return;
     setIsLoadingEntries(true);
-    const res = await window.api.timeEntries.getByTaskPaginated(selectedTaskId, {
+    const res = await window.api.timeEntries.getByTaskPaginated(taskId, {
       offset: 0,
       limit: TIME_ENTRIES_LIMIT,
     });
+    if (currentTaskIdRef.current !== taskId) return;
     setTimeEntries(res.items);
     setTimeEntriesTotal(res.total);
     setTimeEntriesHasMore(res.hasMore);
     setTimeEntryLoadCount(1);
-    loadedForTaskRef.current = selectedTaskId;
+    loadedForTaskRef.current = taskId;
     setIsLoadingEntries(false);
   }, [selectedTaskId]);
 
   const loadMoreTimeEntries = useCallback(async () => {
-    if (!selectedTaskId || isLoadingEntries || !timeEntriesHasMore) return;
-    if (loadedForTaskRef.current !== selectedTaskId) return;
+    const taskId = selectedTaskId;
+    if (!taskId || isLoadingEntries || !timeEntriesHasMore) return;
+    if (loadedForTaskRef.current !== taskId) return;
     setIsLoadingEntries(true);
-    const res = await window.api.timeEntries.getByTaskPaginated(selectedTaskId, {
+    const res = await window.api.timeEntries.getByTaskPaginated(taskId, {
       offset: timeEntries.length,
       limit: TIME_ENTRIES_LIMIT,
     });
+    if (currentTaskIdRef.current !== taskId) return;
     setTimeEntries((prev) => [...prev, ...res.items]);
     setTimeEntriesTotal(res.total);
     setTimeEntriesHasMore(res.hasMore);
@@ -84,8 +94,10 @@ export function TaskDetail() {
   }, [selectedTaskId, isLoadingEntries, timeEntriesHasMore, timeEntries.length]);
 
   const loadComments = useCallback(async () => {
-    if (!selectedTaskId) return;
-    const cmts = await window.api.comments.getByTask(selectedTaskId);
+    const taskId = selectedTaskId;
+    if (!taskId) return;
+    const cmts = await window.api.comments.getByTask(taskId);
+    if (currentTaskIdRef.current !== taskId) return;
     setComments(cmts);
   }, [selectedTaskId]);
 

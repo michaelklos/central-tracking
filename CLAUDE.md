@@ -1,5 +1,15 @@
 # CLAUDE.md — Central Tracking
 
+## Open code-review findings
+
+A code-review audit ran on 2026-05-14 and produced a punch list of footguns. The
+critical items were addressed in that session; the remaining high/medium/low items
+are tracked in [`.claude/code-review-findings.md`](.claude/code-review-findings.md).
+Before adding new features in this codebase, check that doc — there are three
+recurring footgun families (field-name drift through narrow inline IPC types,
+`setX({...x})` instead of functional updaters, async-load-then-setState with no
+staleness guard) that future code should avoid.
+
 ## Project Overview
 
 Central Tracking is a desktop task and time tracking app built with Electron, React, and TypeScript. It uses a local SQLite database (via `better-sqlite3`) and includes a CLI (`ct`) for programmatic interaction. The CLI communicates with the running Electron app via a local HTTP server, enabling AI agents and scripts to perform all operations available in the UI.

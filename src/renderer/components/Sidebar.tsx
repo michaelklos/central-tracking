@@ -85,12 +85,7 @@ const REPORT_MODE_OPTIONS: { value: ReportMode; label: string }[] = [
 
 export function Sidebar() {
   const { filter, setFilter, categories, refreshTasks, batchMode, enterBatchMode } = useTaskContext();
-  let reportContext: ReturnType<typeof useReportContext> | null = null;
-  try {
-    reportContext = useReportContext();
-  } catch {
-    // Not inside a ReportProvider (e.g., in tests)
-  }
+  const reportContext = useReportContext();
   const [collapsed, setCollapsed] = useState(getStoredCollapsed);
   const [sidebarWidth, setSidebarWidth] = useState(getStoredWidth);
   const isResizing = useRef(false);
@@ -143,17 +138,11 @@ export function Sidebar() {
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
-  let navigate: ReturnType<typeof useNavigate> | null = null;
-  let location: ReturnType<typeof useLocation> | null = null;
-  try {
-    navigate = useNavigate();
-    location = useLocation();
-  } catch {
-    // Not inside a router (e.g., in tests)
-  }
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const isOnReports = location?.pathname.includes('/reports') ?? false;
-  const isOnTimeline = location?.pathname.includes('/timeline') ?? false;
+  const isOnReports = location.pathname.includes('/reports');
+  const isOnTimeline = location.pathname.includes('/timeline');
   const isOnSubpage = isOnReports || isOnTimeline;
 
   const toggleCollapse = () => {
@@ -194,21 +183,15 @@ export function Sidebar() {
   const handleTabClick = (tab: SidebarTab) => {
     setActiveTab(tab);
     try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ }
-    if (navigate && isOnSubpage) {
-      navigate('/');
-    }
+    if (isOnSubpage) navigate('/');
   };
 
   const handleReportsClick = () => {
-    if (navigate) {
-      navigate('/reports');
-    }
+    navigate('/reports');
   };
 
   const handleTimelineClick = () => {
-    if (navigate) {
-      navigate('/timeline');
-    }
+    navigate('/timeline');
   };
 
   const handleImportClick = async () => {
@@ -404,7 +387,7 @@ export function Sidebar() {
             )
           )}
 
-          {isOnReports && reportContext && (
+          {isOnReports && (
             <>
               <div className="sidebar__section">
                 <h3 className="sidebar__section-title">Report Type</h3>
@@ -412,8 +395,8 @@ export function Sidebar() {
                   {REPORT_MODE_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
-                      className={`sidebar__report-type-btn ${reportContext!.mode === opt.value ? 'sidebar__report-type-btn--active' : ''}`}
-                      onClick={() => reportContext!.setMode(opt.value)}
+                      className={`sidebar__report-type-btn ${reportContext.mode === opt.value ? 'sidebar__report-type-btn--active' : ''}`}
+                      onClick={() => reportContext.setMode(opt.value)}
                     >
                       {opt.label}
                     </button>
@@ -456,9 +439,9 @@ export function Sidebar() {
                       <button
                         className="sidebar__clear-filters"
                         onClick={() => {
-                          reportContext!.setFilterStatuses([]);
-                          reportContext!.setFilterSources([]);
-                          reportContext!.setFilterCategories([]);
+                          reportContext.setFilterStatuses([]);
+                          reportContext.setFilterSources([]);
+                          reportContext.setFilterCategories([]);
                         }}
                       >
                         Reset filters

@@ -41,7 +41,7 @@ function rowToTask(db: Database, row: TaskRow): Task {
           THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
           ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
         END
-      ), 0) as total FROM time_entries WHERE task_id = ? AND date(start_time) = date('now')`
+      ), 0) as total FROM time_entries WHERE task_id = ? AND date(start_time, 'localtime') = date('now', 'localtime')`
     )
     .get(row.id) as { total: number };
 
@@ -78,7 +78,7 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
           THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
           ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
         END
-      ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time) = date('now')) DESC, created_at DESC`;
+      ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time, 'localtime') = date('now', 'localtime')) DESC, created_at DESC`;
     case 'manual':
     default:
       return isDone ? `updated_at DESC` : `sort_order ASC, created_at DESC`;

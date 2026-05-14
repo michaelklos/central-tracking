@@ -27,6 +27,27 @@ vi.mock('../../context/TaskContext', () => ({
   useTaskContext: () => mockTaskContext,
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/' }),
+}));
+
+vi.mock('../../context/ReportContext', () => ({
+  useReportContext: () => ({
+    mode: 'chart' as const,
+    setMode: vi.fn(),
+    startDate: '2026-01-01',
+    endDate: '2026-01-31',
+    setDateRange: vi.fn(),
+    filterStatuses: [],
+    setFilterStatuses: vi.fn(),
+    filterSources: [],
+    setFilterSources: vi.fn(),
+    filterCategories: [],
+    setFilterCategories: vi.fn(),
+  }),
+}));
+
 describe('Sidebar', () => {
   beforeEach(() => {
     mockTaskContext.categories = [];

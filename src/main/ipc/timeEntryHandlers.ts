@@ -162,7 +162,7 @@ export function getTodayTotal(db: Database): number {
           THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
           ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
         END
-      ), 0) as total FROM time_entries WHERE date(start_time) = date('now')`
+      ), 0) as total FROM time_entries WHERE date(start_time, 'localtime') = date('now', 'localtime')`
     )
     .get() as { total: number };
   return row.total;

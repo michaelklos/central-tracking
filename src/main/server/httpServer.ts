@@ -85,7 +85,15 @@ export async function startHttpServer(
     }
 
     try {
-      const { args = [] } = bodyStr ? JSON.parse(bodyStr) : {};
+      const parsed = bodyStr ? JSON.parse(bodyStr) : {};
+      const args = parsed.args ?? [];
+      if (!Array.isArray(args)) {
+        sendJson(res, 400, {
+          ok: false,
+          error: { code: 'BAD_REQUEST', message: 'Request body must be { "args": [...] }' },
+        });
+        return;
+      }
 
       const result = route.handler(db, ...args);
 
