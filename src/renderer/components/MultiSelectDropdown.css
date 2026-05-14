@@ -1,0 +1,136 @@
+.msd {
+  position: relative;
+  width: 100%;
+}
+
+.msd__trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.msd--open .msd__trigger {
+  border-color: var(--color-primary);
+}
+
+.msd__trigger--active {
+  border-color: var(--color-primary);
+}
+
+.msd__trigger-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.msd__trigger-btn:hover {
+  background: var(--color-surface-hover);
+}
+
+.msd__trigger-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msd__trigger--active .msd__trigger-label {
+  color: var(--color-primary-hover);
+}
+
+.msd__chevron {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.msd__clear {
+  padding: 0 8px;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.msd__clear:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.msd__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  z-index: 100;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.msd__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  user-select: none;
+}
+
+.msd__option:hover {
+  background: var(--color-surface-hover);
+}
+
+.msd__option input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.msd__option--all {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.msd__option--all:hover {
+  color: var(--color-text);
+}
+
+.msd__divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0;
+}
+
+.msd__color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

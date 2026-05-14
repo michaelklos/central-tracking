@@ -85,6 +85,11 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
   }
 }
 
+function toArray(val: string | string[] | undefined): string[] {
+  if (!val) return [];
+  return Array.isArray(val) ? val : [val];
+}
+
 function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; values: unknown[] } {
   const clauses: string[] = [];
   const values: unknown[] = [];
@@ -94,17 +99,24 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
     const pattern = `%${params.search}%`;
     values.push(pattern, pattern);
   }
-  if (params?.status) {
-    clauses.push('status = ?');
-    values.push(params.status);
+
+  const statuses = toArray(params?.status);
+  if (statuses.length) {
+    clauses.push(`status IN (${statuses.map(() => '?').join(', ')})`);
+    values.push(...statuses);
   }
-  if (params?.source) {
-    clauses.push('source = ?');
-    values.push(params.source);
+
+  const sources = toArray(params?.source);
+  if (sources.length) {
+    clauses.push(`source IN (${sources.map(() => '?').join(', ')})`);
+    values.push(...sources);
   }
-  if (params?.categoryId) {
-    clauses.push('id IN (SELECT task_id FROM task_categories WHERE category_id = ?)');
-    values.push(params.categoryId);
+
+  const categoryIds = toArray(params?.categoryId);
+  if (categoryIds.length) {
+    const placeholders = categoryIds.map(() => '?').join(', ');
+    clauses.push(`id IN (SELECT task_id FROM task_categories WHERE category_id IN (${placeholders}))`);
+    values.push(...categoryIds);
   }
 
   return { clauses, values };

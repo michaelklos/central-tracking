@@ -149,9 +149,9 @@ export interface PaginationParams {
 
 export interface TaskFilterParams {
   search?: string;
-  status?: string;
-  source?: string;
-  categoryId?: string;
+  status?: string | string[];
+  source?: string | string[];
+  categoryId?: string | string[];
 }
 
 export type TaskQueryParams = PaginationParams & TaskFilterParams & { sortBy?: TaskSortBy };

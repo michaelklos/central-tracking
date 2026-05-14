@@ -7,7 +7,8 @@ import { OptionsMenu } from './OptionsMenu';
 import { ImportPreviewDialog } from './ImportPreviewDialog';
 import { BatchActionBar } from './BatchActionBar';
 import { HelpPopover } from './HelpPopover';
-import type { ImportPreview, ImportPreviewItem, ImportResult, ReportMode, TaskStatus, TaskSource } from '../../shared/types';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
+import type { ImportPreview, ImportPreviewItem, ImportResult, ReportMode } from '../../shared/types';
 import './Sidebar.css';
 
 type SidebarTab = 'tasks' | 'settings';
@@ -48,7 +49,6 @@ function getStoredTab(): SidebarTab {
 }
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
   { value: 'todo', label: 'To Do' },
   { value: 'in-progress', label: 'In Progress' },
   { value: 'done', label: 'Done' },
@@ -56,7 +56,6 @@ const STATUS_OPTIONS = [
 ];
 
 const SOURCE_OPTIONS = [
-  { value: '', label: 'All Sources' },
   { value: 'ad-hoc', label: 'Ad Hoc' },
   { value: 'email', label: 'Email' },
   { value: 'meeting-prep', label: 'Meeting Prep' },
@@ -274,37 +273,30 @@ export function Sidebar() {
                     value={localSearch}
                     onChange={(e) => setLocalSearch(e.target.value)}
                   />
-                  <select
-                    value={filter.status ?? ''}
-                    onChange={(e) => updateFilter({ status: e.target.value || undefined })}
-                  >
-                    {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filter.source ?? ''}
-                    onChange={(e) => updateFilter({ source: e.target.value || undefined })}
-                  >
-                    {SOURCE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filter.categoryId ?? ''}
-                    onChange={(e) => updateFilter({ categoryId: e.target.value || undefined })}
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  {(filter.search || filter.status || filter.source || filter.categoryId) && (
+                  <MultiSelectDropdown
+                    label="Status"
+                    options={STATUS_OPTIONS}
+                    selected={filter.statuses ?? []}
+                    onChange={(v) => setFilter({ ...filter, statuses: v })}
+                  />
+                  <MultiSelectDropdown
+                    label="Source"
+                    options={SOURCE_OPTIONS}
+                    selected={filter.sources ?? []}
+                    onChange={(v) => setFilter({ ...filter, sources: v })}
+                  />
+                  <MultiSelectDropdown
+                    label="Category"
+                    options={categories.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
+                    selected={filter.categoryIds ?? []}
+                    onChange={(v) => setFilter({ ...filter, categoryIds: v })}
+                  />
+                  {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length) && (
                     <button
                       className="sidebar__clear-filters"
-                      onClick={() => setFilter({})}
+                      onClick={() => { setFilter({}); setLocalSearch(''); }}
                     >
-                      Clear filters
+                      Reset filters
                     </button>
                   )}
                 </div>
@@ -371,35 +363,35 @@ export function Sidebar() {
 
                   <div className="sidebar__section">
                     <h3 className="sidebar__section-title">Filters</h3>
-                    <select
-                      value={reportContext.filterStatus}
-                      onChange={(e) => reportContext!.setFilterStatus(e.target.value as TaskStatus | '')}
-                    >
-                      {STATUS_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={reportContext.filterSource}
-                      onChange={(e) => reportContext!.setFilterSource(e.target.value as TaskSource | '')}
-                    >
-                      {SOURCE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    {categories.length > 0 && (
-                      <div className="sidebar__report-cat-chips">
-                        {categories.map((cat) => (
-                          <button
-                            key={cat.id}
-                            className={`sidebar__report-cat-chip ${reportContext!.filterCategories.includes(cat.id) ? 'sidebar__report-cat-chip--active' : ''}`}
-                            onClick={() => reportContext!.toggleCategoryFilter(cat.id)}
-                          >
-                            <span className="sidebar__cat-dot" style={{ background: cat.color }} />
-                            {cat.name}
-                          </button>
-                        ))}
-                      </div>
+                    <MultiSelectDropdown
+                      label="Status"
+                      options={STATUS_OPTIONS}
+                      selected={reportContext.filterStatuses}
+                      onChange={reportContext.setFilterStatuses}
+                    />
+                    <MultiSelectDropdown
+                      label="Source"
+                      options={SOURCE_OPTIONS}
+                      selected={reportContext.filterSources}
+                      onChange={reportContext.setFilterSources}
+                    />
+                    <MultiSelectDropdown
+                      label="Category"
+                      options={categories.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
+                      selected={reportContext.filterCategories}
+                      onChange={reportContext.setFilterCategories}
+                    />
+                    {(reportContext.filterStatuses.length > 0 || reportContext.filterSources.length > 0 || reportContext.filterCategories.length > 0) && (
+                      <button
+                        className="sidebar__clear-filters"
+                        onClick={() => {
+                          reportContext!.setFilterStatuses([]);
+                          reportContext!.setFilterSources([]);
+                          reportContext!.setFilterCategories([]);
+                        }}
+                      >
+                        Reset filters
+                      </button>
                     )}
                   </div>
                 </>

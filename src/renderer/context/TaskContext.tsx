@@ -81,9 +81,9 @@ interface TaskContextValue {
 }
 
 export interface TaskFilter {
-  status?: string;
-  source?: string;
-  categoryId?: string;
+  statuses?: string[];
+  sources?: string[];
+  categoryIds?: string[];
   search?: string;
 }
 
@@ -138,7 +138,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const refreshActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
@@ -148,7 +148,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const loadMoreActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
@@ -158,7 +158,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const loadDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: 0, limit: DONE_TASKS_LIMIT, sortBy,
-      search: filter.search, status: filter.status, source: filter.source, categoryId: filter.categoryId,
+      search: filter.search, status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
     });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
@@ -296,9 +296,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const selectAllActiveTasks = useCallback(async () => {
     const ids = await window.api.tasks.getActiveIds({
       search: filter.search,
-      status: filter.status,
-      source: filter.source,
-      categoryId: filter.categoryId,
+      status: filter.statuses,
+      source: filter.sources,
+      categoryId: filter.categoryIds,
     });
     setSelectedTaskIds(new Set(ids));
   }, [filter]);

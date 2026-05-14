@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { ReportMode, TaskStatus, TaskSource } from '../../shared/types';
+import type { ReportMode } from '../../shared/types';
 
 function toDateString(date: Date): string {
   return date.toISOString().split('T')[0];
@@ -11,12 +11,12 @@ interface ReportContextValue {
   startDate: string;
   endDate: string;
   setDateRange(start: string, end: string): void;
-  filterStatus: TaskStatus | '';
-  setFilterStatus(s: TaskStatus | ''): void;
-  filterSource: TaskSource | '';
-  setFilterSource(s: TaskSource | ''): void;
+  filterStatuses: string[];
+  setFilterStatuses(s: string[]): void;
+  filterSources: string[];
+  setFilterSources(s: string[]): void;
   filterCategories: string[];
-  toggleCategoryFilter(catId: string): void;
+  setFilterCategories(ids: string[]): void;
 }
 
 const ReportContext = createContext<ReportContextValue | null>(null);
@@ -34,19 +34,13 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ReportMode>('chart');
   const [startDate, setStartDate] = useState(monthStart);
   const [endDate, setEndDate] = useState(today);
-  const [filterStatus, setFilterStatus] = useState<TaskStatus | ''>('');
-  const [filterSource, setFilterSource] = useState<TaskSource | ''>('');
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [filterSources, setFilterSources] = useState<string[]>([]);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
 
   const setDateRange = useCallback((start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
-  }, []);
-
-  const toggleCategoryFilter = useCallback((catId: string) => {
-    setFilterCategories((prev) =>
-      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
-    );
   }, []);
 
   const value: ReportContextValue = {
@@ -55,12 +49,12 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     startDate,
     endDate,
     setDateRange,
-    filterStatus,
-    setFilterStatus,
-    filterSource,
-    setFilterSource,
+    filterStatuses,
+    setFilterStatuses,
+    filterSources,
+    setFilterSources,
     filterCategories,
-    toggleCategoryFilter,
+    setFilterCategories,
   };
 
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;

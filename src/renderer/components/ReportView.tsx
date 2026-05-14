@@ -9,7 +9,7 @@ import type { SummaryReportEntry } from '../../shared/types';
 import './ReportView.css';
 
 export function ReportView() {
-  const { mode, startDate, endDate, filterStatus, filterSource, filterCategories } = useReportContext();
+  const { mode, startDate, endDate, filterStatuses, filterSources, filterCategories } = useReportContext();
   const { categories } = useTaskContext();
 
   const [summaryData, setSummaryData] = useState<SummaryReportEntry[]>([]);
@@ -35,8 +35,8 @@ export function ReportView() {
 
   // Filter summary data
   const filteredSummary = summaryData.filter((entry) => {
-    if (filterStatus && entry.taskStatus !== filterStatus) return false;
-    if (filterSource && entry.taskSource !== filterSource) return false;
+    if (filterStatuses.length > 0 && !filterStatuses.includes(entry.taskStatus)) return false;
+    if (filterSources.length > 0 && !filterSources.includes(entry.taskSource)) return false;
     if (filterCategories.length > 0) {
       const hasMatch = entry.categoryIds.some((id) => filterCategories.includes(id));
       if (!hasMatch) return false;
