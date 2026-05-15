@@ -14,6 +14,12 @@ interface TimerContextValue {
   stopTimer(): Promise<void>;
   isRunningForTask(taskId: string): boolean;
   refreshTodayTotal(): Promise<void>;
+  /**
+   * Re-fetch the active entry from the database. Call this after editing the
+   * running entry directly (e.g. nudging its start time) so the live
+   * elapsed counter reanchors instead of ticking off the stale start.
+   */
+  refreshActiveEntry(): Promise<void>;
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
@@ -105,6 +111,10 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     [activeEntry]
   );
 
+  const refreshActiveEntry = useCallback(async () => {
+    await refreshActive();
+  }, [refreshActive]);
+
   const value: TimerContextValue = {
     activeEntry,
     elapsedSeconds,
@@ -113,6 +123,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     stopTimer,
     isRunningForTask,
     refreshTodayTotal,
+    refreshActiveEntry,
   };
 
   return <TimerContext.Provider value={value}>{children}</TimerContext.Provider>;

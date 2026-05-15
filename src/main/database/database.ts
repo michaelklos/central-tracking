@@ -6,7 +6,11 @@ export class Database {
 
   constructor(dbPath: string) {
     this.db = new BetterSqlite3(dbPath);
-    this.db.pragma('journal_mode = WAL');
+    // WAL is meaningless for `:memory:` (no files to journal) and emits a
+    // misleading "ok" — skip it so tests don't suggest a mode they didn't get.
+    if (dbPath !== ':memory:') {
+      this.db.pragma('journal_mode = WAL');
+    }
     this.db.pragma('foreign_keys = ON');
     runMigrations(this.db);
   }

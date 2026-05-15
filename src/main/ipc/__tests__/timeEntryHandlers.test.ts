@@ -80,6 +80,33 @@ describe('TimeEntry IPC Handlers', () => {
     expect(updated.note).toBe('Test note');
   });
 
+  it('updates the start time of a running entry without ending it', async () => {
+    // Running entry: created with no endTime; duration_seconds is null.
+    const entry = await ipc.invoke('timeEntries:create', { taskId: testTaskId });
+    expect(entry.endTime).toBeNull();
+    expect(entry.durationSeconds).toBeNull();
+
+    // User nudges the start time back by 15 minutes via the editor; the editor
+    // passes endTime: null through so it remains running.
+    const newStart = new Date(Date.now() - 15 * 60_000).toISOString();
+    const updated = await ipc.invoke('timeEntries:update', entry.id, {
+      startTime: newStart,
+      endTime: null,
+      note: 'reanchored',
+    });
+
+    expect(updated.startTime).toBe(newStart);
+    expect(updated.endTime).toBeNull();
+    expect(updated.durationSeconds).toBeNull();
+    expect(updated.note).toBe('reanchored');
+
+    // Still appears as the active entry afterwards.
+    const active = await ipc.invoke('timeEntries:getActive');
+    expect(active).not.toBeNull();
+    expect(active.id).toBe(entry.id);
+    expect(active.startTime).toBe(newStart);
+  });
+
   it('deletes an entry', async () => {
     const entry = await ipc.invoke('timeEntries:create', { taskId: testTaskId });
     await ipc.invoke('timeEntries:delete', entry.id);

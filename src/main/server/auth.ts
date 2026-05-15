@@ -22,6 +22,9 @@ export function generateToken(): string {
 export function writeServerFile(userDataPath: string, info: ServerInfo): void {
   const filePath = getServerFilePath(userDataPath);
   fs.writeFileSync(filePath, JSON.stringify(info, null, 2), { mode: 0o600 });
+  // writeFileSync's `mode` option only applies when the file is created. If
+  // the file already existed (with looser perms), tighten it explicitly.
+  try { fs.chmodSync(filePath, 0o600); } catch { /* ignore — best effort */ }
 }
 
 export function readServerFile(userDataPath: string): ServerInfo | null {

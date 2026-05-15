@@ -81,7 +81,15 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
   const [noteDraft, setNoteDraft] = useState('');
   const [error, setError] = useState('');
 
-  // Reset create form defaults when they change
+  // Reset create form defaults when they change.
+  // FOOTGUN: the ternaries in the deps array dodge a TypeScript narrowing
+  // problem (`props.defaultStartTime` only exists on CreateModeProps), but
+  // they also defeat react-hooks/exhaustive-deps — future edits that add
+  // a new prop reference inside the effect won't get a lint warning.
+  // The proper fix is to split this component into separate Create and Edit
+  // children, each with a flat dep list. Deferred until we touch this file
+  // for another reason; current call sites never flip `isCreate` at runtime,
+  // so the latent bug is unreachable today.
   useEffect(() => {
     if (isCreate) {
       setDateDraft(toDateValue(props.defaultStartTime));

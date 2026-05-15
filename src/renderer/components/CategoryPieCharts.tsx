@@ -46,6 +46,13 @@ interface CategorySlice {
   color: string;
 }
 
+// Tasks tagged with multiple categories have their tracked time split evenly
+// across those categories. This is a fairness heuristic (no per-category
+// allocation is tracked at entry time), so totals across pies will add up to
+// the user's actual tracked time but a given task's contribution to any one
+// category is `totalSeconds / categoryIds.length`. Document this here so a
+// future reader understands why a 30-minute entry on a 2-category task shows
+// 15 minutes in each pie.
 function aggregateByCategory(
   data: SummaryReportEntry[],
   categories: Category[],

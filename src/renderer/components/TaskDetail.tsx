@@ -22,7 +22,7 @@ const AUTO_LOAD_MAX_BATCHES = 3;
 export function TaskDetail() {
   const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal } = useTimerContext();
+  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal, refreshActiveEntry } = useTimerContext();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -248,6 +248,11 @@ export function TaskDetail() {
     await loadSmartDefaults();
     await refreshActiveTasks();
     await refreshTodayTotal();
+    // If we just edited the running entry (no endTime), re-anchor the live
+    // timer so the TimerBar's elapsed counter reflects the new start.
+    if (updated.endTime === null) {
+      await refreshActiveEntry();
+    }
   };
 
   const handleTimerToggle = async () => {

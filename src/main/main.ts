@@ -148,9 +148,12 @@ app.whenReady().then(() => {
     }
   });
 
-  mainWindow!.webContents.once('did-finish-load', () => {
-    if (mainWindow) maybePromptCliInstall(mainWindow);
-  });
+  if (mainWindow) {
+    const win = mainWindow;
+    win.webContents.once('did-finish-load', () => {
+      maybePromptCliInstall(win);
+    });
+  }
 });
 
 app.on('window-all-closed', () => {

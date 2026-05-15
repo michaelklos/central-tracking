@@ -1,14 +1,29 @@
 # CLAUDE.md — Central Tracking
 
-## Open code-review findings
+## Recurring footgun families
 
-A code-review audit ran on 2026-05-14 and produced a punch list of footguns. The
-critical items were addressed in that session; the remaining high/medium/low items
-are tracked in [`.claude/code-review-findings.md`](.claude/code-review-findings.md).
-Before adding new features in this codebase, check that doc — there are three
-recurring footgun families (field-name drift through narrow inline IPC types,
-`setX({...x})` instead of functional updaters, async-load-then-setState with no
-staleness guard) that future code should avoid.
+A code-review audit on 2026-05-14 surfaced three patterns that produced most of
+the bugs in this codebase. Before adding new code, check whether you're falling
+into one of these:
+
+1. **Field-name drift through narrow inline IPC types.** Type the renderer
+   side of `preload.ts` with the shared `Create*Input`/`Update*Input` /
+   `TaskQueryParams` interfaces from `src/shared/types.ts`, not with inline
+   `{...}` types. The original bug: a renderer call passed `filter.status`
+   (singular) when the actual field is `statuses` (plural), and TypeScript
+   couldn't catch it because the preload param was inline and narrower than
+   the renderer-side `CentralTrackingAPI` declaration.
+
+2. **`setX({...x, ...})` inside an effect or handler.** Captures the closure
+   value of `x`, which goes stale when two updates land in the same tick or
+   before a debounce drains. Always use `setX(prev => ({...prev, ...}))`
+   when the update depends on previous state.
+
+3. **`await ipc(id); setState(result)` with no staleness guard.** If the
+   user changes selection during the await, `result` is for the old
+   selection but overwrites the new one's state. Always capture the id
+   locally and bail before setState if it changed (see `currentTaskIdRef`
+   in `TaskDetail.tsx`).
 
 ## Project Overview
 

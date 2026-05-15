@@ -18,7 +18,7 @@ export function createTestDatabase(): Database {
  */
 export function createRawTestDb(): BetterSqlite3.Database {
   const db = new BetterSqlite3(':memory:');
-  db.pragma('journal_mode = WAL');
+  // No WAL pragma — meaningless for `:memory:` (matches Database constructor).
   db.pragma('foreign_keys = ON');
   return db;
 }

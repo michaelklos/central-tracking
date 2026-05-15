@@ -96,20 +96,28 @@ describe('Task Sort Options', () => {
     const t2 = await ipc.invoke('tasks:create', { title: 'LotsOfTime' });
     const t3 = await ipc.invoke('tasks:create', { title: 'NoTime' });
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Anchor entries to "now" so they always fall on the local "today" the
+    // handler queries (`date(start_time, 'localtime') = date('now', 'localtime')`).
+    // Using UTC today directly would put entries on tomorrow's local date in
+    // late-evening US timezones, sinking "today's time" to 0.
+    const now = Date.now();
+    const tEnd1 = new Date(now - 30 * 60_000); // 30m ago
+    const tStart1 = new Date(now - 60 * 60_000); // 1h ago
+    const tEnd2 = new Date(now - 60 * 60_000); // 1h ago
+    const tStart2 = new Date(now - 3 * 60 * 60_000); // 3h ago
 
     // t1: 30 min today
     await timeIpc.invoke('timeEntries:create', {
       taskId: t1.id,
-      startTime: `${todayStr}T08:00:00Z`,
-      endTime: `${todayStr}T08:30:00Z`,
+      startTime: tStart1.toISOString(),
+      endTime: tEnd1.toISOString(),
     });
 
     // t2: 2 hours today
     await timeIpc.invoke('timeEntries:create', {
       taskId: t2.id,
-      startTime: `${todayStr}T08:00:00Z`,
-      endTime: `${todayStr}T10:00:00Z`,
+      startTime: tStart2.toISOString(),
+      endTime: tEnd2.toISOString(),
     });
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'most-time-today' });

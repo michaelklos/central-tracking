@@ -19,8 +19,17 @@ function getCliScriptPath(): string {
   return path.join(__dirname, '..', '..', 'cli', 'cli', 'main.js');
 }
 
+// Single-quote a string for /bin/sh by replacing every `'` with `'\''` and
+// wrapping the result in single quotes. Inside single quotes the shell does
+// no interpolation, so `$`, `"`, backslashes, etc. survive verbatim.
+function shellSingleQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 function buildWrapperScript(): string {
-  return `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${getCliScriptPath()}" "$@"\n`;
+  const electron = shellSingleQuote(process.execPath);
+  const cli = shellSingleQuote(getCliScriptPath());
+  return `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 ${electron} ${cli} "$@"\n`;
 }
 
 function getSymlinkPath(): string {

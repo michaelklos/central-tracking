@@ -28,6 +28,13 @@ export class ErrorBoundary extends Component<Props, State> {
           <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap' }}>
             {this.state.error.message}
           </pre>
+          {/*
+            "Try again" only clears the boundary's own error state — it doesn't
+            reset the child component's state. If the underlying bug is
+            deterministic in props, the same error will fire again immediately.
+            Acceptable for now: the user can always reload via ⌘R; this button
+            is meant for transient (e.g. network) failures.
+          */}
           <button onClick={() => this.setState({ error: null })} style={{ marginTop: 8 }}>
             Try again
           </button>

@@ -285,12 +285,15 @@ describe('CLI → Server Integration', () => {
         { taskId, startTime: start.toISOString(), endTime: now.toISOString() },
       ]);
 
-      const today = now.toISOString().split('T')[0];
+      // Query a wide range bracketing both the start (1h ago) and now so the
+      // test stays correct regardless of the local-vs-UTC date crossover.
+      const rangeStart = new Date(start.getTime() - 3600000).toISOString();
+      const rangeEnd = new Date(now.getTime() + 3600000).toISOString();
 
       // Summary report
       const summaryRes = await makeRequest(server.port, server.token, 'timeEntries/getSummaryReport', [
-        `${today}T00:00:00.000Z`,
-        `${today}T23:59:59.999Z`,
+        rangeStart,
+        rangeEnd,
       ]);
       expect(summaryRes.body.ok).toBe(true);
       const summary = summaryRes.body.data as { date: string; taskTitle: string }[];
@@ -299,8 +302,8 @@ describe('CLI → Server Integration', () => {
 
       // CSV report
       const csvRes = await makeRequest(server.port, server.token, 'reports/generateCsv', [
-        `${today}T00:00:00.000Z`,
-        `${today}T23:59:59.999Z`,
+        rangeStart,
+        rangeEnd,
       ]);
       expect(csvRes.body.ok).toBe(true);
       const csv = csvRes.body.data as string;

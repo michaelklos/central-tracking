@@ -54,6 +54,8 @@ const mockTimerContext = {
   startTimer: vi.fn(),
   stopTimer: vi.fn(),
   isRunningForTask: vi.fn().mockReturnValue(false),
+  refreshTodayTotal: vi.fn().mockResolvedValue(undefined),
+  refreshActiveEntry: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock('../../context/TaskContext', () => ({
