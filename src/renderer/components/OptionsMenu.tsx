@@ -159,20 +159,26 @@ export function OptionsMenu() {
         ))}
       </div>
 
-      {isMac && cliInstalled !== null && (
+      {(isMac ? cliInstalled !== null : true) && (
         <>
           <h3 className="options-menu__title options-menu__title--section">CLI</h3>
           <div className="options-menu__list">
             <div className="options-menu__item-row">
-              <label className="options-menu__item">
-                <input
-                  type="checkbox"
-                  checked={cliInstalled}
-                  onChange={toggleCli}
-                  disabled={cliPending}
-                />
-                <span>Enable <code>ct</code> command-line tool</span>
-              </label>
+              {isMac ? (
+                <label className="options-menu__item">
+                  <input
+                    type="checkbox"
+                    checked={cliInstalled ?? false}
+                    onChange={toggleCli}
+                    disabled={cliPending}
+                  />
+                  <span>Enable <code>ct</code> command-line tool</span>
+                </label>
+              ) : (
+                <span className="options-menu__item options-menu__cli-info">
+                  The <code>ct</code> command-line tool ships with the app.
+                </span>
+              )}
               <HelpPopover title="ct CLI Tool">
                 <p>Controls Central Tracking from any terminal — useful for scripting, automation, and AI agents.</p>
                 <pre>{`ct task list
@@ -182,10 +188,10 @@ ct report summary --from 2024-01-01 --to 2024-01-31`}</pre>
                 <p>Get help for any command:</p>
                 <pre>{`ct --help
 ct task --help`}</pre>
-                <p>Open a new terminal window after enabling.</p>
+                <p>Open a new terminal window if <code>ct</code> isn't recognized.</p>
               </HelpPopover>
             </div>
-            {cliError && (
+            {isMac && cliError && (
               <p className="options-menu__cli-error">{cliError}</p>
             )}
           </div>

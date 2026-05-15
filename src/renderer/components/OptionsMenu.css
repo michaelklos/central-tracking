@@ -211,3 +211,10 @@
   color: var(--color-primary);
   text-decoration: underline;
 }
+
+.options-menu__cli-info {
+  /* Non-Mac platforms: no checkbox to align with, so drop the cursor and
+     normalize spacing relative to the help-popover trigger. */
+  cursor: default;
+  color: var(--color-text-secondary, var(--color-text));
+}
