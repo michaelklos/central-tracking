@@ -1,7 +1,7 @@
 import type { Database } from '../database/database';
 
 import {
-  getAllTasks, getTaskById, getActiveTasks, getDoneTasks,
+  getAllTasks, getTaskById, getActiveTasks, getActiveTaskIds, getDoneTasks,
   createTask, updateTask, deleteTask, reorderTasks,
   batchUpdateTasks, batchSoftDeleteTasks, getDeletedTasks,
   restoreTask, batchRestoreTasks, purgeDeletedTask, emptyRecycleBin,
@@ -52,6 +52,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/getAll',           ipcChannel: 'tasks:getAll',           mutates: false, handler: (db) => getAllTasks(db) },
   { route: 'tasks/getById',          ipcChannel: 'tasks:getById',          mutates: false, handler: (db, id) => getTaskById(db, id as string) },
   { route: 'tasks/getActive',        ipcChannel: 'tasks:getActive',        mutates: false, handler: (db, params) => getActiveTasks(db, params as never) },
+  { route: 'tasks/getActiveIds',     ipcChannel: 'tasks:getActiveIds',     mutates: false, handler: (db, params) => getActiveTaskIds(db, params as never) },
   { route: 'tasks/getDone',          ipcChannel: 'tasks:getDone',          mutates: false, handler: (db, params) => getDoneTasks(db, params as never) },
   { route: 'tasks/create',           ipcChannel: 'tasks:create',           mutates: true,  event: 'task.created',   handler: (db, input) => createTask(db, input as never) },
   { route: 'tasks/update',           ipcChannel: 'tasks:update',           mutates: true,  event: 'task.updated',   handler: (db, id, updates) => updateTask(db, id as string, updates as never) },

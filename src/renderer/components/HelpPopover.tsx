@@ -43,9 +43,13 @@ export function HelpPopover({ children, title }: HelpPopoverProps) {
         setOpen(false);
       }
     };
+    const closeOnScroll = () => setOpen(false);
     document.addEventListener('mousedown', close);
-    window.addEventListener('scroll', () => setOpen(false), { once: true });
-    return () => document.removeEventListener('mousedown', close);
+    window.addEventListener('scroll', closeOnScroll, { once: true });
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', closeOnScroll);
+    };
   }, [open]);
 
   return (

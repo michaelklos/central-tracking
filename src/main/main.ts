@@ -70,10 +70,19 @@ app.whenReady().then(() => {
 
   try {
     const prefsPath = path.join(userDataPath, 'preferences.json');
-    const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
-    keepaliveEnabled = prefs?.keepDisplayAwake === true;
+    if (fs.existsSync(prefsPath)) {
+      try {
+        const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+        keepaliveEnabled = prefs?.keepDisplayAwake === true;
+      } catch (err) {
+        // File exists but is malformed — warn so the user notices instead of
+        // silently disabling preferences. Keep the message generic; the
+        // surrounding feature is deliberately low-profile.
+        log.warn('preferences.json is unreadable or malformed; using defaults.', String(err));
+      }
+    }
   } catch {
-    // file absent or unreadable — leave default
+    // unexpected — leave defaults
   }
 
   const dbPath = path.join(userDataPath, 'central-tracking.db');

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils/timeline';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
+import { toLocalDateString as toDateString } from '../../shared/dateRange';
 import type { TimeEntryWithTask, TaskSource } from '../../shared/types';
 import './TimelineView.css';
 
@@ -21,11 +22,6 @@ function sourcePrefix(source?: string): string {
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-function toDateString(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -75,11 +71,11 @@ export function TimelineView() {
 
   useEffect(() => {
     loadTimeline();
-    // Only auto-refresh when viewing today (for active timers)
-    if (isViewingToday) {
-      const interval = setInterval(loadTimeline, 60000);
-      return () => clearInterval(interval);
-    }
+    // Only auto-refresh when viewing today (for active timers). Always return
+    // a cleanup so that switching away from "today" cancels the interval.
+    if (!isViewingToday) return undefined;
+    const interval = setInterval(loadTimeline, 60000);
+    return () => clearInterval(interval);
   }, [loadTimeline, isViewingToday]);
 
   const goToPreviousDay = () => {
@@ -161,9 +157,9 @@ export function TimelineView() {
         </p>
       ) : (
         <div className="timeline-view__list">
-          {timeline.map((item, index) => (
+          {timeline.map((item) => (
             <div
-              key={index}
+              key={`${item.type}:${item.startTime.toISOString()}`}
               className={`timeline-view__item ${item.type === 'gap' ? 'timeline-view__item--gap' : 'timeline-view__item--entry'}`}
               onClick={() => handleItemClick(item)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleItemClick(item); } }}

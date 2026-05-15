@@ -375,7 +375,7 @@ export function Sidebar() {
                   </button>
                   {importResult && (
                     <p className="sidebar__import-result">
-                      Imported {importResult.created}, skipped {importResult.skipped}
+                      Imported {importResult.created} new, {importResult.updated} appended, {importResult.skipped} skipped
                     </p>
                   )}
                 </div>

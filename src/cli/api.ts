@@ -33,6 +33,7 @@ export interface ApiClient {
     getAll(): Promise<Task[]>;
     getById(id: string): Promise<Task | null>;
     getActive(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
+    getActiveIds(params?: TaskQueryParams): Promise<string[]>;
     getDone(params?: TaskQueryParams): Promise<PaginatedResponse<Task>>;
     create(input: CreateTaskInput): Promise<Task>;
     update(id: string, input: UpdateTaskInput): Promise<Task>;
@@ -99,6 +100,7 @@ export function createApiClient(request: RawRequest): ApiClient {
       getAll: () => request<Task[]>('tasks/getAll'),
       getById: (id) => request<Task | null>('tasks/getById', [id]),
       getActive: (params) => request<PaginatedResponse<Task>>('tasks/getActive', [params ?? {}]),
+      getActiveIds: (params) => request<string[]>('tasks/getActiveIds', [params ?? {}]),
       getDone: (params) => request<PaginatedResponse<Task>>('tasks/getDone', [params ?? {}]),
       create: (input) => request<Task>('tasks/create', [input]),
       update: (id, input) => request<Task>('tasks/update', [id, input]),

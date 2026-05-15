@@ -87,70 +87,12 @@ revisited:
 
 ## MEDIUM — open
 
-- `src/main/server/httpServer.ts:67, 120-135` — `isValidHost` reads `actualPort` via
-  closure; works because listen runs before any requests, but fragile if init order
-  ever changes. Fix: capture port via a getter or move `createServer()` after the
-  listen loop.
-- `src/renderer/context/TaskContext.tsx:229-262` — data-changed listener effect
-  re-binds on every keystroke (filter.search changes → `refreshActiveTasks` identity
-  changes → effect re-runs → re-subscribes to `onDataChanged`). Resets the 100ms
-  debounce too. Fix: stash `refreshActiveTasks` in a ref; depend on stable
-  identities only.
-- `src/renderer/components/TimelineView.tsx:76-83` — `isViewingToday` true→false
-  transition leaves the previous "today" interval running until the next deps change
-  (the false branch returns undefined from the effect). Fix: always return a cleanup
-  from the effect.
-- `src/renderer/components/TimelineView.tsx:164` and `CategoryPieCharts.tsx:209, 259,
-  272` — `key={index}`/`key={i}` on lists whose order changes; React reconciliation
-  can attach the wrong DOM nodes. Fix: use stable derived keys (e.g.,
-  `${item.type}:${item.startTime.toISOString()}`).
 - `src/renderer/components/TimeEntryEditor.tsx:88` — deps array uses ternaries
   (`[isCreate, isCreate ? props.defaultStartTime : null, ...]`). Defeats
   exhaustive-deps and creates surprising behavior when `isCreate` flips. Fix: split
   into separate Create vs Edit components (props are already a discriminated union).
-- `src/renderer/components/OptionsMenu.tsx:68-71` — empty deps `[]` with `isMac`
-  referenced inside. Works only because `isMac` is constant. Fix: add to deps.
-- `src/main/server/apiManifest.ts` — `tasks:resetApp` and `tasks:getActiveIds` exist
-  as IPC channels but have no HTTP route entries; CLI can't reach them. There's a
-  parity test (`apiManifest.parity.test.ts`) — likely missing assertion. Fix: add
-  routes or document the IPC-only exemption.
-- `src/main/import/importExecutor.ts:115-117` — `ImportResult` reports `created` and
-  `skipped` but no `updated`; dedup'd duplicates count as "created" but are silently
-  merged. Fix: extend `ImportResult` with `updated`; document dedup behavior.
-- `src/renderer/components/HelpPopover.tsx:47` — `window.addEventListener('scroll',
-  () => setOpen(false), { once: true })` added without matching `removeEventListener`;
-  cleanup only removes 'mousedown'. Inline closure stays registered until scroll
-  fires. Fix: capture the function in a const and remove it in cleanup.
-- `src/renderer/components/DateRangePicker.tsx:~11` + `src/renderer/context/ReportContext.tsx:4-5`
-  — `toDateString(new Date())` uses `.toISOString().split('T')[0]`, which is
-  UTC-relative. Users in UTC-7 see "yesterday" until 5 PM local. The "today's timer
-  overcounting" fix landed in the SQL layer, but this same UTC-vs-local issue lives
-  in the renderer for date pickers and the default report range. Fix: format with
-  local components (`getFullYear`/`getMonth`/`getDate`) — `TimelineView` already has
-  the right helper, reuse it.
-- `src/main/ipc/taskHandlers.ts:130-149` — `resolveTaskId` LIKE-matches user input
-  concatenated into `%${id}%`; `%`/`_` in the input aren't escaped. CLI lookup like
-  `ct task delete "100%"` matches every task containing "100". Fix: escape LIKE
-  metacharacters (e.g., wrap with `ESCAPE '\'` and replace `%`, `_`, `\` in input),
-  or attempt an exact-match before fuzzy.
-- `src/renderer/components/Sidebar.tsx:122-125` — `searchMode` init effect fires
-  `setFilter` on first mount even when nothing has changed (filter.searchIn
-  undefined → set to 'title'). Extra refresh on every Sidebar mount. Fix: seed the
-  default into the initial `TaskContext` filter state instead.
-- `src/renderer/context/TaskContext.tsx:137` — `tasks = useMemo(() => [...activeTasks,
-  ...doneTasks], ...)` is fine, but if the active timer is on a task that's been
-  filtered out of `activeTasks` AND not in `doneTasks`, the TimerBar reads "Unknown
-  task". Fix: have TimerContext separately fetch the active task by id (don't rely
-  on the filtered list).
-- `src/main/main.ts:73` — `preferences.json` parsed via `JSON.parse` inside try/catch
-  (good); a malformed-but-readable file silently disables the feature. Fix: log a
-  warning so users notice corrupt prefs. **Careful**: keep the warning generic — the
-  surrounding feature is deliberately low-profile (see `localdocs/` if it exists in
-  the repo; that dir is gitignored).
-- `src/renderer/components/TaskDetail.tsx:188-191, 244-247` — `handleComplete`/
-  `handleTimerToggle` catch errors with `console.error` only; failed DB writes leave
-  the UI thinking the operation succeeded. Fix: surface error via toast/inline
-  message and roll back optimistic state if any.
+  Deferred 2026-05-14: 22 tests would need to be retargeted; not worth the churn
+  until we touch this file for another reason.
 
 ## LOW — open
 

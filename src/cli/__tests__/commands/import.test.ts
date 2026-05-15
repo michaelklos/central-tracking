@@ -71,7 +71,7 @@ describe('ct import execute', () => {
       {
         responses: {
           'import/parseContent': { items, errors: [] },
-          'import/execute': { created: 0, skipped: 0, errors: [] },
+          'import/execute': { created: 0, updated: 0, skipped: 0, errors: [] },
         },
       },
     );
@@ -89,10 +89,10 @@ describe('ct import execute', () => {
       {
         responses: {
           'import/parseContent': { items, errors: [] },
-          'import/execute': { created: 1, skipped: 0, errors: [] },
+          'import/execute': { created: 1, updated: 0, skipped: 0, errors: [] },
         },
       },
     );
-    expect(stdout).toContain('Import complete: 1 created, 0 skipped');
+    expect(stdout).toContain('Import complete: 1 created, 0 appended, 0 skipped');
   });
 });

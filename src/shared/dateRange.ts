@@ -5,6 +5,16 @@
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Format a Date as YYYY-MM-DD in the user's local time. Date pickers compare
+ * against the user's local calendar, so using toISOString() (UTC) would show
+ * "yesterday" west of UTC during the evening.
+ */
+export function toLocalDateString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function assertDateString(input: string): void {
   if (!DATE_REGEX.test(input)) {
     throw new Error(`Invalid date "${input}" — expected YYYY-MM-DD`);

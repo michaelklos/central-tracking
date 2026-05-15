@@ -114,6 +114,7 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
 
   return {
     created,
+    updated,
     skipped: items.length - actionableItems.length,
     errors,
   };

@@ -67,11 +67,14 @@ describe('apiManifest', () => {
   });
 
   it('every CLI-facing IPC channel (domain:operation) has a matching route', () => {
-    // UI-only IPC channels — wrap dialogs or window ops, no CLI equivalent.
+    // UI-only IPC channels.
+    //   `reports:exportCsv`     — wraps the pure CSV generator in a save dialog.
+    //   `import:selectAndParse` — wraps the pure parser in a file dialog.
+    //   `tasks:resetApp`        — destructive total-wipe; requires the in-UI
+    //                             confirm flow, no CLI shortcut by design.
     const UI_ONLY_CHANNELS = new Set([
       'reports:exportCsv',
       'import:selectAndParse',
-      'tasks:getActiveIds',
       'tasks:resetApp',
     ]);
 

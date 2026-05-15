@@ -1,14 +1,11 @@
 import React from 'react';
+import { toLocalDateString as toDateString } from '../../shared/dateRange';
 import './DateRangePicker.css';
 
 interface DateRangePickerProps {
   start: string;
   end: string;
   onChange: (start: string, end: string) => void;
-}
-
-function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
 }
 
 function getStartOfWeek(date: Date): Date {

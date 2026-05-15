@@ -219,7 +219,11 @@ export interface ImportError {
 }
 
 export interface ImportResult {
+  /** Number of new tasks created. */
   created: number;
+  /** Number of time entries appended to existing tasks (matched by external_id or exact title). */
+  updated: number;
+  /** Number of items whose action was 'skip'. */
   skipped: number;
   errors: string[];
 }

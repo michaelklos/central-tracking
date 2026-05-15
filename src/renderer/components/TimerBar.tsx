@@ -2,16 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { useTimerContext } from '../context/TimerContext';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
+import type { Task } from '../../shared/types';
 import './TimerBar.css';
 
 export function TimerBar() {
   const { activeEntry, elapsedSeconds, totalTodaySeconds, stopTimer } = useTimerContext();
   const { tasks } = useTaskContext();
   const [pinned, setPinned] = useState(false);
+  // Fallback fetch by id: the active timer may be on a task that's filtered
+  // out of the visible activeTasks list (and not in doneTasks either), in
+  // which case `tasks.find` returns undefined. Look it up directly.
+  const [fallbackTask, setFallbackTask] = useState<Task | null>(null);
 
   useEffect(() => {
     window.api.window.getAlwaysOnTop().then(setPinned);
   }, []);
+
+  const inMemoryTask = activeEntry ? tasks.find((t) => t.id === activeEntry.taskId) : null;
+  const activeTaskId = activeEntry?.taskId ?? null;
+  useEffect(() => {
+    if (!activeTaskId) { setFallbackTask(null); return; }
+    if (inMemoryTask) { setFallbackTask(null); return; }
+    let stale = false;
+    window.api.tasks.getById(activeTaskId).then((task) => {
+      if (stale) return;
+      setFallbackTask(task);
+    });
+    return () => { stale = true; };
+  }, [activeTaskId, inMemoryTask]);
 
   const handleTogglePin = async () => {
     const next = !pinned;
@@ -19,7 +37,7 @@ export function TimerBar() {
     setPinned(next);
   };
 
-  const activeTask = activeEntry ? tasks.find((t) => t.id === activeEntry.taskId) : null;
+  const activeTask = inMemoryTask ?? fallbackTask;
   const todayDisplay = activeEntry ? totalTodaySeconds + elapsedSeconds : totalTodaySeconds;
 
   return (

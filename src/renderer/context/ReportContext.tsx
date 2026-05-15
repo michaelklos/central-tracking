@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { ReportMode } from '../../shared/types';
-
-function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
+import { toLocalDateString as toDateString } from '../../shared/dateRange';
 
 interface ReportContextValue {
   mode: ReportMode;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode, type Dispatch, type SetStateAction } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react';
 import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy } from '../../shared/types';
 
 const ACTIVE_TASKS_LIMIT = 50;
@@ -116,7 +116,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TaskFilter>({});
+  const [filter, setFilter] = useState<TaskFilter>(() => {
+    // Seed searchIn from the persisted search mode so the Sidebar doesn't
+    // trigger an extra refresh on mount just to push the default in.
+    try {
+      const stored = localStorage.getItem('central-tracking:search-mode');
+      if (stored === 'title' || stored === 'all') {
+        return { searchIn: stored };
+      }
+    } catch { /* ignore */ }
+    return { searchIn: 'title' };
+  });
   const [sortBy, setSortByState] = useState<TaskSortBy>(() => {
     try {
       const stored = localStorage.getItem('ct-sort-by');
@@ -239,27 +249,39 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     refreshCategories();
   }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories, doneTasksLoaded, loadDoneTasks]);
 
-  // Refresh when CLI or other external process modifies data
+  // Refresh when CLI or other external process modifies data.
+  // Refreshers are stashed in a ref so the subscription doesn't re-bind on
+  // every keystroke (filter.search changes recreate refreshActiveTasks). That
+  // would also reset the 100ms debounce in flight.
+  const refreshersRef = useRef({
+    refreshActiveTasks, loadDoneTasks, refreshDoneCount, refreshDeletedCount,
+    refreshCategories, doneTasksLoaded,
+  });
+  refreshersRef.current = {
+    refreshActiveTasks, loadDoneTasks, refreshDoneCount, refreshDeletedCount,
+    refreshCategories, doneTasksLoaded,
+  };
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout>;
     const unsubscribe = window.api.onDataChanged(() => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        refreshActiveTasks();
-        if (doneTasksLoaded) {
-          loadDoneTasks();
+        const r = refreshersRef.current;
+        r.refreshActiveTasks();
+        if (r.doneTasksLoaded) {
+          r.loadDoneTasks();
         } else {
-          refreshDoneCount();
+          r.refreshDoneCount();
         }
-        refreshDeletedCount();
-        refreshCategories();
+        r.refreshDeletedCount();
+        r.refreshCategories();
       }, 100);
     });
     return () => {
       clearTimeout(debounceTimer);
       unsubscribe();
     };
-  }, [refreshActiveTasks, refreshDoneCount, refreshDeletedCount, refreshCategories, doneTasksLoaded, loadDoneTasks]);
+  }, []);
 
   const createTask = useCallback(async (input: CreateTaskInput) => {
     const task = await window.api.tasks.create(input);

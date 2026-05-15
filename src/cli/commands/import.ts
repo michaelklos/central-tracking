@@ -138,10 +138,10 @@ export function registerImportCommands(yargs: Argv): Argv {
               return;
             }
 
-            const result = await request<{ created: number; skipped: number; errors: string[] }>('import/execute', [items]);
+            const result = await request<{ created: number; updated: number; skipped: number; errors: string[] }>('import/execute', [items]);
 
             output(argv, result, (r) => {
-              const lines = [`Import complete: ${r.created} created, ${r.skipped} skipped`];
+              const lines = [`Import complete: ${r.created} created, ${r.updated} appended, ${r.skipped} skipped`];
               if (r.errors.length > 0) {
                 lines.push('Errors:', ...r.errors.map((e) => `  - ${e}`));
               }

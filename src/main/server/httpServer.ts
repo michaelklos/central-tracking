@@ -53,6 +53,10 @@ export async function startHttpServer(
   const token = generateToken();
   const routes = buildRouteMap();
 
+  // Captured by the request handler so it always reads the resolved port,
+  // even if listen()/port-walk init order is ever changed.
+  let boundPort = 0;
+
   const server = http.createServer(async (req, res) => {
     // Drain request body before sending any error response to avoid ECONNRESET
     const bodyStr = await readBody(req);
@@ -64,7 +68,7 @@ export async function startHttpServer(
     }
 
     // Host header validation (DNS rebinding protection)
-    if (!isValidHost(req, actualPort)) {
+    if (!isValidHost(req, boundPort)) {
       sendJson(res, 403, { ok: false, error: { code: 'FORBIDDEN', message: 'Invalid host' } });
       return;
     }
@@ -149,6 +153,8 @@ export async function startHttpServer(
       }
     }
   }
+
+  boundPort = actualPort;
 
   // Write server discovery file
   writeServerFile(userDataPath, { port: actualPort, token, pid: process.pid });

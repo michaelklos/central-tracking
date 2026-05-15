@@ -43,6 +43,7 @@ export function TaskDetail() {
     return (!isNaN(min) && min > 0) ? min * 60 : 1800;
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
@@ -193,12 +194,15 @@ export function TaskDetail() {
 
   const handleComplete = async () => {
     try {
+      setActionError(null);
       if (isRunningForTask(task.id)) {
         await stopTimer();
       }
       await updateTask(task.id, { status: 'done' });
     } catch (err) {
-      console.error('Failed to complete task:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to complete task: ${msg}`);
+      window.api.log.error(`TaskDetail.handleComplete: ${msg}`);
     }
   };
 
@@ -248,6 +252,7 @@ export function TaskDetail() {
 
   const handleTimerToggle = async () => {
     try {
+      setActionError(null);
       if (isRunningForTask(task.id)) {
         await stopTimer();
       } else {
@@ -255,7 +260,9 @@ export function TaskDetail() {
       }
       await loadTimeEntries();
     } catch (err) {
-      console.error('Timer toggle failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Timer toggle failed: ${msg}`);
+      window.api.log.error(`TaskDetail.handleTimerToggle: ${msg}`);
     }
   };
 
@@ -275,6 +282,18 @@ export function TaskDetail() {
 
   return (
     <div className="task-detail">
+      {actionError && (
+        <div className="task-detail__action-error" role="alert">
+          {actionError}
+          <button
+            className="task-detail__action-error-close"
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="task-detail__header">
         <div className="task-detail__title-row">
           {editingTitle ? (

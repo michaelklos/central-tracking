@@ -68,7 +68,7 @@ export function OptionsMenu() {
   useEffect(() => {
     if (!isMac) return;
     window.api.cli.isInstalled().then(setCliInstalled);
-  }, []);
+  }, [isMac]);
 
   const toggleCli = async () => {
     if (cliInstalled === null || cliPending) return;

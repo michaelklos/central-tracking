@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDuration } from '../utils/time';
+import { toLocalDateString as toDateString } from '../../shared/dateRange';
 import type { Category, SummaryReportEntry } from '../../shared/types';
 import './CategoryPieCharts.css';
-
-function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
 
 interface PanelConfig {
   label: string;
@@ -209,7 +206,7 @@ export function CategoryPieCharts({ categories }: Props) {
           const isExpanded = expandedOverrides.has(i);
 
           return (
-            <div key={i} className="category-pie-charts__panel" data-testid={`pie-panel-${i}`}>
+            <div key={panel.label} className="category-pie-charts__panel" data-testid={`pie-panel-${i}`}>
               <div className="category-pie-charts__panel-header">
                 <span className="category-pie-charts__panel-label">{panel.label}</span>
                 <span className="category-pie-charts__panel-total">{formatDuration(totalSeconds)}</span>
@@ -259,8 +256,8 @@ export function CategoryPieCharts({ categories }: Props) {
                         label={renderLabel}
                         labelLine={false}
                       >
-                        {slices.map((slice, j) => (
-                          <Cell key={j} fill={slice.color} />
+                        {slices.map((slice) => (
+                          <Cell key={slice.name} fill={slice.color} />
                         ))}
                       </Pie>
                       <Tooltip content={renderTooltip} />
@@ -272,8 +269,8 @@ export function CategoryPieCharts({ categories }: Props) {
               </div>
 
               <div className="category-pie-charts__legend">
-                {slices.map((slice, j) => (
-                  <div key={j} className="category-pie-charts__legend-row">
+                {slices.map((slice) => (
+                  <div key={slice.name} className="category-pie-charts__legend-row">
                     <span className="category-pie-charts__legend-dot" style={{ background: slice.color }} />
                     <span className="category-pie-charts__legend-name">{slice.name}</span>
                     <span className="category-pie-charts__legend-time">{formatDuration(slice.value)}</span>
