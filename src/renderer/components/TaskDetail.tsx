@@ -238,7 +238,7 @@ export function TaskDetail() {
     await refreshTodayTotal();
   };
 
-  const handleUpdateEntry = async (id: string, startTime: string, endTime: string, note: string) => {
+  const handleUpdateEntry = async (id: string, startTime: string, endTime: string | null, note: string) => {
     const updated = await window.api.timeEntries.update(id, { startTime, endTime, note });
     setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
     await loadSmartDefaults();

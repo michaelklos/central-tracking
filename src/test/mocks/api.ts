@@ -72,5 +72,9 @@ export function createMockApi(): CentralTrackingAPI {
     shell: {
       openExternal: vi.fn().mockResolvedValue(undefined),
     },
-  } as unknown as CentralTrackingAPI;
+    log: {
+      error: vi.fn(),
+      warn: vi.fn(),
+    },
+  };
 }

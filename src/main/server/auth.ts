@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -46,7 +47,11 @@ export function isValidToken(request: { headers: Record<string, string | string[
   const authHeader = request.headers['authorization'];
   if (typeof authHeader !== 'string') return false;
   const parts = authHeader.split(' ');
-  return parts.length === 2 && parts[0] === 'Bearer' && parts[1] === expectedToken;
+  if (parts.length !== 2 || parts[0] !== 'Bearer') return false;
+  const providedBuf = Buffer.from(parts[1]);
+  const expectedBuf = Buffer.from(expectedToken);
+  if (providedBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(providedBuf, expectedBuf);
 }
 
 export function isValidHost(request: { headers: Record<string, string | string[] | undefined> }, port: number): boolean {

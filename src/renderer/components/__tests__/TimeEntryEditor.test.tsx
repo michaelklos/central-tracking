@@ -174,6 +174,46 @@ describe('TimeEntryEditor - Edit Mode', () => {
   });
 });
 
+describe('TimeEntryEditor - Running Entry', () => {
+  const runningEntry = makeEntry({ endTime: null, durationSeconds: null, note: '' });
+  const defaultProps = {
+    entry: runningEntry,
+    allEntries: [runningEntry],
+    onSave: vi.fn().mockResolvedValue(undefined),
+    onCancel: vi.fn(),
+    onDelete: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('hides duration/end fields when editing a running entry', async () => {
+    const user = userEvent.setup();
+    render(<TimeEntryEditor {...defaultProps} />);
+    await user.click(screen.getAllByTitle('Click to edit')[0]);
+
+    expect(screen.getByTestId('entry-date')).toBeInTheDocument();
+    expect(screen.getByTestId('entry-start-time')).toBeInTheDocument();
+    expect(screen.queryByTestId('entry-duration')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('entry-end-time')).not.toBeInTheDocument();
+  });
+
+  it('saves with endTime: null when editing a running entry', async () => {
+    const user = userEvent.setup();
+    render(<TimeEntryEditor {...defaultProps} />);
+    await user.click(screen.getAllByTitle('Click to edit')[0]);
+    await user.click(screen.getByText('Save'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      'te-1',
+      expect.any(String),
+      null,
+      ''
+    );
+  });
+});
+
 describe('TimeEntryEditor - Create Mode', () => {
   const defaultProps = {
     mode: 'create' as const,

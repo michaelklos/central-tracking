@@ -224,7 +224,7 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .positional('ids', { type: 'string', array: true, demandOption: true, describe: 'UUID(s), prefix(es), or name(s)' })
             .option('status', { type: 'string', choices: TASK_STATUSES })
             .option('source', { type: 'string', choices: TASK_SOURCES })
-            .option('category', { type: 'string', array: true }),
+            .option('category', { type: 'string', array: true, describe: 'Category IDs to add to each task (additive; existing categories are preserved)' }),
         (argv) =>
           runCommand(argv, async ({ client }) => {
             const input: BatchUpdateInput = {};

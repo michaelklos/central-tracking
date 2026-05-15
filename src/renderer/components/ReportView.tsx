@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useReportContext } from '../context/ReportContext';
 import { useTaskContext } from '../context/TaskContext';
@@ -14,18 +14,20 @@ export function ReportView() {
 
   const [summaryData, setSummaryData] = useState<SummaryReportEntry[]>([]);
   const [copied, setCopied] = useState(false);
-
-  const loadReport = useCallback(async () => {
-    if (mode === 'categories') return;
-    const start = `${startDate}T00:00:00Z`;
-    const end = `${endDate}T23:59:59Z`;
-    const data = await window.api.timeEntries.getSummaryReport(start, end);
-    setSummaryData(data);
-  }, [startDate, endDate, mode]);
+  const loadGenerationRef = useRef(0);
 
   useEffect(() => {
-    loadReport();
-  }, [loadReport]);
+    if (mode === 'categories') return;
+    const myGeneration = ++loadGenerationRef.current;
+    const start = `${startDate}T00:00:00Z`;
+    const end = `${endDate}T23:59:59Z`;
+    (async () => {
+      const data = await window.api.timeEntries.getSummaryReport(start, end);
+      // Bail if a newer load has started while we awaited.
+      if (loadGenerationRef.current !== myGeneration) return;
+      setSummaryData(data);
+    })();
+  }, [startDate, endDate, mode]);
 
   const handleExportCsv = async () => {
     const start = `${startDate}T00:00:00Z`;
@@ -34,7 +36,7 @@ export function ReportView() {
   };
 
   // Filter summary data
-  const filteredSummary = summaryData.filter((entry) => {
+  const filteredSummary = useMemo(() => summaryData.filter((entry) => {
     if (filterStatuses.length > 0 && !filterStatuses.includes(entry.taskStatus)) return false;
     if (filterSources.length > 0 && !filterSources.includes(entry.taskSource)) return false;
     if (filterCategories.length > 0) {
@@ -42,7 +44,7 @@ export function ReportView() {
       if (!hasMatch) return false;
     }
     return true;
-  });
+  }), [summaryData, filterStatuses, filterSources, filterCategories]);
 
   const selectedCategoryNames = filterCategories
     .map((id) => categories.find((c) => c.id === id)?.name)
@@ -82,24 +84,26 @@ export function ReportView() {
     };
   })();
 
-  const fallbackColors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
-
-  // Map each task title to its first category color; fall back to palette for uncategorized tasks
-  const taskColorMap = new Map<string, string>();
-  for (const row of filteredSummary) {
-    if (!taskColorMap.has(row.taskTitle)) {
+  // Build the task→color map once per data change. Pure (no mutation during
+  // render), so colors stay stable across re-renders for the same data.
+  const taskColorMap = useMemo(() => {
+    const fallbackColors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+    const map = new Map<string, string>();
+    let fallbackIndex = 0;
+    for (const row of filteredSummary) {
+      if (map.has(row.taskTitle)) continue;
       const cat = categories.find((c) => row.categoryIds.includes(c.id));
-      if (cat) taskColorMap.set(row.taskTitle, cat.color);
+      if (cat) {
+        map.set(row.taskTitle, cat.color);
+      } else {
+        map.set(row.taskTitle, fallbackColors[fallbackIndex % fallbackColors.length]);
+        fallbackIndex++;
+      }
     }
-  }
-  let fallbackIndex = 0;
-  const taskColor = (name: string): string => {
-    if (taskColorMap.has(name)) return taskColorMap.get(name)!;
-    const color = fallbackColors[fallbackIndex % fallbackColors.length];
-    taskColorMap.set(name, color);
-    fallbackIndex++;
-    return color;
-  };
+    return map;
+  }, [filteredSummary, categories]);
+
+  const taskColor = (name: string): string => taskColorMap.get(name) ?? '#6366f1';
 
   const totalSeconds = filteredSummary.reduce((sum, r) => sum + r.totalSeconds, 0);
 

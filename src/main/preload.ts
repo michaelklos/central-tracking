@@ -1,24 +1,38 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type {
+  TaskQueryParams,
+  CreateTaskInput,
+  UpdateTaskInput,
+  BatchUpdateInput,
+  PaginationParams,
+  CreateTimeEntryInput,
+  UpdateTimeEntryInput,
+  CreateCommentInput,
+  UpdateCommentInput,
+  CreateCategoryInput,
+  UpdateCategoryInput,
+  ImportPreviewItem,
+} from '../shared/types';
 
 const api = {
   // Tasks
   tasks: {
     getAll: () => ipcRenderer.invoke('tasks:getAll'),
     getById: (id: string) => ipcRenderer.invoke('tasks:getById', id),
-    getActive: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
+    getActive: (params?: TaskQueryParams) =>
       ipcRenderer.invoke('tasks:getActive', params),
-    getActiveIds: (params?: { search?: string; status?: string; source?: string; categoryId?: string }) =>
+    getActiveIds: (params?: TaskQueryParams) =>
       ipcRenderer.invoke('tasks:getActiveIds', params),
-    getDone: (params?: { offset?: number; limit?: number; sortBy?: string }) =>
+    getDone: (params?: TaskQueryParams) =>
       ipcRenderer.invoke('tasks:getDone', params),
-    create: (task: unknown) => ipcRenderer.invoke('tasks:create', task),
-    update: (id: string, updates: unknown) => ipcRenderer.invoke('tasks:update', id, updates),
+    create: (task: CreateTaskInput) => ipcRenderer.invoke('tasks:create', task),
+    update: (id: string, updates: UpdateTaskInput) => ipcRenderer.invoke('tasks:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('tasks:delete', id),
     reorder: (orderedIds: string[]) => ipcRenderer.invoke('tasks:reorder', orderedIds),
-    batchUpdate: (ids: string[], input: unknown) =>
+    batchUpdate: (ids: string[], input: BatchUpdateInput) =>
       ipcRenderer.invoke('tasks:batchUpdate', ids, input),
     batchSoftDelete: (ids: string[]) => ipcRenderer.invoke('tasks:batchSoftDelete', ids),
-    getDeleted: (params?: { offset?: number; limit?: number }) =>
+    getDeleted: (params?: PaginationParams) =>
       ipcRenderer.invoke('tasks:getDeleted', params),
     restore: (id: string) => ipcRenderer.invoke('tasks:restore', id),
     batchRestore: (ids: string[]) => ipcRenderer.invoke('tasks:batchRestore', ids),
@@ -32,10 +46,10 @@ const api = {
   // Time entries
   timeEntries: {
     getByTask: (taskId: string) => ipcRenderer.invoke('timeEntries:getByTask', taskId),
-    getByTaskPaginated: (taskId: string, params?: { offset?: number; limit?: number }) =>
+    getByTaskPaginated: (taskId: string, params?: PaginationParams) =>
       ipcRenderer.invoke('timeEntries:getByTaskPaginated', taskId, params),
-    create: (entry: unknown) => ipcRenderer.invoke('timeEntries:create', entry),
-    update: (id: string, updates: unknown) => ipcRenderer.invoke('timeEntries:update', id, updates),
+    create: (entry: CreateTimeEntryInput) => ipcRenderer.invoke('timeEntries:create', entry),
+    update: (id: string, updates: UpdateTimeEntryInput) => ipcRenderer.invoke('timeEntries:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('timeEntries:delete', id),
     getActiveEntry: () => ipcRenderer.invoke('timeEntries:getActive'),
     stopActive: () => ipcRenderer.invoke('timeEntries:stopActive'),
@@ -53,16 +67,16 @@ const api = {
   // Comments
   comments: {
     getByTask: (taskId: string) => ipcRenderer.invoke('comments:getByTask', taskId),
-    create: (comment: unknown) => ipcRenderer.invoke('comments:create', comment),
-    update: (id: string, updates: unknown) => ipcRenderer.invoke('comments:update', id, updates),
+    create: (comment: CreateCommentInput) => ipcRenderer.invoke('comments:create', comment),
+    update: (id: string, updates: UpdateCommentInput) => ipcRenderer.invoke('comments:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('comments:delete', id),
   },
 
   // Categories
   categories: {
     getAll: () => ipcRenderer.invoke('categories:getAll'),
-    create: (category: unknown) => ipcRenderer.invoke('categories:create', category),
-    update: (id: string, updates: unknown) => ipcRenderer.invoke('categories:update', id, updates),
+    create: (category: CreateCategoryInput) => ipcRenderer.invoke('categories:create', category),
+    update: (id: string, updates: UpdateCategoryInput) => ipcRenderer.invoke('categories:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('categories:delete', id),
     assignToTask: (taskId: string, categoryIds: string[]) =>
       ipcRenderer.invoke('categories:assignToTask', taskId, categoryIds),
@@ -83,7 +97,7 @@ const api = {
   // Import
   import: {
     selectAndParse: () => ipcRenderer.invoke('import:selectAndParse'),
-    execute: (items: unknown[]) => ipcRenderer.invoke('import:execute', items),
+    execute: (items: ImportPreviewItem[]) => ipcRenderer.invoke('import:execute', items),
   },
 
   // CLI tool installation (Mac only; Windows handled by NSIS installer)

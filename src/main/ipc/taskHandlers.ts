@@ -363,8 +363,9 @@ export function batchUpdateTasks(db: Database, ids: string[], input: BatchUpdate
         db.instance.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).run(...values);
       }
 
+      // Additive: assigns these categories to each task without removing
+      // existing assignments. Use the per-task `updateTask` for replace-all.
       if (input.categoryIds !== undefined) {
-        db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(id);
         const insertCat = db.instance.prepare(
           'INSERT OR IGNORE INTO task_categories (task_id, category_id) VALUES (?, ?)'
         );

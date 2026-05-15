@@ -81,7 +81,7 @@ export function BatchActionBar() {
         </label>
 
         <label className="batch-bar__field">
-          <span>Category:</span>
+          <span>Add category:</span>
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
             <option value="">{'\u2014'} No change {'\u2014'}</option>
             {categories.map((cat) => (

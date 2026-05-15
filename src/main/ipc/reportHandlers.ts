@@ -3,6 +3,7 @@ import { dialog } from 'electron';
 import * as fs from 'fs';
 import type { Database } from '../database/database';
 import { generateCsvContent } from '../reports/csvGenerator';
+import { log } from '../logger';
 
 export { generateCsvContent } from '../reports/csvGenerator';
 
@@ -17,7 +18,12 @@ export function registerReportHandlers(ipcMain: IpcMain, db: Database): void {
     if (result.canceled || !result.filePath) return null;
 
     const csvContent = generateCsvContent(db, start, end);
-    fs.writeFileSync(result.filePath, csvContent, 'utf-8');
+    try {
+      fs.writeFileSync(result.filePath, csvContent, 'utf-8');
+    } catch (err) {
+      log.error('reports:exportCsv writeFile failed:', String(err));
+      throw new Error(`Failed to write CSV: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return result.filePath;
   });
 }

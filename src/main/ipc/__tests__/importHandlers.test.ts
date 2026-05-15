@@ -14,11 +14,16 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('fs', () => ({
-  readFileSync: vi.fn().mockReturnValue(
-    '# 2026-03-04\n* [TK-101] Fix login bug: 09:30 (1h 45m)\n* [12345] ADO work item: 11:00 (30m)\n* Meeting prep: 14:00 (45m)\n'
-  ),
-}));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  const mocked = {
+    ...actual,
+    readFileSync: vi.fn().mockReturnValue(
+      '# 2026-03-04\n* [TK-101] Fix login bug: 09:30 (1h 45m)\n* [12345] ADO work item: 11:00 (30m)\n* Meeting prep: 14:00 (45m)\n'
+    ),
+  };
+  return { ...mocked, default: mocked };
+});
 
 describe('Import IPC Handlers', () => {
   let db: Database;

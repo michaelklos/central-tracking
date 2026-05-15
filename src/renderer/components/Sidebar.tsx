@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useTaskContext, type TaskFilter } from '../context/TaskContext';
+import { useTaskContext } from '../context/TaskContext';
 import { useReportContext } from '../context/ReportContext';
 import { DateRangePicker } from './DateRangePicker';
 import { OptionsMenu } from './OptionsMenu';
@@ -231,10 +231,6 @@ export function Sidebar() {
     setImportPreview(null);
   };
 
-  const updateFilter = (partial: Partial<TaskFilter>) => {
-    setFilter({ ...filter, ...partial });
-  };
-
   // Determine which tab icon is visually active
   const tasksTabActive = !isOnSubpage && activeTab === 'tasks';
   const reportsTabActive = isOnReports;
@@ -331,19 +327,19 @@ export function Sidebar() {
                     label="Status"
                     options={STATUS_OPTIONS}
                     selected={filter.statuses ?? []}
-                    onChange={(v) => setFilter({ ...filter, statuses: v })}
+                    onChange={(v) => setFilter((prev) => ({ ...prev, statuses: v }))}
                   />
                   <MultiSelectDropdown
                     label="Source"
                     options={SOURCE_OPTIONS}
                     selected={filter.sources ?? []}
-                    onChange={(v) => setFilter({ ...filter, sources: v })}
+                    onChange={(v) => setFilter((prev) => ({ ...prev, sources: v }))}
                   />
                   <MultiSelectDropdown
                     label="Category"
                     options={categories.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
                     selected={filter.categoryIds ?? []}
-                    onChange={(v) => setFilter({ ...filter, categoryIds: v })}
+                    onChange={(v) => setFilter((prev) => ({ ...prev, categoryIds: v }))}
                   />
                   {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length) && (
                     <button

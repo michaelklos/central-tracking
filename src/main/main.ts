@@ -102,6 +102,18 @@ app.whenReady().then(() => {
     return mainWindow?.isAlwaysOnTop() ?? false;
   });
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    // Restrict to http(s) to prevent a compromised renderer from invoking
+    // file://, javascript:, or other dangerous URL schemes via the shell.
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        log.warn(`Refusing to open external URL with unsupported protocol: ${parsed.protocol}`);
+        return;
+      }
+    } catch {
+      log.warn(`Refusing to open external URL: malformed input`);
+      return;
+    }
     shell.openExternal(url);
   });
 

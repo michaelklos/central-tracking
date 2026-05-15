@@ -14,7 +14,7 @@ interface TimeEntryEditorBaseProps {
 interface EditModeProps extends TimeEntryEditorBaseProps {
   mode?: 'edit';
   entry: TimeEntry;
-  onSave: (id: string, startTime: string, endTime: string, note: string) => Promise<void>;
+  onSave: (id: string, startTime: string, endTime: string | null, note: string) => Promise<void>;
   onCancel: () => void;
   onCreate?: never;
   defaultStartTime?: never;
@@ -62,6 +62,9 @@ function computeDurationSeconds(startIso: string, endIso: string): number {
 
 export function TimeEntryEditor(props: TimeEntryEditorProps) {
   const isCreate = props.mode === 'create';
+  // A running entry has no endTime — duration is live, so we let the user edit
+  // only the start time and pass endTime: null through to the update IPC.
+  const isRunning = !isCreate && props.entry.endTime === null;
 
   const [editing, setEditing] = useState(isCreate);
 
@@ -104,18 +107,47 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
   };
 
   const handleSubmit = async () => {
-    const durSeconds = parseDuration(durationDraft);
-    if (durSeconds === null || durSeconds <= 0) {
-      setError('Invalid duration. Use formats like "30m", "1h30m", "1:30", or "90".');
-      return;
-    }
-
     if (!dateDraft || !timeDraft) {
       setError('Date and start time are required');
       return;
     }
 
     const startIso = combineDateTimeToISO(dateDraft, timeDraft);
+
+    if (isRunning) {
+      // Running entry: validate the new start is in the past and doesn't fall
+      // inside any other (completed) entry.
+      const startMs = new Date(startIso).getTime();
+      if (isNaN(startMs)) {
+        setError('Invalid date format');
+        return;
+      }
+      if (startMs > Date.now()) {
+        setError('Start time cannot be in the future');
+        return;
+      }
+      for (const other of props.allEntries) {
+        if (other.id === props.entry.id) continue;
+        if (!other.endTime) continue;
+        const oStart = new Date(other.startTime).getTime();
+        const oEnd = new Date(other.endTime).getTime();
+        if (startMs >= oStart && startMs < oEnd) {
+          setError('Start time overlaps with an existing time entry');
+          return;
+        }
+      }
+      await props.onSave(props.entry.id, startIso, null, noteDraft);
+      setEditing(false);
+      setError('');
+      return;
+    }
+
+    const durSeconds = parseDuration(durationDraft);
+    if (durSeconds === null || durSeconds <= 0) {
+      setError('Invalid duration. Use formats like "30m", "1h30m", "1:30", or "90".');
+      return;
+    }
+
     const endIso = computeEndTime(startIso, durSeconds);
 
     const validation = validateTimeEntry(
@@ -189,24 +221,26 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
               />
             </div>
           </div>
-          <div className="time-entry-editor__datetime-row">
-            <div className="time-entry-editor__row">
-              <label>Duration</label>
-              <input
-                type="text"
-                value={durationDraft}
-                onChange={(e) => setDurationDraft(e.target.value)}
-                placeholder='e.g. "30m", "1h30m", "1:30"'
-                data-testid="entry-duration"
-              />
+          {!isRunning && (
+            <div className="time-entry-editor__datetime-row">
+              <div className="time-entry-editor__row">
+                <label>Duration</label>
+                <input
+                  type="text"
+                  value={durationDraft}
+                  onChange={(e) => setDurationDraft(e.target.value)}
+                  placeholder='e.g. "30m", "1h30m", "1:30"'
+                  data-testid="entry-duration"
+                />
+              </div>
+              <div className="time-entry-editor__row">
+                <label>End</label>
+                <span className="time-entry-editor__end-display" data-testid="entry-end-time">
+                  {computedEndDisplay || '—'}
+                </span>
+              </div>
             </div>
-            <div className="time-entry-editor__row">
-              <label>End</label>
-              <span className="time-entry-editor__end-display" data-testid="entry-end-time">
-                {computedEndDisplay || '—'}
-              </span>
-            </div>
-          </div>
+          )}
           <div className="time-entry-editor__row">
             <label>Note</label>
             <input

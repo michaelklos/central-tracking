@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDuration } from '../utils/time';
 import type { Category, SummaryReportEntry } from '../../shared/types';
@@ -105,24 +105,27 @@ export function CategoryPieCharts({ categories }: Props) {
     );
   };
 
-  const loadPanelData = useCallback(async () => {
-    const results: Record<number, SummaryReportEntry[]> = {};
-    for (let i = 0; i < PANELS.length; i++) {
-      const override = panelOverrides[i];
-      const start = override ? override.start : PANELS[i].defaultStart();
-      const end = override ? override.end : PANELS[i].defaultEnd();
-      const data = await window.api.timeEntries.getSummaryReport(
-        `${start}T00:00:00Z`,
-        `${end}T23:59:59Z`
-      );
-      results[i] = data;
-    }
-    setPanelData(results);
-  }, [panelOverrides]);
-
+  const loadGenerationRef = useRef(0);
   useEffect(() => {
-    loadPanelData();
-  }, [loadPanelData]);
+    const myGeneration = ++loadGenerationRef.current;
+    (async () => {
+      const results: Record<number, SummaryReportEntry[]> = {};
+      for (let i = 0; i < PANELS.length; i++) {
+        const override = panelOverrides[i];
+        const start = override ? override.start : PANELS[i].defaultStart();
+        const end = override ? override.end : PANELS[i].defaultEnd();
+        const data = await window.api.timeEntries.getSummaryReport(
+          `${start}T00:00:00Z`,
+          `${end}T23:59:59Z`
+        );
+        // Bail if a newer load has started while we awaited.
+        if (loadGenerationRef.current !== myGeneration) return;
+        results[i] = data;
+      }
+      if (loadGenerationRef.current !== myGeneration) return;
+      setPanelData(results);
+    })();
+  }, [panelOverrides]);
 
   const toggleDateOverride = (panelIndex: number) => {
     setExpandedOverrides((prev) => {

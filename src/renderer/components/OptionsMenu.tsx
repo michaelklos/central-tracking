@@ -110,18 +110,20 @@ export function OptionsMenu() {
   });
 
   const toggleOption = (key: string) => {
-    const newValue = !values[key];
-    setValues({ ...values, [key]: newValue });
-    localStorage.setItem(key, String(newValue));
+    setValues((prev) => {
+      const newValue = !prev[key];
+      localStorage.setItem(key, String(newValue));
+      return { ...prev, [key]: newValue };
+    });
   };
 
   const updateGeneralSetting = (key: string, value: string) => {
-    setGeneralValues({ ...generalValues, [key]: value });
+    setGeneralValues((prev) => ({ ...prev, [key]: value }));
     localStorage.setItem(key, value);
   };
 
   const updateTimelineSetting = (key: string, value: string) => {
-    setTimelineValues({ ...timelineValues, [key]: value });
+    setTimelineValues((prev) => ({ ...prev, [key]: value }));
     localStorage.setItem(key, value);
   };
 

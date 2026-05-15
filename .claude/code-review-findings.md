@@ -83,69 +83,7 @@ revisited:
 
 ## HIGH — open
 
-1. `src/main/preload.ts:8-13` — `getActive`/`getDone` inline param type omits filter
-   fields (`search`, `searchIn`, `status`, `source`, `categoryId`). This is the type
-   hole that hid the calibration bug. Fix: `import { TaskQueryParams } from
-   '../shared/types'` and use it directly.
-2. `src/main/preload.ts:10-11` — `getActiveIds` declares singular `status: string` /
-   `source: string` / `categoryId: string`, but renderer passes arrays. Same fix as
-   #1.
-3. `src/main/preload.ts` (multiple lines: ~14, 15, 18, 37, 38, 56, 57, 65, 66, 86) —
-   `create`, `update`, `batchUpdate`, `timeEntries.create`/`update`, `comments.create`,
-   `categories.create`/`update`, `import.execute` all type payloads as `unknown`,
-   erasing renderer type info at the IPC boundary. Fix: import and apply the
-   `Create*Input`/`Update*Input` interfaces from `shared/types`.
-4. `src/renderer/components/Sidebar.tsx:252, 351, 357, 363, 368` — Five
-   `setFilter({...filter, ...})` stale-closure sites identical to the search-debounce
-   one already fixed. Convert all to `setFilter(prev => ({...prev, ...}))`.
-5. `src/renderer/components/BatchActionBar.tsx:43` + `src/main/ipc/taskHandlers.ts:366-373`
-   — Picking a category in batch mode passes `categoryIds: [categoryId]`; the handler
-   `DELETE`s all existing `task_categories` rows for each task before re-inserting.
-   Users silently lose every other category assignment. Fix: change semantics to "add
-   this category" (INSERT OR IGNORE without the DELETE) and add a separate "replace
-   all" verb if that case is needed. Coordinate UI text so the user knows which one
-   they're invoking.
-6. `src/test/mocks/api.ts` — mock is missing `log: { error, warn }`.
-   `ErrorBoundary.componentDidCatch` calls `window.api.log.error(...)`; any test
-   that surfaces an error crashes with "Cannot read properties of undefined". Fix:
-   add the log property to the mock and drop the `as unknown as CentralTrackingAPI`
-   cast.
-7. `src/main/main.ts:104-106` — `shell:openExternal` accepts any URL. Allows
-   `file://`, `javascript:`, etc. from a compromised renderer. Fix: enforce `http(s):`
-   only; log + reject everything else.
-8. `src/main/server/auth.ts:45-50` — `isValidToken` uses plain `===` (timing-leaky).
-   Defense in depth even though server is loopback-only. Fix: use
-   `crypto.timingSafeEqual` on equal-length buffers (check length first to avoid
-   throwing).
-9. `src/renderer/components/ReportView.tsx:88-102` — `taskColorMap` is constructed
-   AND mutated during render (`.set()` and `fallbackIndex++` inside JSX-traversal
-   callback). Render is impure → colors can shift between renders. Fix: `useMemo`
-   over `filteredSummary` to build the map once per data change; don't mutate
-   during traversal.
-10. `src/renderer/components/ReportView.tsx:18-28` + `CategoryPieCharts.tsx:108-125`
-    — Report-load async ops with no cancellation; rapid date-range changes can
-    overwrite newer dataset with older response. Same family as the calibration
-    TaskDetail bug. Fix: generation counter or AbortController.
-11. `src/main/ipc/importHandlers.ts:21` and `src/main/ipc/reportHandlers.ts:20` —
-    `fs.readFileSync`/`fs.writeFileSync` unwrapped; disk errors become uncaught
-    rejections in the IPC reply. Fix: try/catch and return the project's standard
-    `{ ok: false, error }` shape.
-12. `src/renderer/components/OptionsMenu.tsx:112-126` — `setValues({...values,
-    [key]: x})` stale-closure pattern. Two rapid setting toggles can lose one. Fix:
-    functional `setValues(prev => ({...prev, [key]: x}))`.
-13. `src/renderer/components/TimeEntryEditor.tsx:95-110` — Editing a **running** time
-    entry (no `endTime`) is blocked. `handleEdit` at line 95-100 sets
-    `durationDraft = ''` when `entry.endTime` is null; `handleSubmit` at line 107-110
-    then fails `parseDuration('')` and shows "Invalid duration. Use formats like
-    '30m'..." even when the user only wanted to nudge the start time. Fix options:
-    (a) when `mode === 'edit'` and the entry has no `endTime`, hide the duration
-    field and update only `startTime` (passing `endTime: null` through to
-    `window.api.timeEntries.update`); (b) when the user edits start time of a
-    running entry, also re-anchor `start_time` of the LIVE entry. Verify the IPC
-    `timeEntries.update` handler at `src/main/ipc/timeEntryHandlers.ts` already
-    accepts `endTime: null` (or supports a partial update without `endTime`); if
-    not, extend it. Add a test for "edit start time of running entry then resume,
-    elapsed reflects the new anchor."
+(none — all items closed 2026-05-14)
 
 ## MEDIUM — open
 

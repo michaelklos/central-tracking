@@ -316,6 +316,22 @@ describe('Task IPC Handlers', () => {
       expect(updated.categoryIds).toContain(cat.id);
     });
 
+    it('batchUpdate preserves existing categories (additive)', async () => {
+      const catIpc = createMockIpcMain();
+      const { registerCategoryHandlers } = await import('../categoryHandlers');
+      registerCategoryHandlers(catIpc as never, db);
+
+      const catA = await catIpc.invoke('categories:create', { name: 'Cat A' });
+      const catB = await catIpc.invoke('categories:create', { name: 'Cat B' });
+      const t1 = await ipc.invoke('tasks:create', { title: 'Multi Cat', categoryIds: [catA.id] });
+
+      await ipc.invoke('tasks:batchUpdate', [t1.id], { categoryIds: [catB.id] });
+
+      const updated = await ipc.invoke('tasks:getById', t1.id);
+      expect(updated.categoryIds).toEqual(expect.arrayContaining([catA.id, catB.id]));
+      expect(updated.categoryIds).toHaveLength(2);
+    });
+
     it('batchSoftDelete soft-deletes multiple tasks', async () => {
       const t1 = await ipc.invoke('tasks:create', { title: 'Del 1' });
       const t2 = await ipc.invoke('tasks:create', { title: 'Del 2' });
