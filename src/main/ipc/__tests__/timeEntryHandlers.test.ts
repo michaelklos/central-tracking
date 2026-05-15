@@ -107,6 +107,113 @@ describe('TimeEntry IPC Handlers', () => {
     expect(active.startTime).toBe(newStart);
   });
 
+  describe('reportedAt round-trip', () => {
+    it('update sets reportedAt to a timestamp', async () => {
+      const entry = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:30:00.000Z',
+      });
+      expect(entry.reportedAt).toBeNull();
+
+      const ts = '2026-05-13T09:00:00.000Z';
+      const updated = await ipc.invoke('timeEntries:update', entry.id, { reportedAt: ts });
+      expect(updated.reportedAt).toBe(ts);
+    });
+
+    it('update with reportedAt: null unsets the timestamp', async () => {
+      const entry = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:30:00.000Z',
+      });
+      await ipc.invoke('timeEntries:update', entry.id, { reportedAt: '2026-05-13T09:00:00.000Z' });
+      const cleared = await ipc.invoke('timeEntries:update', entry.id, { reportedAt: null });
+      expect(cleared.reportedAt).toBeNull();
+    });
+
+    it('markTaskReported with a timestamp marks only unreported entries, preserving prior reports', async () => {
+      const old = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:30:00.000Z',
+      });
+      // Pre-report this one with an "old" timestamp.
+      const oldTs = '2026-05-12T17:00:00.000Z';
+      await ipc.invoke('timeEntries:update', old.id, { reportedAt: oldTs });
+
+      const fresh = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-13T10:00:00.000Z',
+        endTime: '2026-05-13T10:30:00.000Z',
+      });
+
+      const newTs = '2026-05-13T17:00:00.000Z';
+      const result = await ipc.invoke('timeEntries:markTaskReported', testTaskId, newTs);
+      expect(result.changed).toBe(1);
+
+      const refreshedOld = (await ipc.invoke('timeEntries:getByTask', testTaskId)).find(
+        (e: { id: string }) => e.id === old.id,
+      );
+      const refreshedFresh = (await ipc.invoke('timeEntries:getByTask', testTaskId)).find(
+        (e: { id: string }) => e.id === fresh.id,
+      );
+      expect(refreshedOld.reportedAt).toBe(oldTs); // unchanged
+      expect(refreshedFresh.reportedAt).toBe(newTs); // newly reported
+    });
+
+    it('markTaskReported with null unsets reportedAt on every entry of the task', async () => {
+      const e1 = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:30:00.000Z',
+      });
+      const e2 = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-13T10:00:00.000Z',
+        endTime: '2026-05-13T10:30:00.000Z',
+      });
+      await ipc.invoke('timeEntries:update', e1.id, { reportedAt: '2026-05-12T17:00:00.000Z' });
+      await ipc.invoke('timeEntries:update', e2.id, { reportedAt: '2026-05-13T17:00:00.000Z' });
+
+      const result = await ipc.invoke('timeEntries:markTaskReported', testTaskId, null);
+      expect(result.changed).toBe(2);
+
+      const all = await ipc.invoke('timeEntries:getByTask', testTaskId);
+      expect(all.every((e: { reportedAt: string | null }) => e.reportedAt === null)).toBe(true);
+    });
+
+    it('recurring scenario: log → mark reported → log again → task has unreported time for the new entry only', async () => {
+      // Week 1: log 30m on the recurring task and report it.
+      const week1 = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-05T10:00:00.000Z',
+        endTime: '2026-05-05T10:30:00.000Z',
+      });
+      await ipc.invoke('timeEntries:markTaskReported', testTaskId, '2026-05-09T17:00:00.000Z');
+      const week1After = (await ipc.invoke('timeEntries:getByTask', testTaskId)).find(
+        (e: { id: string }) => e.id === week1.id,
+      );
+      expect(week1After.reportedAt).toBe('2026-05-09T17:00:00.000Z');
+
+      // Week 2: log another 45m. Should NOT be marked reported.
+      const week2 = await ipc.invoke('timeEntries:create', {
+        taskId: testTaskId,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:45:00.000Z',
+      });
+      expect(week2.reportedAt).toBeNull();
+
+      // Aggregate on the task should now show 45m unreported.
+      const taskIpc = createMockIpcMain();
+      const { registerTaskHandlers } = await import('../taskHandlers');
+      registerTaskHandlers(taskIpc as never, db);
+      const task = await taskIpc.invoke('tasks:getById', testTaskId);
+      expect(task.hasUnreportedTime).toBe(true);
+      expect(task.unreportedTimeSeconds).toBe(45 * 60);
+    });
+  });
+
   it('deletes an entry', async () => {
     const entry = await ipc.invoke('timeEntries:create', { taskId: testTaskId });
     await ipc.invoke('timeEntries:delete', entry.id);

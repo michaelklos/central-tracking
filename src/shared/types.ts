@@ -22,6 +22,10 @@ export interface Task {
   totalTimeSeconds: number;
   /** Time tracked today in seconds (computed from time entries) */
   todayTimeSeconds: number;
+  /** Sum of seconds in time entries that have not been reported externally. */
+  unreportedTimeSeconds: number;
+  /** Convenience: unreportedTimeSeconds > 0. */
+  hasUnreportedTime: boolean;
   /** Category/label IDs assigned to this task */
   categoryIds: string[];
   /** Free-form notes for the task */
@@ -67,6 +71,9 @@ export interface TimeEntry {
   endTime: string | null;
   durationSeconds: number | null;
   note: string;
+  /** Timestamp the time entry was marked as reported to an external system
+   * (e.g. ADO worklog). Null = not yet reported. */
+  reportedAt: string | null;
   createdAt: string;
 }
 
@@ -81,6 +88,8 @@ export interface UpdateTimeEntryInput {
   startTime?: string;
   endTime?: string | null;
   note?: string;
+  /** undefined = no change; null = unset; string = set to this ISO timestamp. */
+  reportedAt?: string | null;
 }
 
 // ─── Comment ─────────────────────────────────────────────────────────────────
@@ -153,6 +162,10 @@ export interface TaskFilterParams {
   status?: string | string[];
   source?: string | string[];
   categoryId?: string | string[];
+  /** Include only tasks that have at least one un-reported time entry. */
+  hasUnreportedTime?: boolean;
+  /** Include only tasks that have no categories assigned. */
+  uncategorized?: boolean;
 }
 
 export type TaskQueryParams = PaginationParams & TaskFilterParams & { sortBy?: TaskSortBy };
@@ -305,6 +318,13 @@ export interface CentralTrackingAPI {
     getReport(start: string, end: string): Promise<TimeEntryReport[]>;
     getSummaryReport(start: string, end: string): Promise<SummaryReportEntry[]>;
     getByDateRangeWithTasks(start: string, end: string): Promise<TimeEntryWithTask[]>;
+    /**
+     * Bulk-set reportedAt for all time entries on a task. Pass an ISO
+     * timestamp to mark unreported entries as reported (preserves any prior
+     * reportedAt on already-reported entries). Pass null to unset all entries
+     * on the task. Returns the count of rows changed.
+     */
+    markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;

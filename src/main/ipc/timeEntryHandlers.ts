@@ -10,6 +10,7 @@ interface TimeEntryRow {
   end_time: string | null;
   duration_seconds: number | null;
   note: string;
+  reported_at: string | null;
   created_at: string;
 }
 
@@ -21,6 +22,7 @@ function rowToTimeEntry(row: TimeEntryRow): TimeEntry {
     endTime: row.end_time,
     durationSeconds: row.duration_seconds,
     note: row.note,
+    reportedAt: row.reported_at,
     createdAt: row.created_at,
   };
 }
@@ -123,6 +125,10 @@ export function updateTimeEntry(db: Database, id: string, updates: UpdateTimeEnt
   if (updates.note !== undefined) {
     sets.push('note = ?');
     values.push(updates.note);
+  }
+  if (updates.reportedAt !== undefined) {
+    sets.push('reported_at = ?');
+    values.push(updates.reportedAt);
   }
 
   if (sets.length > 0) {
@@ -267,6 +273,32 @@ export function getTimeEntriesByDateRangeWithTasks(db: Database, start: string, 
   }));
 }
 
+/**
+ * Bulk-set reported_at on every time entry of a task.
+ *
+ * - `reportedAt: string` (ISO timestamp) → mark only the currently UNREPORTED
+ *   entries. This preserves the original timestamp on already-reported entries
+ *   (e.g. for a recurring task that you've reported partial weeks of).
+ * - `reportedAt: null` → unset reported_at on every entry of the task,
+ *   restoring them to "not yet reported."
+ *
+ * Returns the count of rows changed.
+ */
+export function markTaskEntriesReported(
+  db: Database,
+  taskId: string,
+  reportedAt: string | null,
+): { changed: number } {
+  const result = reportedAt === null
+    ? db.instance
+        .prepare('UPDATE time_entries SET reported_at = NULL WHERE task_id = ? AND reported_at IS NOT NULL')
+        .run(taskId)
+    : db.instance
+        .prepare('UPDATE time_entries SET reported_at = ? WHERE task_id = ? AND reported_at IS NULL')
+        .run(reportedAt, taskId);
+  return { changed: result.changes };
+}
+
 export function stopActiveTimeEntry(db: Database): TimeEntry | null {
   const active = db.instance
     .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
@@ -303,4 +335,5 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
   ipcMain.handle('timeEntries:getSummaryReport', (_event, start: string, end: string) => getSummaryReport(db, start, end));
   ipcMain.handle('timeEntries:getByDateRangeWithTasks', (_event, start: string, end: string) => getTimeEntriesByDateRangeWithTasks(db, start, end));
   ipcMain.handle('timeEntries:stopActive', () => stopActiveTimeEntry(db));
+  ipcMain.handle('timeEntries:markTaskReported', (_event, taskId: string, reportedAt: string | null) => markTaskEntriesReported(db, taskId, reportedAt));
 }

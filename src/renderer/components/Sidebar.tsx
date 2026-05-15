@@ -341,7 +341,33 @@ export function Sidebar() {
                     selected={filter.categoryIds ?? []}
                     onChange={(v) => setFilter((prev) => ({ ...prev, categoryIds: v }))}
                   />
-                  {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length) && (
+                  <label className="sidebar__toggle-row" title="Hide tasks whose time entries are all reported">
+                    <input
+                      type="checkbox"
+                      checked={filter.hasUnreportedTime ?? false}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          hasUnreportedTime: e.target.checked ? true : undefined,
+                        }))
+                      }
+                    />
+                    <span>Only show unreported time</span>
+                  </label>
+                  <label className="sidebar__toggle-row" title="Show only tasks with no categories">
+                    <input
+                      type="checkbox"
+                      checked={filter.uncategorized ?? false}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          uncategorized: e.target.checked ? true : undefined,
+                        }))
+                      }
+                    />
+                    <span>Only show uncategorized</span>
+                  </label>
+                  {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length || filter.hasUnreportedTime || filter.uncategorized) && (
                     <button
                       className="sidebar__clear-filters"
                       onClick={() => { setFilter({}); setLocalSearch(''); }}

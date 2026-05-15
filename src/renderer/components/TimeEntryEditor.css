@@ -125,3 +125,32 @@
 .time-entry__edit:hover {
   color: var(--color-primary);
 }
+
+.time-entry__report-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0;
+}
+
+.time-entry__report-chip--done {
+  background: var(--color-success-bg, #d4edda);
+  color: var(--color-success, #155724);
+  border-color: var(--color-success, #155724);
+}
+
+.time-entry__report-chip--pending {
+  opacity: 0.4;
+}
+
+.time-entry__report-chip--pending:hover {
+  opacity: 1;
+}

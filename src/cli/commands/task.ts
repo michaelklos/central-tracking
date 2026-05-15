@@ -26,6 +26,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .option('status', { type: 'string', describe: 'Filter by status' })
             .option('source', { type: 'string', describe: 'Filter by source' })
             .option('category', { type: 'string', describe: 'Filter by category ID' })
+            .option('has-unreported', { type: 'boolean', describe: 'Show only tasks with un-reported time entries' })
+            .option('uncategorized', { type: 'boolean', describe: 'Show only tasks with no categories assigned' })
             .option('sort', { type: 'string', describe: 'Sort: manual|recent|created|alphabetical|most-time-today' })
             .option('limit', { type: 'number', default: 50, describe: 'Max results' })
             .option('offset', { type: 'number', default: 0, describe: 'Skip results' })
@@ -49,6 +51,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
             if (argv.status) params.status = argv.status;
             if (argv.source) params.source = argv.source;
             if (argv.category) params.categoryId = argv.category;
+            if (argv['has-unreported']) params.hasUnreportedTime = true;
+            if (argv.uncategorized) params.uncategorized = true;
 
             const result = argv.deleted
               ? await client.tasks.getDeleted({ offset: argv.offset, limit: argv.limit })
@@ -235,6 +239,32 @@ export function registerTaskCommands(yargs: Argv): Argv {
             const ids = argv.ids as string[];
             const result = await client.tasks.batchUpdate(ids, input);
             say(`Updated ${result.updatedCount} tasks`);
+          }),
+      )
+      .command(
+        'report <id>',
+        'Mark all un-reported time entries on a task as reported',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const result = await client.timeEntries.markTaskReported(
+              argv.id as string,
+              new Date().toISOString(),
+            );
+            output(argv, result, (r) => `Marked ${r.changed} entr${r.changed === 1 ? 'y' : 'ies'} as reported`);
+          }),
+      )
+      .command(
+        'unreport <id>',
+        'Reset reported state on every time entry of a task',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true, describe: 'UUID, prefix, or name substring' }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const result = await client.timeEntries.markTaskReported(
+              argv.id as string,
+              null,
+            );
+            output(argv, result, (r) => `Reset ${r.changed} entr${r.changed === 1 ? 'y' : 'ies'} to unreported`);
           }),
       )
       .demandCommand(1, 'Specify a task subcommand')

@@ -45,6 +45,17 @@ function rowToTask(db: Database, row: TaskRow): Task {
     )
     .get(row.id) as { total: number };
 
+  const unreportedTime = db.instance
+    .prepare(
+      `SELECT COALESCE(SUM(
+        CASE WHEN end_time IS NOT NULL
+          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
+          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+        END
+      ), 0) as total FROM time_entries WHERE task_id = ? AND reported_at IS NULL`
+    )
+    .get(row.id) as { total: number };
+
   return {
     id: row.id,
     title: row.title,
@@ -56,6 +67,8 @@ function rowToTask(db: Database, row: TaskRow): Task {
     sortOrder: row.sort_order,
     totalTimeSeconds: totalTime.total,
     todayTimeSeconds: todayTime.total,
+    unreportedTimeSeconds: unreportedTime.total,
+    hasUnreportedTime: unreportedTime.total > 0,
     categoryIds: catRows.map((r) => r.category_id),
     notes: row.notes ?? '',
     deletedAt: row.deleted_at,
@@ -122,6 +135,21 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
     const placeholders = categoryIds.map(() => '?').join(', ');
     clauses.push(`id IN (SELECT task_id FROM task_categories WHERE category_id IN (${placeholders}))`);
     values.push(...categoryIds);
+  }
+
+  if (params?.hasUnreportedTime === true) {
+    // Include only tasks that have at least one un-reported time entry.
+    // Tasks with no entries at all are excluded (nothing to report).
+    clauses.push(
+      `EXISTS (SELECT 1 FROM time_entries WHERE task_id = tasks.id AND reported_at IS NULL)`,
+    );
+  }
+
+  if (params?.uncategorized === true) {
+    // Include only tasks that have no categories assigned.
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM task_categories WHERE task_id = tasks.id)`,
+    );
   }
 
   return { clauses, values };

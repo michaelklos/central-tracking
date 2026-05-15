@@ -473,3 +473,19 @@
   color: var(--color-text);
   background: var(--color-surface-hover);
 }
+
+.sidebar__toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text);
+  padding: 4px 2px;
+}
+
+.sidebar__toggle-row input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+}

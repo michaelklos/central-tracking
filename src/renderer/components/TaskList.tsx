@@ -456,6 +456,23 @@ export function TaskList() {
                             {(task.notes ?? '').length > 0 && (
                               <span className="task-item__notes-badge" title="Has notes">&#128221;</span>
                             )}
+                            {task.totalTimeSeconds > 0 && (
+                              task.hasUnreportedTime ? (
+                                <span
+                                  className="task-item__report-chip task-item__report-chip--pending"
+                                  title={`${formatDuration(task.unreportedTimeSeconds)} not yet reported`}
+                                >
+                                  ⚠
+                                </span>
+                              ) : (
+                                <span
+                                  className="task-item__report-chip task-item__report-chip--done"
+                                  title="All time entries reported"
+                                >
+                                  ✓
+                                </span>
+                              )
+                            )}
                           </div>
                         </div>
                       </div>

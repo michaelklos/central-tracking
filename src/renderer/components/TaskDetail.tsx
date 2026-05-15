@@ -255,6 +255,33 @@ export function TaskDetail() {
     }
   };
 
+  const handleToggleEntryReported = async (id: string, reportedAt: string | null) => {
+    try {
+      setActionError(null);
+      const updated = await window.api.timeEntries.update(id, { reportedAt });
+      setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      await refreshActiveTasks();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to update reported state: ${msg}`);
+      window.api.log.error(`TaskDetail.handleToggleEntryReported: ${msg}`);
+    }
+  };
+
+  const handleMarkReported = async () => {
+    try {
+      setActionError(null);
+      await window.api.timeEntries.markTaskReported(task.id, new Date().toISOString());
+      await loadTimeEntries();
+      await refreshActiveTasks();
+      await refreshTodayTotal();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to mark reported: ${msg}`);
+      window.api.log.error(`TaskDetail.handleMarkReported: ${msg}`);
+    }
+  };
+
   const handleTimerToggle = async () => {
     try {
       setActionError(null);
@@ -357,6 +384,29 @@ export function TaskDetail() {
             {running ? '■ Stop' : '▶ Start'}
           </button>
         </div>
+
+        {task.totalTimeSeconds > 0 && (
+          <div className="task-detail__report-state">
+            {task.hasUnreportedTime ? (
+              <>
+                <span className="task-detail__report-chip task-detail__report-chip--pending">
+                  ⚠ {formatDuration(task.unreportedTimeSeconds)} unreported
+                </span>
+                <button
+                  className="task-detail__report-btn"
+                  onClick={handleMarkReported}
+                  title="Mark all un-reported entries on this task as reported"
+                >
+                  Mark as reported
+                </button>
+              </>
+            ) : (
+              <span className="task-detail__report-chip task-detail__report-chip--done">
+                ✓ Reported
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="task-detail__tabs">
@@ -469,6 +519,7 @@ export function TaskDetail() {
                 onCancel={() => {}}
                 onDelete={handleDeleteTimeEntry}
                 onNavigateToTimeline={handleNavigateToTimeline}
+                onReportedToggle={handleToggleEntryReported}
               />
             ))}
             {showScrollSentinel && (

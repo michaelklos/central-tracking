@@ -371,4 +371,86 @@ describe('Task IPC Handlers', () => {
     const updated = await ipc.invoke('tasks:update', task.id, { source: 'email' });
     expect(updated.source).toBe('email');
   });
+
+  // ─── Reported-state aggregate + filter ─────────────────────────────
+
+  describe('reported-state aggregate', () => {
+    let timeIpc: ReturnType<typeof createMockIpcMain>;
+    beforeEach(async () => {
+      timeIpc = createMockIpcMain();
+      const { registerTimeEntryHandlers } = await import('../timeEntryHandlers');
+      registerTimeEntryHandlers(timeIpc as never, db);
+    });
+
+    it('rowToTask returns unreportedTimeSeconds equal to sum of unreported entries', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Recurring meeting' });
+      // 30 minutes — reported
+      const entryA = await timeIpc.invoke('timeEntries:create', {
+        taskId: task.id,
+        startTime: '2026-05-12T13:00:00.000Z',
+        endTime: '2026-05-12T13:30:00.000Z',
+      });
+      await timeIpc.invoke('timeEntries:update', entryA.id, {
+        reportedAt: '2026-05-12T17:00:00.000Z',
+      });
+      // 45 minutes — unreported
+      await timeIpc.invoke('timeEntries:create', {
+        taskId: task.id,
+        startTime: '2026-05-13T13:00:00.000Z',
+        endTime: '2026-05-13T13:45:00.000Z',
+      });
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      expect(refreshed.unreportedTimeSeconds).toBe(45 * 60);
+      expect(refreshed.hasUnreportedTime).toBe(true);
+      expect(refreshed.totalTimeSeconds).toBe((30 + 45) * 60);
+    });
+
+    it('hasUnreportedTime=true filter excludes tasks whose entries are all reported', async () => {
+      const fullyReported = await ipc.invoke('tasks:create', { title: 'All Reported' });
+      const partial = await ipc.invoke('tasks:create', { title: 'Has Unreported' });
+
+      const e1 = await timeIpc.invoke('timeEntries:create', {
+        taskId: fullyReported.id,
+        startTime: '2026-05-12T10:00:00.000Z',
+        endTime: '2026-05-12T10:30:00.000Z',
+      });
+      await timeIpc.invoke('timeEntries:update', e1.id, {
+        reportedAt: '2026-05-13T09:00:00.000Z',
+      });
+      await timeIpc.invoke('timeEntries:create', {
+        taskId: partial.id,
+        startTime: '2026-05-12T11:00:00.000Z',
+        endTime: '2026-05-12T11:30:00.000Z',
+      });
+
+      const filtered = await ipc.invoke('tasks:getActive', { hasUnreportedTime: true });
+      const titles = filtered.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('Has Unreported');
+      expect(titles).not.toContain('All Reported');
+    });
+
+    it('hasUnreportedTime=true filter excludes tasks with no time entries at all', async () => {
+      await ipc.invoke('tasks:create', { title: 'Empty' });
+      const filtered = await ipc.invoke('tasks:getActive', { hasUnreportedTime: true });
+      expect(filtered.items.find((t: { title: string }) => t.title === 'Empty')).toBeUndefined();
+    });
+  });
+
+  describe('uncategorized filter', () => {
+    it('uncategorized=true returns only tasks with zero categories', async () => {
+      const catIpc = createMockIpcMain();
+      const { registerCategoryHandlers } = await import('../categoryHandlers');
+      registerCategoryHandlers(catIpc as never, db);
+      const cat = await catIpc.invoke('categories:create', { name: 'Has Cat' });
+
+      await ipc.invoke('tasks:create', { title: 'Naked' });
+      await ipc.invoke('tasks:create', { title: 'Clothed', categoryIds: [cat.id] });
+
+      const filtered = await ipc.invoke('tasks:getActive', { uncategorized: true });
+      const titles = filtered.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('Naked');
+      expect(titles).not.toContain('Clothed');
+    });
+  });
 });

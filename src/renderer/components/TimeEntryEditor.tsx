@@ -9,6 +9,9 @@ interface TimeEntryEditorBaseProps {
   allEntries: TimeEntry[];
   onDelete?: (id: string) => void;
   onNavigateToTimeline?: (date: string) => void;
+  /** Toggle the reportedAt state for this entry. Pass an ISO timestamp to
+   *  mark reported; pass null to unmark. Only meaningful in edit mode. */
+  onReportedToggle?: (id: string, reportedAt: string | null) => Promise<void>;
 }
 
 interface EditModeProps extends TimeEntryEditorBaseProps {
@@ -301,6 +304,15 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
         >
           {entry.durationSeconds != null ? formatDuration(entry.durationSeconds) : 'active'}
         </span>
+        {props.onReportedToggle && (
+          <button
+            className={`time-entry__report-chip ${entry.reportedAt ? 'time-entry__report-chip--done' : 'time-entry__report-chip--pending'}`}
+            onClick={() => props.onReportedToggle!(entry.id, entry.reportedAt ? null : new Date().toISOString())}
+            title={entry.reportedAt ? `Reported ${new Date(entry.reportedAt).toLocaleString()}` : 'Mark this entry as reported'}
+          >
+            {entry.reportedAt ? '✓' : '○'}
+          </button>
+        )}
         {props.onNavigateToTimeline && (
           <button
             className="time-entry__timeline-link"

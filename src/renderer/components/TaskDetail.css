@@ -533,3 +533,46 @@
   padding: 0 4px;
   margin-left: 8px;
 }
+
+.task-detail__report-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.task-detail__report-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+
+.task-detail__report-chip--pending {
+  background: var(--color-warning-bg, #fff3cd);
+  color: var(--color-warning, #856404);
+  border-color: var(--color-warning, #856404);
+}
+
+.task-detail__report-chip--done {
+  background: var(--color-success-bg, #d4edda);
+  color: var(--color-success, #155724);
+  border-color: var(--color-success, #155724);
+}
+
+.task-detail__report-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-detail__report-btn:hover {
+  background: var(--color-hover, var(--color-surface));
+}

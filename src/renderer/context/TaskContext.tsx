@@ -86,6 +86,10 @@ export interface TaskFilter {
   categoryIds?: string[];
   search?: string;
   searchIn?: 'title' | 'all';
+  /** When true, restrict listings to tasks that have un-reported time. */
+  hasUnreportedTime?: boolean;
+  /** When true, restrict listings to tasks with no categories assigned. */
+  uncategorized?: boolean;
 }
 
 const TaskContext = createContext<TaskContextValue | null>(null);
@@ -151,6 +155,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy,
       search: filter.search, searchIn: filter.searchIn,
       status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
@@ -162,6 +168,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy,
       search: filter.search, searchIn: filter.searchIn,
       status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
@@ -173,6 +181,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       offset: 0, limit: DONE_TASKS_LIMIT, sortBy,
       search: filter.search, searchIn: filter.searchIn,
       status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
@@ -185,6 +195,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy,
       search: filter.search, searchIn: filter.searchIn,
       status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setDoneTasks((prev) => [...prev, ...res.items]);
     setDoneTasksTotal(res.total);
@@ -197,6 +209,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       offset: 0, limit: 0, sortBy,
       search: filter.search, searchIn: filter.searchIn,
       status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setDoneTasksTotal(res.total);
   }, [sortBy, filter]);
@@ -341,6 +355,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       status: filter.statuses,
       source: filter.sources,
       categoryId: filter.categoryIds,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      uncategorized: filter.uncategorized,
     });
     setSelectedTaskIds(new Set(ids));
   }, [filter]);

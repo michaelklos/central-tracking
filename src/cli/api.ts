@@ -60,6 +60,7 @@ export interface ApiClient {
     getReport(start: string, end: string): Promise<TimeEntryReport[]>;
     getSummaryReport(start: string, end: string): Promise<SummaryReportEntry[]>;
     getByDateRangeWithTasks(start: string, end: string): Promise<TimeEntryWithTask[]>;
+    markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;
@@ -132,6 +133,8 @@ export function createApiClient(request: RawRequest): ApiClient {
         request<SummaryReportEntry[]>('timeEntries/getSummaryReport', [start, end]),
       getByDateRangeWithTasks: (start, end) =>
         request<TimeEntryWithTask[]>('timeEntries/getByDateRangeWithTasks', [start, end]),
+      markTaskReported: (taskId, reportedAt) =>
+        request<{ changed: number }>('timeEntries/markTaskReported', [taskId, reportedAt]),
     },
     comments: {
       getByTask: (taskId) => request<Comment[]>('comments/getByTask', [taskId]),

@@ -62,6 +62,8 @@ const api = {
       ipcRenderer.invoke('timeEntries:getSummaryReport', start, end),
     getByDateRangeWithTasks: (start: string, end: string) =>
       ipcRenderer.invoke('timeEntries:getByDateRangeWithTasks', start, end),
+    markTaskReported: (taskId: string, reportedAt: string | null) =>
+      ipcRenderer.invoke('timeEntries:markTaskReported', taskId, reportedAt),
   },
 
   // Comments

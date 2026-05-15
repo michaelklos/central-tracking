@@ -13,7 +13,7 @@ import {
   createTimeEntry, updateTimeEntry, deleteTimeEntry,
   getActiveTimeEntry, stopActiveTimeEntry, getTodayTotal,
   getTimeEntriesByDateRange, getTimeEntryReport, getSummaryReport,
-  getTimeEntriesByDateRangeWithTasks,
+  getTimeEntriesByDateRangeWithTasks, markTaskEntriesReported,
 } from '../ipc/timeEntryHandlers';
 
 import {
@@ -81,6 +81,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'timeEntries/getReport',               ipcChannel: 'timeEntries:getReport',               mutates: false, handler: (db, start, end) => getTimeEntryReport(db, start as string, end as string) },
   { route: 'timeEntries/getSummaryReport',        ipcChannel: 'timeEntries:getSummaryReport',        mutates: false, handler: (db, start, end) => getSummaryReport(db, start as string, end as string) },
   { route: 'timeEntries/getByDateRangeWithTasks', ipcChannel: 'timeEntries:getByDateRangeWithTasks', mutates: false, handler: (db, start, end) => getTimeEntriesByDateRangeWithTasks(db, start as string, end as string) },
+  { route: 'timeEntries/markTaskReported',        ipcChannel: 'timeEntries:markTaskReported',        mutates: true,  event: 'timeEntry.updated', handler: (db, taskId, reportedAt) => markTaskEntriesReported(db, taskId as string, reportedAt as string | null) },
 
   // Comments
   { route: 'comments/getByTask', ipcChannel: 'comments:getByTask', mutates: false, handler: (db, taskId) => getCommentsByTask(db, taskId as string) },

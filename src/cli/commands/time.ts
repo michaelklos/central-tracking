@@ -111,6 +111,30 @@ export function registerTimeCommands(yargs: Argv): Argv {
             output(argv, { totalSeconds: total, formatted: formatDuration(total) }, () => `Today: ${formatDuration(total)}`);
           }),
       )
+      .command(
+        'report <id>',
+        'Mark a single time entry as reported externally',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const entry = await client.timeEntries.update(argv.id as string, {
+              reportedAt: new Date().toISOString(),
+            });
+            output(argv, entry, (e) => `Marked entry ${e.id} as reported`);
+          }),
+      )
+      .command(
+        'unreport <id>',
+        'Mark a single time entry as not yet reported',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const entry = await client.timeEntries.update(argv.id as string, {
+              reportedAt: null,
+            });
+            output(argv, entry, (e) => `Marked entry ${e.id} as unreported`);
+          }),
+      )
       .demandCommand(1, 'Specify a time subcommand')
   );
 }

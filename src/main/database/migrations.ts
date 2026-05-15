@@ -92,6 +92,13 @@ const MIGRATIONS: string[] = [
   );
   INSERT OR IGNORE INTO schema_version (version) VALUES (5);
   `,
+  // Migration 006: Reported-at on time entries (manually marked today;
+  // future ADO plugin will set automatically on push).
+  `
+  ALTER TABLE time_entries ADD COLUMN reported_at TEXT DEFAULT NULL;
+  CREATE INDEX IF NOT EXISTS idx_time_entries_reported_at ON time_entries(reported_at);
+  INSERT OR IGNORE INTO schema_version (version) VALUES (6);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {
