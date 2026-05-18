@@ -6,9 +6,9 @@
 
 ## Handoff Status
 
-**Current stage:** Stage 0 — done (uncommitted; user to review and commit)
-**Last updated:** 2026-05-17
-**Last commit on this work:** (none yet — Stage 0 changes are staged-but-uncommitted in the working tree)
+**Current stage:** Stage 0 — done; ready for Stage 1
+**Last updated:** 2026-05-18
+**Last commit on this work:** b82da3a (Scaffold ADO plugin (Stage 0): schema, handlers, skeleton)
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
