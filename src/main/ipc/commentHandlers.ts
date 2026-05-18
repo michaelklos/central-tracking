@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { Comment, CreateCommentInput, UpdateCommentInput, UpsertExternalCommentInput } from '../../shared/types';
+import type { Comment, CreateCommentInput, PendingSyncComment, TaskSource, UpdateCommentInput, UpsertExternalCommentInput } from '../../shared/types';
 
 interface CommentRow {
   id: string;
@@ -87,6 +87,38 @@ export function deleteComment(db: Database, id: string): void {
 }
 
 /**
+ * Outbound comments awaiting push to an external system. Joins to tasks so
+ * the plugin gets the work-item id and source in one query and doesn't have
+ * to fetch every task to figure out which comments to push.
+ *
+ * Filter is parameterized by task source (e.g. 'ado') so future plugins can
+ * share the route.
+ */
+export function getPendingSyncComments(
+  db: Database,
+  source: string,
+): PendingSyncComment[] {
+  const rows = db.instance
+    .prepare(
+      `SELECT c.id, c.task_id, c.body, c.syncable, c.synced, c.external_id,
+              c.created_at, c.updated_at,
+              t.source AS task_source, t.external_id AS task_external_id
+       FROM comments c
+       JOIN tasks t ON t.id = c.task_id
+       WHERE t.source = ? AND c.syncable = 1 AND c.synced = 0
+       ORDER BY c.created_at ASC`,
+    )
+    .all(source) as Array<
+      CommentRow & { task_source: string; task_external_id: string | null }
+    >;
+  return rows.map((r) => ({
+    ...rowToComment(r),
+    taskSource: r.task_source as TaskSource,
+    taskExternalId: r.task_external_id,
+  }));
+}
+
+/**
  * Upsert a comment by external_id. Mirrored external comments are always
  * `synced=1, syncable=0` — they're read-only mirrors of the source-of-truth
  * system. Insert on first sight; update body on subsequent pulls.
@@ -127,4 +159,5 @@ export function registerCommentHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('comments:update', (_event, id: string, updates: UpdateCommentInput) => updateComment(db, id, updates));
   ipcMain.handle('comments:delete', (_event, id: string) => deleteComment(db, id));
   ipcMain.handle('comments:upsertExternal', (_event, input: UpsertExternalCommentInput) => upsertExternalComment(db, input));
+  ipcMain.handle('comments:getPendingSync', (_event, source: string) => getPendingSyncComments(db, source));
 }

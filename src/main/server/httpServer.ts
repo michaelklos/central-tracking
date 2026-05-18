@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron';
 import { generateToken, writeServerFile, removeServerFile, isValidToken, isValidHost } from './auth';
 import { buildRouteMap } from './apiManifest';
 import { dispatchEvent } from './webhooks';
+import { DomainError } from '../errors';
 
 export { apiManifest, buildRouteMap } from './apiManifest';
 export type { ApiRoute } from './apiManifest';
@@ -120,6 +121,13 @@ export async function startHttpServer(
         }
       }
     } catch (err) {
+      if (err instanceof DomainError) {
+        sendJson(res, err.httpStatus, {
+          ok: false,
+          error: { code: err.code, message: err.message },
+        });
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       const code = message.includes('not found') ? 'NOT_FOUND' : 'INTERNAL';
       sendJson(res, code === 'NOT_FOUND' ? 404 : 500, {

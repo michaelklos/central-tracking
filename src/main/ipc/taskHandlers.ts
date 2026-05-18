@@ -1,7 +1,25 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
+import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
+import { DomainError } from '../errors';
+
+/**
+ * Allowed ADO-source status transitions. `blocked` is a local-only state
+ * (no ADO mapping), so transitions to/from it bypass the FSM and become
+ * a no-op on the next plugin push.
+ */
+const ADO_FORWARD_TRANSITIONS: Readonly<Record<TaskStatus, ReadonlyArray<TaskStatus>>> = {
+  todo: ['in-progress', 'done', 'blocked'],
+  'in-progress': ['done', 'blocked'],
+  done: ['in-progress', 'blocked'],
+  blocked: ['todo', 'in-progress', 'done'],
+};
+
+function isAllowedAdoTransition(from: TaskStatus, to: TaskStatus): boolean {
+  if (from === to) return true;
+  return (ADO_FORWARD_TRANSITIONS[from] ?? []).includes(to);
+}
 
 interface TaskRow {
   id: string;
@@ -358,13 +376,19 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
   }
 
   if (updates.status !== undefined) {
-    // ADO-source tasks: status change marks the task dirty so the plugin
-    // knows to push the new state. Plugin clears it via tasksSetExternalState
-    // after a successful push.
+    // ADO-source tasks: enforce FSM and mark state_dirty so the plugin pushes
+    // the new state on next sync. Plugin clears the flag via setExternalState
+    // after a successful push. Non-ADO tasks: no constraint.
     const current = db.instance
       .prepare('SELECT source, status FROM tasks WHERE id = ?')
       .get(id) as { source: string; status: string } | undefined;
     if (current && current.source === 'ado' && current.status !== updates.status) {
+      if (!isAllowedAdoTransition(current.status as TaskStatus, updates.status as TaskStatus)) {
+        throw new DomainError(
+          'INVALID_ADO_TRANSITION',
+          `Illegal ADO transition: ${current.status} → ${updates.status}`,
+        );
+      }
       sets.push('state_dirty = 1');
     }
   }

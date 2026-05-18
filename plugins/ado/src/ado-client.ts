@@ -146,4 +146,19 @@ export class AdoClient {
     const data = await this.request<AdoWorkItemCommentsResponse>(() => this.http.get(url));
     return data.comments;
   }
+
+  /**
+   * Post a new comment on a work item. ADO accepts HTML in the `text` field;
+   * the plugin renders comment markdown → HTML before calling. Returns the
+   * minimal `{ id }` that the caller stamps into ct's `external_id`.
+   */
+  async postWorkItemComment(id: number, html: string): Promise<{ id: number }> {
+    const url =
+      `${this.projBase}/_apis/wit/workItems/${id}/comments` +
+      `?api-version=${API_VERSION_PREVIEW_COMMENTS}`;
+    const data = await this.request<{ id: number }>(() =>
+      this.http.post(url, { text: html }, { headers: { 'Content-Type': 'application/json' } }),
+    );
+    return { id: data.id };
+  }
 }

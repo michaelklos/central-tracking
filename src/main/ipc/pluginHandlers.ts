@@ -1,3 +1,4 @@
+import type { IpcMain } from 'electron';
 import type { Database } from '../database/database';
 import type { Plugin, PluginManifest, PluginConfigEntry } from '../../shared/types';
 
@@ -163,4 +164,14 @@ export function getWebhookSubscribers(db: Database): WebhookSubscriber[] {
     url: p.manifest.webhook!.url,
     events: p.manifest.events ?? ['*'],
   }));
+}
+
+// ─── IPC registration ─────────────────────────────────────────────────────
+//
+// Plugin install/manage stays HTTP-only (CLI surface). The renderer needs
+// read access to plugin config to drive UI rules sourced from plugins
+// (e.g. the ADO state-map drives the TaskDetail status dropdown FSM).
+
+export function registerPluginHandlers(ipcMain: IpcMain, db: Database): void {
+  ipcMain.handle('plugins:getConfig', (_event, id: string, key: string) => getPluginConfig(db, id, key));
 }

@@ -7,6 +7,7 @@ import axios, { AxiosInstance } from 'axios';
 import type {
   CtTask,
   CtComment,
+  CtPendingSyncComment,
   CtTimeEntry,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
@@ -16,6 +17,14 @@ import type {
 export interface GetTasksFilter {
   source?: string[];
   hasUnreportedTime?: boolean;
+  stateDirty?: boolean;
+}
+
+export interface UpdateCommentPatch {
+  body?: string;
+  syncable?: boolean;
+  synced?: boolean;
+  externalId?: string | null;
 }
 
 export interface CtClientOptions {
@@ -74,6 +83,7 @@ export class CtClient {
     return all.filter((t) => {
       if (filter.source && !filter.source.includes(t.source)) return false;
       if (filter.hasUnreportedTime === true && !t.hasUnreportedTime) return false;
+      if (filter.stateDirty === true && !t.stateDirty) return false;
       return true;
     });
   }
@@ -108,5 +118,19 @@ export class CtClient {
   // ─── Comments ───
   upsertExternalComment(input: UpsertExternalCommentInput): Promise<CtComment> {
     return this.call('comments/upsertExternal', [input]);
+  }
+
+  /**
+   * Pending outbound comments for a given source — `syncable=1 AND synced=0`
+   * joined to the task's `source`. The backend handler does the join so the
+   * plugin doesn't have to pull every task to figure out which comments to
+   * push.
+   */
+  getPendingSyncComments(source: string): Promise<CtPendingSyncComment[]> {
+    return this.call('comments/getPendingSync', [source]);
+  }
+
+  updateComment(id: string, patch: UpdateCommentPatch): Promise<CtComment> {
+    return this.call('comments/update', [id, patch]);
   }
 }

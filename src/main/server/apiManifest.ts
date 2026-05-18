@@ -19,6 +19,7 @@ import {
 
 import {
   getCommentsByTask, createComment, updateComment, deleteComment, upsertExternalComment,
+  getPendingSyncComments,
 } from '../ipc/commentHandlers';
 
 import {
@@ -92,6 +93,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'comments/update',    ipcChannel: 'comments:update',    mutates: true,  event: 'comment.updated', handler: (db, id, updates) => updateComment(db, id as string, updates as never) },
   { route: 'comments/delete',    ipcChannel: 'comments:delete',    mutates: true,  event: 'comment.deleted', handler: (db, id) => deleteComment(db, id as string) },
   { route: 'comments/upsertExternal', ipcChannel: 'comments:upsertExternal', mutates: true, event: 'comment.created', handler: (db, input) => upsertExternalComment(db, input as never) },
+  { route: 'comments/getPendingSync', ipcChannel: 'comments:getPendingSync', mutates: false, handler: (db, source) => getPendingSyncComments(db, source as string) },
 
   // Categories
   { route: 'categories/getAll',       ipcChannel: 'categories:getAll',       mutates: false, handler: (db) => getAllCategories(db) },
@@ -113,7 +115,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'plugins/install',      ipcChannel: null, mutates: true,  event: 'plugin.installed',   handler: (db, manifest) => installPlugin(db, manifest) },
   { route: 'plugins/uninstall',    ipcChannel: null, mutates: true,  event: 'plugin.uninstalled', handler: (db, id) => uninstallPlugin(db, id as string) },
   { route: 'plugins/setEnabled',   ipcChannel: null, mutates: true,  event: 'plugin.updated',     handler: (db, id, enabled) => setPluginEnabled(db, id as string, enabled as boolean) },
-  { route: 'plugins/getConfig',    ipcChannel: null, mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
+  { route: 'plugins/getConfig',    ipcChannel: 'plugins:getConfig', mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
   { route: 'plugins/listConfig',   ipcChannel: null, mutates: false, handler: (db, id) => listPluginConfig(db, id as string) },
   { route: 'plugins/setConfig',    ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value) => setPluginConfig(db, id as string, key as string, value as string) },
   { route: 'plugins/deleteConfig', ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key) => deletePluginConfig(db, id as string, key as string) },

@@ -108,6 +108,12 @@ const api = {
     execute: (items: ImportPreviewItem[]) => ipcRenderer.invoke('import:execute', items),
   },
 
+  // Plugin config read-only access (renderer reads the ADO state-map etc.)
+  plugins: {
+    getConfig: (id: string, key: string): Promise<string | null> =>
+      ipcRenderer.invoke('plugins:getConfig', id, key),
+  },
+
   // CLI tool installation (Mac only; Windows handled by NSIS installer)
   cli: {
     isInstalled: () => ipcRenderer.invoke('cli:isInstalled'),

@@ -160,6 +160,37 @@ export interface UpsertExternalCommentInput {
   body: string;
 }
 
+/**
+ * Comment row enriched with its task's `source` and `external_id`, returned
+ * by `comments:getPendingSync`. Plugins use the external id to address the
+ * remote system without a second per-comment lookup.
+ */
+export interface PendingSyncComment extends Comment {
+  taskExternalId: string | null;
+  taskSource: TaskSource;
+}
+
+/**
+ * Shape of one entry in the ADO `state-map` plugin config. The renderer
+ * mirrors this so it can drive the TaskDetail FSM dropdown without
+ * importing plugin code (plugins are out-of-process / different build).
+ *
+ * MUST stay in sync with `plugins/ado/src/state-map.ts`. If the shape
+ * changes there, change it here. The default values below match
+ * `DEFAULT_STATE_MAP` in that file.
+ */
+export interface AdoStateMapEntry {
+  ado: string;
+  altIn: string[];
+}
+export type AdoStateMap = Record<string, AdoStateMapEntry>;
+
+export const ADO_DEFAULT_STATE_MAP: AdoStateMap = {
+  todo: { ado: 'New', altIn: ['New', 'To Do', 'Proposed'] },
+  'in-progress': { ado: 'Active', altIn: ['Active', 'Committed', 'In Progress'] },
+  done: { ado: 'Closed', altIn: ['Closed', 'Resolved', 'Done', 'Completed'] },
+};
+
 // ─── Category / Label ────────────────────────────────────────────────────────
 
 export interface Category {
@@ -399,6 +430,10 @@ export interface CentralTrackingAPI {
     isInstalled(): Promise<boolean>;
     install(): Promise<{ ok: boolean; error?: string }>;
     uninstall(): Promise<{ ok: boolean; error?: string }>;
+  };
+  plugins: {
+    /** Read a single plugin config value. Returns null if unset. */
+    getConfig(id: string, key: string): Promise<string | null>;
   };
   shell: {
     openExternal(url: string): Promise<void>;

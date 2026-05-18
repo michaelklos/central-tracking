@@ -26,6 +26,7 @@ import type {
   PluginConfigEntry,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
+  PendingSyncComment,
 } from '../shared/types';
 
 export type RawRequest = <T = unknown>(endpoint: string, args?: unknown[]) => Promise<T>;
@@ -74,6 +75,7 @@ export interface ApiClient {
     update(id: string, input: UpdateCommentInput): Promise<Comment>;
     delete(id: string): Promise<void>;
     upsertExternal(input: UpsertExternalCommentInput): Promise<Comment>;
+    getPendingSync(source: string): Promise<PendingSyncComment[]>;
   };
   categories: {
     getAll(): Promise<Category[]>;
@@ -152,6 +154,7 @@ export function createApiClient(request: RawRequest): ApiClient {
       update: (id, input) => request<Comment>('comments/update', [id, input]),
       delete: (id) => request<void>('comments/delete', [id]),
       upsertExternal: (input) => request<Comment>('comments/upsertExternal', [input]),
+      getPendingSync: (source) => request<PendingSyncComment[]>('comments/getPendingSync', [source]),
     },
     categories: {
       getAll: () => request<Category[]>('categories/getAll'),

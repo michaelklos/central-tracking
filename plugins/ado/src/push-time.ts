@@ -17,11 +17,17 @@
  * No local update of `external_completed_hours` — the next `pull` step in
  * `sync` overwrites it. Eventual consistency is acceptable for display.
  */
-import type { AxiosError } from 'axios';
 import { AdoClient } from './ado-client';
 import type { AdoConfig } from './config';
 import { CtClient } from './ct-client';
+import { describeError, isConflict } from './lib/ado-errors';
 import type { CtTask, CtTimeEntry, JsonPatchOp } from './types';
+
+export interface PushedTaskBatch {
+  task: CtTask;
+  hoursPushed: number;
+  entries: CtTimeEntry[];
+}
 
 export interface PushTimeResult {
   tasksConsidered: number;
@@ -30,6 +36,8 @@ export interface PushTimeResult {
   tasksFailed: number;
   hoursPushed: number;
   warnings: string[];
+  /** One entry per successfully-pushed task; consumed by auto-comment-on-time-push. */
+  pushedBatches: PushedTaskBatch[];
 }
 
 const SECONDS_PER_HOUR = 3600;
@@ -74,20 +82,10 @@ function buildPatch(rev: number, newTotalHours: number): JsonPatchOp[] {
   ];
 }
 
-function isConflict(err: unknown): boolean {
-  const ax = err as AxiosError;
-  return ax?.response?.status === 409;
-}
-
-function describeError(err: unknown): string {
-  const ax = err as AxiosError;
-  if (ax?.response) return `HTTP ${ax.response.status} ${JSON.stringify(ax.response.data)}`;
-  return err instanceof Error ? err.message : String(err);
-}
-
 interface TaskOutcome {
   kind: 'pushed' | 'skipped-zero' | 'failed';
   hoursPushed: number;
+  entries: CtTimeEntry[];
 }
 
 async function pushOneTask(
@@ -99,16 +97,16 @@ async function pushOneTask(
 ): Promise<TaskOutcome> {
   if (!task.externalId) {
     warnings.push(`[ado] push-time: task ${task.id} has no external_id, skipping`);
-    return { kind: 'failed', hoursPushed: 0 };
+    return { kind: 'failed', hoursPushed: 0, entries: [] };
   }
   const workItemId = Number(task.externalId);
   if (!Number.isFinite(workItemId)) {
     warnings.push(`[ado] push-time: task ${task.id} external_id "${task.externalId}" not numeric, skipping`);
-    return { kind: 'failed', hoursPushed: 0 };
+    return { kind: 'failed', hoursPushed: 0, entries: [] };
   }
 
   const entries = await ct.getTimeEntriesByTask(task.id, { unreportedOnly: true });
-  if (entries.length === 0) return { kind: 'skipped-zero', hoursPushed: 0 };
+  if (entries.length === 0) return { kind: 'skipped-zero', hoursPushed: 0, entries: [] };
 
   const totalSeconds = sumSeconds(entries);
   const deltaHours = roundSecondsToHours(totalSeconds, config.roundMinutes, config.roundMode);
@@ -116,7 +114,7 @@ async function pushOneTask(
     warnings.push(
       `[ado] push-time: #${task.externalId} rounded delta is 0 (${totalSeconds}s, ${config.roundMinutes}m ${config.roundMode}), skipping`,
     );
-    return { kind: 'skipped-zero', hoursPushed: 0 };
+    return { kind: 'skipped-zero', hoursPushed: 0, entries };
   }
 
   let patchOk = false;
@@ -132,16 +130,16 @@ async function pushOneTask(
       warnings.push(
         `[ado] push-time: #${task.externalId} PATCH failed: ${describeError(err)}`,
       );
-      return { kind: 'failed', hoursPushed: 0 };
+      return { kind: 'failed', hoursPushed: 0, entries: [] };
     }
   }
-  if (!patchOk) return { kind: 'failed', hoursPushed: 0 };
+  if (!patchOk) return { kind: 'failed', hoursPushed: 0, entries: [] };
 
   // PATCH succeeded — ADO accepted the delta. If markTaskReported fails the
   // next run would double-push, so let the error propagate up to the caller
   // rather than silently swallowing it.
   await ct.markTaskReported(task.id, new Date().toISOString());
-  return { kind: 'pushed', hoursPushed: deltaHours };
+  return { kind: 'pushed', hoursPushed: deltaHours, entries };
 }
 
 export async function pushTime(
@@ -156,12 +154,14 @@ export async function pushTime(
   let tasksSkippedZero = 0;
   let tasksFailed = 0;
   let hoursPushed = 0;
+  const pushedBatches: PushedTaskBatch[] = [];
 
   for (const task of tasks) {
     const outcome = await pushOneTask(ado, ct, task, config, warnings);
     if (outcome.kind === 'pushed') {
       tasksPushed++;
       hoursPushed += outcome.hoursPushed;
+      pushedBatches.push({ task, hoursPushed: outcome.hoursPushed, entries: outcome.entries });
     } else if (outcome.kind === 'skipped-zero') {
       tasksSkippedZero++;
     } else {
@@ -176,6 +176,7 @@ export async function pushTime(
     tasksFailed,
     hoursPushed,
     warnings,
+    pushedBatches,
   };
 }
 

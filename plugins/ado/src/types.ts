@@ -31,6 +31,15 @@ export interface CtComment {
   externalId: string | null;
 }
 
+/**
+ * Comment returned by `comments/getPendingSync`. The handler joins to `tasks`
+ * so the plugin can address ADO without a second lookup per comment.
+ */
+export interface CtPendingSyncComment extends CtComment {
+  taskExternalId: string | null;
+  taskSource: string;
+}
+
 export interface CtTimeEntry {
   id: string;
   taskId: string;

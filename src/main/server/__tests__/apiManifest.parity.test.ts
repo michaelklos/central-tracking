@@ -32,6 +32,7 @@ function collectRegisteredIpcChannels(): string[] {
     'src/main/ipc/categoryHandlers.ts',
     'src/main/ipc/reportHandlers.ts',
     'src/main/ipc/importHandlers.ts',
+    'src/main/ipc/pluginHandlers.ts',
   ];
   return ipcFiles.flatMap((f) => extractIpcChannels(readRepoFile(f)));
 }

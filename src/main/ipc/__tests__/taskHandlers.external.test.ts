@@ -96,6 +96,62 @@ describe('Task external mirror (ADO plugin support)', () => {
     expect(cleaned?.externalState).toBe('Active');
   });
 
+  it('updateTask rejects illegal ADO transitions with INVALID_ADO_TRANSITION', () => {
+    const task = upsertExternalTask(db, {
+      source: 'ado',
+      externalId: '500',
+      title: 'T',
+      status: 'in-progress',
+    });
+    // in-progress → todo is not in the allowed set.
+    expect(() => updateTask(db, task.id, { status: 'todo' })).toThrow(
+      /Illegal ADO transition: in-progress → todo/,
+    );
+    try {
+      updateTask(db, task.id, { status: 'todo' });
+    } catch (err) {
+      expect((err as { code: string }).code).toBe('INVALID_ADO_TRANSITION');
+    }
+    // Ensure state was not mutated.
+    const after = getTaskById(db, task.id);
+    expect(after?.status).toBe('in-progress');
+    expect(after?.stateDirty).toBe(false);
+  });
+
+  it('updateTask allows legal ADO transitions including done → in-progress (reopen)', () => {
+    const task = upsertExternalTask(db, {
+      source: 'ado',
+      externalId: '501',
+      title: 'T',
+      status: 'done',
+    });
+    const reopened = updateTask(db, task.id, { status: 'in-progress' });
+    expect(reopened.status).toBe('in-progress');
+    expect(reopened.stateDirty).toBe(true);
+  });
+
+  it('updateTask allows transitions to/from blocked (local-only, no ADO push)', () => {
+    const task = upsertExternalTask(db, {
+      source: 'ado',
+      externalId: '502',
+      title: 'T',
+      status: 'in-progress',
+    });
+    const blocked = updateTask(db, task.id, { status: 'blocked' });
+    expect(blocked.status).toBe('blocked');
+    const unblocked = updateTask(db, task.id, { status: 'in-progress' });
+    expect(unblocked.status).toBe('in-progress');
+  });
+
+  it('updateTask does NOT enforce FSM for non-ADO tasks', () => {
+    db.instance
+      .prepare("INSERT INTO tasks (id, title, status, source) VALUES ('y', 'Y', 'in-progress', 'ad-hoc')")
+      .run();
+    // For ad-hoc, in-progress → todo is fine.
+    const updated = updateTask(db, 'y', { status: 'todo' });
+    expect(updated.status).toBe('todo');
+  });
+
   it('upsertExternalTask preserves pending status when state_dirty=1', () => {
     const task = upsertExternalTask(db, {
       source: 'ado',

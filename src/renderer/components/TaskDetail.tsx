@@ -9,6 +9,7 @@ import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { getStringSetting } from './OptionsMenu';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
+import { allowedAdoStatusTargets } from '../utils/adoFsm';
 import './TaskDetail.css';
 
 type DetailTab = 'details' | 'time' | 'comments' | 'notes';
@@ -190,7 +191,16 @@ export function TaskDetail() {
   };
 
   const handleStatusChange = async (status: TaskStatus) => {
-    await updateTask(task.id, { status });
+    try {
+      setActionError(null);
+      await updateTask(task.id, { status });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Backend rejects illegal ADO transitions with INVALID_ADO_TRANSITION.
+      // Surface the message inline rather than letting the promise dangle.
+      setActionError(`Status change rejected: ${msg}`);
+      window.api.log.error(`TaskDetail.handleStatusChange: ${msg}`);
+    }
   };
 
   const handleComplete = async () => {
@@ -476,10 +486,15 @@ export function TaskDetail() {
             <div className="task-detail__field">
               <label>Status</label>
               <select value={task.status} onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}>
-                {STATUS_OPTIONS.map((s) => (
+                {(isAdo ? allowedAdoStatusTargets(task.status) : STATUS_OPTIONS).map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+              {isAdo && task.status === 'done' && (
+                <div className="task-detail__readonly-hint">
+                  Reopen (done → in-progress) may be rejected by ADO; ct will revert from ADO on next pull if so.
+                </div>
+              )}
             </div>
 
             <div className="task-detail__field">

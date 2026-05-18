@@ -9,6 +9,7 @@ import { registerCategoryHandlers } from './ipc/categoryHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
+import { registerPluginHandlers } from './ipc/pluginHandlers';
 import { startDisplayKeepalive, stopDisplayKeepalive } from './displayKeepalive';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 import { initLogFile, log } from './logger';
@@ -95,6 +96,7 @@ app.whenReady().then(() => {
   registerReportHandlers(ipcMain, database);
   registerImportHandlers(ipcMain, database);
   registerCliHandlers(ipcMain);
+  registerPluginHandlers(ipcMain, database);
   refreshCliWrapper();
 
   // Auto-purge tasks deleted more than 30 days ago
