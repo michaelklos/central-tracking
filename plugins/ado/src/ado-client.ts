@@ -13,6 +13,7 @@ import type {
   AdoWorkItemBatchResponse,
   AdoWorkItemComment,
   AdoWorkItemCommentsResponse,
+  JsonPatchOp,
 } from './types';
 
 export interface AdoClientOptions {
@@ -118,6 +119,23 @@ export class AdoClient {
     const items = await this.getWorkItems([id], fields);
     if (items.length === 0) throw new Error(`ADO work item #${id} not found`);
     return items[0];
+  }
+
+  /**
+   * PATCH a work item with a json-patch document.
+   *
+   * Bypasses the 5xx retry helper: PATCH conflicts (409 from a `test` op on
+   * `/rev`) are NOT retriable by the generic helper — the caller in
+   * `push-time.ts` / `push-state.ts` handles 409 explicitly with one
+   * refetch+retry. Other 4xx/5xx errors propagate as AxiosError so callers
+   * can branch on `err.response?.status`.
+   */
+  async patchWorkItem(id: number, ops: JsonPatchOp[]): Promise<AdoWorkItem> {
+    const url = `${this.projBase}/_apis/wit/workitems/${id}?api-version=${API_VERSION}`;
+    const res = await this.http.patch<AdoWorkItem>(url, ops, {
+      headers: { 'Content-Type': 'application/json-patch+json' },
+    });
+    return res.data;
   }
 
   /** Fetch comments for a work item (preview API). */

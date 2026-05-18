@@ -6,12 +6,21 @@
 
 ## Handoff Status
 
-**Current stage:** Stage 1 — done; ready for Stage 2
+**Current stage:** Stage 2 — done; ready for Stage 3
 **Last updated:** 2026-05-18
-**Last commit on this work:** 93f9496 (Implement ADO plugin Stage 1: pull + display)
+**Last commit on this work:** (to be filled after commit) — Stage 2 commit
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
+- **Stage 2 findings (read before Stage 3):**
+  - **No backend changes were needed.** Plan §0a flagged a potential `reportedAt` filter on `timeEntries:getByTask`; we filtered client-side instead (smaller blast radius, plan's recommended path). `tasks/getAll` similarly takes no filter args — `CtClient.getTasks(filter)` fetches all then filters in plugin.
+  - **`patchWorkItem` bypasses the `request` retry helper.** It uses `this.http.patch` directly so an AxiosError on 409 propagates intact. The 5xx retry helper would have masked the 409 status from callers. `push-time.ts` does its own one-shot 409 retry (refetch rev, recompute, retry).
+  - **`markTaskReported` errors propagate, do NOT get caught by the PATCH try/catch.** Initial implementation lumped them together — a `markTaskReported` failure after a successful PATCH would have been logged as a "PATCH failed" warning and the next run would double-push to ADO. Now the try/catch is scoped to `patchWorkItem` only; after PATCH succeeds, the markTaskReported call is unguarded and any failure propagates up. Test `does not call markTaskReported if PATCH succeeds but mark throws — propagates` enforces this.
+  - **`hoursPushed` in `PushTimeResult` is the rounded delta actually sent**, not the raw unreported seconds. Useful for stdout summaries; matches what ADO received.
+  - **`roundSecondsToHours` short-circuits on `<= 0`** — keeps `round-mode=up` from rounding 0s to a positive bucket. The current behavior: 0s in → 0h out regardless of mode.
+  - **`sync` command = push-time → pull** (Stage 2 only). Stage 3 will reorder to `push-state → push-time → push-comments → pull` per plan.
+  - **`JsonPatchOp` type added to `plugins/ado/src/types.ts`** with op union `'add' | 'replace' | 'test' | 'remove'`. ADO accepts other ops but these are all we need for Stage 2+3.
+  - **Lint baseline unchanged.** 3 errors + 3 warnings, all pre-existing in `src/` not plugins.
 - **Stage 1 findings (read before Stage 2):**
   - **Entrypoint resolution fixed in CLI install (option a from Stage 0 notes).** `src/cli/commands/plugin.ts:readManifestFile` now rewrites relative path tokens in the entrypoint string to absolute paths anchored at the manifest's directory. Means `ct plugin run ado pull` works from any CWD, not just repo root. Re-install via `ct plugin install plugins/ado/plugin.json` to pick up the rewrite.
   - **Plugin tests live in `plugins/ado/src/__tests__/` and are picked up by root vitest** via include-glob added to `vitest.config.ts`. No separate runner.
@@ -38,7 +47,7 @@
 
 - [x] **Stage 0** — Scaffolding (schema migration 007, plugin skeleton, types, config)
 - [x] **Stage 1** — Pull + display (read-only ADO mirror in ct)
-- [ ] **Stage 2** — Time push (CompletedWork sync via existing reportedAt machinery)
+- [x] **Stage 2** — Time push (CompletedWork sync via existing reportedAt machinery)
 - [ ] **Stage 3** — Comments push + state push (full bidi additive)
 
 ### Assistant instructions for handoff maintenance
@@ -443,6 +452,29 @@ Three recurring bug families to watch for:
 ## Stage 3 — Comments push + state push
 
 **Goal:** full bidi additive. User can manage state and comments entirely in ct.
+
+**Carry-over from Stage 2 (READ FIRST):**
+
+1. **Skip `msw`/`nock`.** Stage 2 used plain `vi.fn()` mocks of `AdoClient`/`CtClient` — 23 tests, no transport-layer mock. Copy the `makeMocks` + `castMocks` pattern in `plugins/ado/src/__tests__/push-time.test.ts`. Overrides the "Mock ADO REST via msw" line in the Cross-cutting §Testing block.
+
+2. **PATCH-succeeded-but-side-effect-failed footgun.** Stage 2 nearly lumped `markTaskReported` into the PATCH try/catch — would have caused silent double-push. Same risk twice in Stage 3:
+   - `push-state`: after a successful state PATCH, `setExternalTaskState` MUST propagate on failure. If swallowed, ADO has the new state but ct still has `state_dirty=1` and stale `external_state`; next pull reads "drift" and reverts.
+   - `push-comments`: after `postWorkItemComment` 200, `updateComment({synced, externalId})` MUST propagate. If swallowed, next run reposts the comment.
+   - **Rule:** wrap try/catch around the ADO call only. ct-side bookkeeping runs unguarded.
+
+3. **Extract `isConflict` + `describeError` from `push-time.ts`** into a shared util (e.g. `plugins/ado/src/lib/ado-errors.ts`) before starting Stage 3. push-state needs identical 409 retry plus 400 workflow-rule logging.
+
+4. **`patchWorkItem` is reusable.** State push uses the same client method with different json-patch ops. No `ado-client.ts` changes needed for state push.
+
+5. **`CtClient.getTasks` filter is client-side.** Add `stateDirty?: boolean` to `GetTasksFilter` for push-state. Do NOT extend the HTTP `tasks/getAll` route.
+
+6. **`push-time` discards entry notes — fix before auto-comment work.** `pushOneTask` currently returns `{kind, hoursPushed}`. Plan §3.4 auto-comment-on-time-push needs the entries that were just batched. Extend the outcome to include `entries: CtTimeEntry[]`; let callers decide what to do with them. Tiny refactor.
+
+7. **Backend FSM validation in `tasks:update` is NOT done yet.** Stage 0 added `setExternalTaskState` + `state_dirty` auto-flip but `tasks:update` does not yet reject illegal ADO transitions with `INVALID_ADO_TRANSITION`. Verify before renderer FSM work — keeps "defense in depth" honest.
+
+8. **`window.api.plugins.getConfig` preload bridge still missing.** HTTP route exists; preload doesn't. Add early in Stage 3 so TaskDetail dropdown can read `state-map`.
+
+9. **Default state-map duplication.** `DEFAULT_STATE_MAP` lives in `plugins/ado/src/state-map.ts`. Renderer can't import plugin code, so either copy the constant into `src/shared/` or accept duplication. Decide before TaskDetail FSM work; document the choice.
 
 **Already built (do NOT redo — verify and move on):**
 - `tasks:setExternalState` handler + HTTP route + IPC + preload bridge — Stage 0. See

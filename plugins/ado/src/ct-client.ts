@@ -7,10 +7,16 @@ import axios, { AxiosInstance } from 'axios';
 import type {
   CtTask,
   CtComment,
+  CtTimeEntry,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
   PluginConfigEntry,
 } from './types';
+
+export interface GetTasksFilter {
+  source?: string[];
+  hasUnreportedTime?: boolean;
+}
 
 export interface CtClientOptions {
   baseUrl?: string;
@@ -58,12 +64,45 @@ export class CtClient {
     return this.call('tasks/getById', [id]);
   }
 
+  /**
+   * Fetch all tasks and filter client-side. The HTTP `tasks/getAll` route
+   * does not accept filter params; we keep that surface stable and filter
+   * here to avoid expanding the backend handler for one consumer.
+   */
+  async getTasks(filter: GetTasksFilter = {}): Promise<CtTask[]> {
+    const all = await this.call<CtTask[]>('tasks/getAll', []);
+    return all.filter((t) => {
+      if (filter.source && !filter.source.includes(t.source)) return false;
+      if (filter.hasUnreportedTime === true && !t.hasUnreportedTime) return false;
+      return true;
+    });
+  }
+
   upsertExternalTask(input: UpsertExternalTaskInput): Promise<CtTask> {
     return this.call('tasks/upsertExternal', [input]);
   }
 
   setExternalTaskState(taskId: string, externalState: string): Promise<{ ok: true }> {
     return this.call('tasks/setExternalState', [taskId, externalState]);
+  }
+
+  // ─── Time entries ───
+  /**
+   * Fetch time entries for a task. The `unreportedOnly` filter is applied
+   * client-side; the backend handler returns every entry regardless of
+   * `reported_at`.
+   */
+  async getTimeEntriesByTask(
+    taskId: string,
+    opts: { unreportedOnly?: boolean } = {},
+  ): Promise<CtTimeEntry[]> {
+    const entries = await this.call<CtTimeEntry[]>('timeEntries/getByTask', [taskId]);
+    if (opts.unreportedOnly) return entries.filter((e) => e.reportedAt === null);
+    return entries;
+  }
+
+  markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }> {
+    return this.call('timeEntries/markTaskReported', [taskId, reportedAt]);
   }
 
   // ─── Comments ───

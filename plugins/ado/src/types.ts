@@ -31,6 +31,17 @@ export interface CtComment {
   externalId: string | null;
 }
 
+export interface CtTimeEntry {
+  id: string;
+  taskId: string;
+  startTime: string;
+  endTime: string | null;
+  durationSeconds: number | null;
+  note: string;
+  reportedAt: string | null;
+  createdAt: string;
+}
+
 export interface UpsertExternalTaskInput {
   source: string;
   externalId: string;
@@ -111,4 +122,10 @@ export interface AdoWorkItemCommentsResponse {
   totalCount: number;
   count: number;
   comments: AdoWorkItemComment[];
+}
+
+export interface JsonPatchOp {
+  op: 'add' | 'replace' | 'test' | 'remove';
+  path: string;
+  value?: unknown;
 }
