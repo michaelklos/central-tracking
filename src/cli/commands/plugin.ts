@@ -137,9 +137,12 @@ export function registerPluginCommands(yargs: Argv): Argv {
           .demandCommand(1, 'Specify a config subcommand'),
       )
       .command(
-        'run <id>',
-        'Spawn a plugin\'s entrypoint with CT_* env vars',
-        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        'run <id> [pluginArgs..]',
+        'Spawn a plugin\'s entrypoint with CT_* env vars (extra args are forwarded)',
+        (yy) =>
+          yy
+            .positional('id', { type: 'string', demandOption: true })
+            .positional('pluginArgs', { type: 'string', array: true, default: [] }),
         (argv) =>
           runCommand(argv, async ({ client, server }) => {
             const plugin = await client.plugins.get(argv.id as string);
@@ -147,7 +150,8 @@ export function registerPluginCommands(yargs: Argv): Argv {
             if (!plugin.manifest.entrypoint) fail(`Plugin ${plugin.id} has no entrypoint`);
 
             const [cmd, ...args] = plugin.manifest.entrypoint.split(/\s+/);
-            const child = spawn(cmd, args, {
+            const forwarded = (argv.pluginArgs as string[]) ?? [];
+            const child = spawn(cmd, [...args, ...forwarded], {
               stdio: 'inherit',
               env: {
                 ...process.env,

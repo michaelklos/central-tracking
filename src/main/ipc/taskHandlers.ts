@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams } from '../../shared/types';
+import type { CreateTaskInput, Task, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
 
 interface TaskRow {
   id: string;
@@ -14,6 +14,11 @@ interface TaskRow {
   sort_order: number;
   notes: string;
   deleted_at: string | null;
+  external_url: string | null;
+  external_state: string | null;
+  external_completed_hours: number | null;
+  external_refreshed_at: string | null;
+  state_dirty: number;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +77,11 @@ function rowToTask(db: Database, row: TaskRow): Task {
     categoryIds: catRows.map((r) => r.category_id),
     notes: row.notes ?? '',
     deletedAt: row.deleted_at,
+    externalUrl: row.external_url,
+    externalState: row.external_state,
+    externalCompletedHours: row.external_completed_hours,
+    externalRefreshedAt: row.external_refreshed_at,
+    stateDirty: row.state_dirty === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -347,6 +357,18 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
     values.push(updates.notes);
   }
 
+  if (updates.status !== undefined) {
+    // ADO-source tasks: status change marks the task dirty so the plugin
+    // knows to push the new state. Plugin clears it via tasksSetExternalState
+    // after a successful push.
+    const current = db.instance
+      .prepare('SELECT source, status FROM tasks WHERE id = ?')
+      .get(id) as { source: string; status: string } | undefined;
+    if (current && current.source === 'ado' && current.status !== updates.status) {
+      sets.push('state_dirty = 1');
+    }
+  }
+
   if (sets.length > 0) {
     sets.push("updated_at = datetime('now')");
     values.push(id);
@@ -512,6 +534,102 @@ export function deleteAllTasks(db: Database): { deletedCount: number } {
   return { deletedCount: result.changes };
 }
 
+/**
+ * Upsert a task by (source, external_id). Insert if not found, otherwise
+ * update mirror fields. Title/notes/description are overwritten (ADO owns
+ * them). Status is overwritten only when state_dirty=0; if state_dirty=1
+ * a local push is pending and we must not clobber it.
+ */
+export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput): Task {
+  const now = new Date().toISOString();
+  const existing = db.instance
+    .prepare('SELECT id, state_dirty FROM tasks WHERE source = ? AND external_id = ?')
+    .get(input.source, input.externalId) as { id: string; state_dirty: number } | undefined;
+
+  if (!existing) {
+    const id = uuidv4();
+    const maxOrder = db.instance
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM tasks')
+      .get() as { next: number };
+    db.instance
+      .prepare(
+        `INSERT INTO tasks (
+          id, title, description, status, source, external_id, plugin_id,
+          sort_order, notes, external_url, external_state,
+          external_completed_hours, external_refreshed_at, state_dirty,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      )
+      .run(
+        id,
+        input.title,
+        input.description ?? '',
+        input.status ?? 'todo',
+        input.source,
+        input.externalId,
+        input.pluginId ?? null,
+        maxOrder.next,
+        input.notes ?? '',
+        input.externalUrl ?? null,
+        input.externalState ?? null,
+        input.externalCompletedHours ?? null,
+        input.externalRefreshedAt ?? now,
+        now,
+        now,
+      );
+    const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow;
+    return rowToTask(db, row);
+  }
+
+  const sets: string[] = ['title = ?', 'notes = ?', 'description = ?'];
+  const values: unknown[] = [input.title, input.notes ?? '', input.description ?? ''];
+
+  if (input.externalUrl !== undefined) {
+    sets.push('external_url = ?');
+    values.push(input.externalUrl);
+  }
+  if (input.externalState !== undefined) {
+    sets.push('external_state = ?');
+    values.push(input.externalState);
+  }
+  if (input.externalCompletedHours !== undefined) {
+    sets.push('external_completed_hours = ?');
+    values.push(input.externalCompletedHours);
+  }
+  sets.push('external_refreshed_at = ?');
+  values.push(input.externalRefreshedAt ?? now);
+
+  if (input.status !== undefined && existing.state_dirty === 0) {
+    sets.push('status = ?');
+    values.push(input.status);
+  }
+
+  sets.push("updated_at = datetime('now')");
+  values.push(existing.id);
+  db.instance.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+
+  const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(existing.id) as TaskRow;
+  return rowToTask(db, row);
+}
+
+/**
+ * Clear `state_dirty` and set `external_state` after a plugin successfully
+ * pushed the local status to the external system.
+ */
+export function setExternalTaskState(
+  db: Database,
+  id: string,
+  externalState: string,
+): { ok: true } {
+  id = resolveTaskId(db, id);
+  db.instance
+    .prepare(
+      "UPDATE tasks SET external_state = ?, state_dirty = 0, updated_at = datetime('now') WHERE id = ?",
+    )
+    .run(externalState, id);
+  return { ok: true };
+}
+
 export function resetApp(db: Database): void {
   db.instance.transaction(() => {
     db.instance.prepare('DELETE FROM task_categories').run();
@@ -544,4 +662,6 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:restoreAll', () => restoreAllDeleted(db));
   ipcMain.handle('tasks:deleteAll', () => deleteAllTasks(db));
   ipcMain.handle('tasks:resetApp', () => resetApp(db));
+  ipcMain.handle('tasks:upsertExternal', (_event, input: UpsertExternalTaskInput) => upsertExternalTask(db, input));
+  ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string) => setExternalTaskState(db, id, externalState));
 }

@@ -12,6 +12,8 @@ import type {
   CreateCategoryInput,
   UpdateCategoryInput,
   ImportPreviewItem,
+  UpsertExternalTaskInput,
+  UpsertExternalCommentInput,
 } from '../shared/types';
 
 const api = {
@@ -41,6 +43,9 @@ const api = {
     restoreAll: () => ipcRenderer.invoke('tasks:restoreAll'),
     deleteAll: () => ipcRenderer.invoke('tasks:deleteAll'),
     resetApp: () => ipcRenderer.invoke('tasks:resetApp'),
+    upsertExternal: (input: UpsertExternalTaskInput) => ipcRenderer.invoke('tasks:upsertExternal', input),
+    setExternalState: (id: string, externalState: string) =>
+      ipcRenderer.invoke('tasks:setExternalState', id, externalState),
   },
 
   // Time entries
@@ -72,6 +77,7 @@ const api = {
     create: (comment: CreateCommentInput) => ipcRenderer.invoke('comments:create', comment),
     update: (id: string, updates: UpdateCommentInput) => ipcRenderer.invoke('comments:update', id, updates),
     delete: (id: string) => ipcRenderer.invoke('comments:delete', id),
+    upsertExternal: (input: UpsertExternalCommentInput) => ipcRenderer.invoke('comments:upsertExternal', input),
   },
 
   // Categories

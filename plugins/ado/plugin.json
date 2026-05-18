@@ -1,0 +1,6 @@
+{
+  "id": "ado",
+  "name": "Azure DevOps Sync",
+  "version": "0.1.0",
+  "entrypoint": "node plugins/ado/dist/index.js"
+}

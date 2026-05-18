@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "description": "Extensible task and time tracking application with plugin architecture for external source integration",
   "main": "dist/main/main.js",
+  "workspaces": [
+    "plugins/*"
+  ],
   "bin": {
     "ct": "dist/cli/cli/main.js"
   },
@@ -13,7 +16,8 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:cli": "webpack --config webpack.cli.config.js --mode production",
     "build:renderer": "webpack --config webpack.renderer.config.js --mode production",
-    "build": "npm run build:main && npm run build:renderer && npm run build:cli",
+    "build:plugin:ado": "npm run build --workspace=@central-tracking/plugin-ado",
+    "build": "npm run build:main && npm run build:renderer && npm run build:cli && npm run build:plugin:ado",
     "start": "electron dist/main/main.js",
     "start:debug": "electron dist/main/main.js --debug",
     "pack": "npm run build && electron-builder --dir",

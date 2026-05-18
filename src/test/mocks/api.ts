@@ -23,6 +23,8 @@ export function createMockApi(): CentralTrackingAPI {
       restoreAll: vi.fn().mockResolvedValue({ restoredCount: 0 }),
       deleteAll: vi.fn().mockResolvedValue({ deletedCount: 0 }),
       resetApp: vi.fn().mockResolvedValue(undefined),
+      upsertExternal: vi.fn().mockResolvedValue({}),
+      setExternalState: vi.fn().mockResolvedValue({ ok: true }),
     },
     timeEntries: {
       getByTask: vi.fn().mockResolvedValue([]),
@@ -43,6 +45,7 @@ export function createMockApi(): CentralTrackingAPI {
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),
+      upsertExternal: vi.fn().mockResolvedValue({}),
     },
     categories: {
       getAll: vi.fn().mockResolvedValue([]),

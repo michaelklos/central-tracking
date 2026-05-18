@@ -18,7 +18,8 @@ describe('Migration 002 - Notes column', () => {
     const db = new BetterSqlite3(':memory:');
     db.pragma('foreign_keys = ON');
 
-    // Run only migration 001 first (full schema needed for later migrations)
+    // Run only migration 001 first (full schema needed for later migrations,
+    // including 007 which ALTERs `comments`).
     db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)');
     db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -41,6 +42,15 @@ describe('Migration 002 - Notes column', () => {
         duration_seconds INTEGER,
         note TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE IF NOT EXISTS comments (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        syncable INTEGER NOT NULL DEFAULT 0,
+        synced INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       INSERT OR IGNORE INTO schema_version (version) VALUES (1);
     `);

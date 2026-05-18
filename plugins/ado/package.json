@@ -1,0 +1,22 @@
+{
+  "name": "@central-tracking/plugin-ado",
+  "version": "0.1.0",
+  "description": "Azure DevOps sync plugin for Central Tracking",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "marked": "^11.2.0",
+    "turndown": "^7.2.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/turndown": "^5.0.5",
+    "@types/yargs": "^17.0.32",
+    "typescript": "^5.5.4"
+  }
+}

@@ -24,6 +24,8 @@ import type {
   Plugin,
   PluginManifest,
   PluginConfigEntry,
+  UpsertExternalTaskInput,
+  UpsertExternalCommentInput,
 } from '../shared/types';
 
 export type RawRequest = <T = unknown>(endpoint: string, args?: unknown[]) => Promise<T>;
@@ -46,6 +48,10 @@ export interface ApiClient {
     batchRestore(ids: string[]): Promise<{ restoredCount: number }>;
     purgeDeleted(id: string): Promise<void>;
     emptyRecycleBin(): Promise<void>;
+    restoreAll(): Promise<{ restoredCount: number }>;
+    deleteAll(): Promise<{ deletedCount: number }>;
+    upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
+    setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;
@@ -67,6 +73,7 @@ export interface ApiClient {
     create(input: CreateCommentInput): Promise<Comment>;
     update(id: string, input: UpdateCommentInput): Promise<Comment>;
     delete(id: string): Promise<void>;
+    upsertExternal(input: UpsertExternalCommentInput): Promise<Comment>;
   };
   categories: {
     getAll(): Promise<Category[]>;
@@ -116,6 +123,9 @@ export function createApiClient(request: RawRequest): ApiClient {
       emptyRecycleBin: () => request<void>('tasks/emptyRecycleBin'),
       restoreAll: () => request<{ restoredCount: number }>('tasks/restoreAll'),
       deleteAll: () => request<{ deletedCount: number }>('tasks/deleteAll'),
+      upsertExternal: (input) => request<Task>('tasks/upsertExternal', [input]),
+      setExternalState: (id, externalState) =>
+        request<{ ok: true }>('tasks/setExternalState', [id, externalState]),
     },
     timeEntries: {
       getByTask: (taskId) => request<TimeEntry[]>('timeEntries/getByTask', [taskId]),
@@ -141,6 +151,7 @@ export function createApiClient(request: RawRequest): ApiClient {
       create: (input) => request<Comment>('comments/create', [input]),
       update: (id, input) => request<Comment>('comments/update', [id, input]),
       delete: (id) => request<void>('comments/delete', [id]),
+      upsertExternal: (input) => request<Comment>('comments/upsertExternal', [input]),
     },
     categories: {
       getAll: () => request<Category[]>('categories/getAll'),

@@ -99,6 +99,22 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_time_entries_reported_at ON time_entries(reported_at);
   INSERT OR IGNORE INTO schema_version (version) VALUES (6);
   `,
+  // Migration 007: ADO plugin support — external mirror fields on tasks +
+  // external_id on comments. `state_dirty` flags ct-side status changes that
+  // haven't been pushed to the external system yet.
+  `
+  ALTER TABLE comments ADD COLUMN external_id TEXT;
+  ALTER TABLE tasks ADD COLUMN external_url TEXT;
+  ALTER TABLE tasks ADD COLUMN external_state TEXT;
+  ALTER TABLE tasks ADD COLUMN external_completed_hours REAL;
+  ALTER TABLE tasks ADD COLUMN external_refreshed_at TEXT;
+  ALTER TABLE tasks ADD COLUMN state_dirty INTEGER NOT NULL DEFAULT 0;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_source_external
+    ON tasks(source, external_id) WHERE external_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_comments_external_id
+    ON comments(external_id) WHERE external_id IS NOT NULL;
+  INSERT OR IGNORE INTO schema_version (version) VALUES (7);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { Comment, CreateCommentInput, UpdateCommentInput } from '../../shared/types';
+import type { Comment, CreateCommentInput, UpdateCommentInput, UpsertExternalCommentInput } from '../../shared/types';
 
 interface CommentRow {
   id: string;
@@ -9,6 +9,7 @@ interface CommentRow {
   body: string;
   syncable: number;
   synced: number;
+  external_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +21,7 @@ function rowToComment(row: CommentRow): Comment {
     body: row.body,
     syncable: row.syncable === 1,
     synced: row.synced === 1,
+    externalId: row.external_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -65,6 +67,10 @@ export function updateComment(db: Database, id: string, updates: UpdateCommentIn
     sets.push('synced = ?');
     values.push(updates.synced ? 1 : 0);
   }
+  if (updates.externalId !== undefined) {
+    sets.push('external_id = ?');
+    values.push(updates.externalId);
+  }
 
   if (sets.length > 0) {
     sets.push("updated_at = datetime('now')");
@@ -80,6 +86,39 @@ export function deleteComment(db: Database, id: string): void {
   db.instance.prepare('DELETE FROM comments WHERE id = ?').run(id);
 }
 
+/**
+ * Upsert a comment by external_id. Mirrored external comments are always
+ * `synced=1, syncable=0` — they're read-only mirrors of the source-of-truth
+ * system. Insert on first sight; update body on subsequent pulls.
+ */
+export function upsertExternalComment(
+  db: Database,
+  input: UpsertExternalCommentInput,
+): Comment {
+  const now = new Date().toISOString();
+  const existing = db.instance
+    .prepare('SELECT id FROM comments WHERE external_id = ?')
+    .get(input.externalId) as { id: string } | undefined;
+
+  if (!existing) {
+    const id = uuidv4();
+    db.instance
+      .prepare(
+        `INSERT INTO comments (id, task_id, body, syncable, synced, external_id, created_at, updated_at)
+         VALUES (?, ?, ?, 0, 1, ?, ?, ?)`,
+      )
+      .run(id, input.taskId, input.body, input.externalId, now, now);
+    const row = db.instance.prepare('SELECT * FROM comments WHERE id = ?').get(id) as CommentRow;
+    return rowToComment(row);
+  }
+
+  db.instance
+    .prepare("UPDATE comments SET body = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(input.body, existing.id);
+  const row = db.instance.prepare('SELECT * FROM comments WHERE id = ?').get(existing.id) as CommentRow;
+  return rowToComment(row);
+}
+
 // ─── IPC registration (thin wrappers around exported functions) ─────
 
 export function registerCommentHandlers(ipcMain: IpcMain, db: Database): void {
@@ -87,4 +126,5 @@ export function registerCommentHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('comments:create', (_event, input: CreateCommentInput) => createComment(db, input));
   ipcMain.handle('comments:update', (_event, id: string, updates: UpdateCommentInput) => updateComment(db, id, updates));
   ipcMain.handle('comments:delete', (_event, id: string) => deleteComment(db, id));
+  ipcMain.handle('comments:upsertExternal', (_event, input: UpsertExternalCommentInput) => upsertExternalComment(db, input));
 }

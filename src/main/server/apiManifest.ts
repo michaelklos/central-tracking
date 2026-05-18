@@ -6,6 +6,7 @@ import {
   batchUpdateTasks, batchSoftDeleteTasks, getDeletedTasks,
   restoreTask, batchRestoreTasks, purgeDeletedTask, emptyRecycleBin,
   restoreAllDeleted, deleteAllTasks,
+  upsertExternalTask, setExternalTaskState,
 } from '../ipc/taskHandlers';
 
 import {
@@ -17,7 +18,7 @@ import {
 } from '../ipc/timeEntryHandlers';
 
 import {
-  getCommentsByTask, createComment, updateComment, deleteComment,
+  getCommentsByTask, createComment, updateComment, deleteComment, upsertExternalComment,
 } from '../ipc/commentHandlers';
 
 import {
@@ -67,6 +68,8 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/emptyRecycleBin',  ipcChannel: 'tasks:emptyRecycleBin',  mutates: true,  event: 'task.purged',    handler: (db) => emptyRecycleBin(db) },
   { route: 'tasks/restoreAll',       ipcChannel: 'tasks:restoreAll',       mutates: true,  event: 'task.restored',  handler: (db) => restoreAllDeleted(db) },
   { route: 'tasks/deleteAll',        ipcChannel: 'tasks:deleteAll',        mutates: true,  event: 'task.deleted',   handler: (db) => deleteAllTasks(db) },
+  { route: 'tasks/upsertExternal',   ipcChannel: 'tasks:upsertExternal',   mutates: true,  event: 'task.updated',   handler: (db, input) => upsertExternalTask(db, input as never) },
+  { route: 'tasks/setExternalState', ipcChannel: 'tasks:setExternalState', mutates: true,  event: 'task.updated',   handler: (db, id, externalState) => setExternalTaskState(db, id as string, externalState as string) },
 
   // Time entries
   { route: 'timeEntries/getByTask',               ipcChannel: 'timeEntries:getByTask',               mutates: false, handler: (db, taskId) => getTimeEntriesByTask(db, taskId as string) },
@@ -88,6 +91,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'comments/create',    ipcChannel: 'comments:create',    mutates: true,  event: 'comment.created', handler: (db, input) => createComment(db, input as never) },
   { route: 'comments/update',    ipcChannel: 'comments:update',    mutates: true,  event: 'comment.updated', handler: (db, id, updates) => updateComment(db, id as string, updates as never) },
   { route: 'comments/delete',    ipcChannel: 'comments:delete',    mutates: true,  event: 'comment.deleted', handler: (db, id) => deleteComment(db, id as string) },
+  { route: 'comments/upsertExternal', ipcChannel: 'comments:upsertExternal', mutates: true, event: 'comment.created', handler: (db, input) => upsertExternalComment(db, input as never) },
 
   // Categories
   { route: 'categories/getAll',       ipcChannel: 'categories:getAll',       mutates: false, handler: (db) => getAllCategories(db) },

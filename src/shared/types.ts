@@ -1,6 +1,6 @@
 // ─── Task ────────────────────────────────────────────────────────────────────
 
-export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const;
+export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin', 'ado'] as const;
 export type TaskSource = typeof TASK_SOURCES[number];
 
 export const TASK_STATUSES = ['todo', 'in-progress', 'done', 'blocked'] as const;
@@ -32,6 +32,16 @@ export interface Task {
   notes: string;
   /** Soft-delete timestamp (null = active, non-null = in recycle bin) */
   deletedAt: string | null;
+  /** Link to the external system record (e.g. ADO work item URL). */
+  externalUrl: string | null;
+  /** Last-known state in the external system (raw string, e.g. ADO "Active"). */
+  externalState: string | null;
+  /** Last-known total reported hours in the external system. */
+  externalCompletedHours: number | null;
+  /** Timestamp of the most recent successful pull from the external system. */
+  externalRefreshedAt: string | null;
+  /** True when ct's status changed and the change has not yet been pushed. Renderer reads only. */
+  stateDirty: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +70,24 @@ export interface BatchUpdateInput {
   status?: TaskStatus;
   source?: TaskSource;
   categoryIds?: string[];
+}
+
+/**
+ * Input for `tasks:upsertExternal`. Used by plugins (e.g. ADO) to mirror
+ * external work items into ct. Matched by `(source, externalId)`.
+ */
+export interface UpsertExternalTaskInput {
+  source: TaskSource;
+  externalId: string;
+  pluginId?: string | null;
+  title: string;
+  notes?: string;
+  description?: string;
+  status?: TaskStatus;
+  externalUrl?: string | null;
+  externalState?: string | null;
+  externalCompletedHours?: number | null;
+  externalRefreshedAt?: string | null;
 }
 
 // ─── Time Entry ──────────────────────────────────────────────────────────────
@@ -102,6 +130,8 @@ export interface Comment {
   syncable: boolean;
   /** Has this comment been synced to the external source? */
   synced: boolean;
+  /** ID of the comment in the external system (null = ct-only). */
+  externalId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +146,18 @@ export interface UpdateCommentInput {
   body?: string;
   syncable?: boolean;
   synced?: boolean;
+  externalId?: string | null;
+}
+
+/**
+ * Input for `comments:upsertExternal`. Used by plugins to mirror external
+ * comments into ct. Matched by `externalId`. Mirrored comments are always
+ * `synced=true, syncable=false`.
+ */
+export interface UpsertExternalCommentInput {
+  taskId: string;
+  externalId: string;
+  body: string;
 }
 
 // ─── Category / Label ────────────────────────────────────────────────────────
@@ -304,6 +346,8 @@ export interface CentralTrackingAPI {
     restoreAll(): Promise<{ restoredCount: number }>;
     deleteAll(): Promise<{ deletedCount: number }>;
     resetApp(): Promise<void>;
+    upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
+    setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;
@@ -331,6 +375,7 @@ export interface CentralTrackingAPI {
     create(input: CreateCommentInput): Promise<Comment>;
     update(id: string, input: UpdateCommentInput): Promise<Comment>;
     delete(id: string): Promise<void>;
+    upsertExternal(input: UpsertExternalCommentInput): Promise<Comment>;
   };
   categories: {
     getAll(): Promise<Category[]>;
