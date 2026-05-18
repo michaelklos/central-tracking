@@ -19,6 +19,7 @@ const SOURCE_LABELS: Record<TaskSource, string> = {
   'email': 'Email',
   'meeting-prep': 'Meeting Prep',
   'plugin': 'Plugin',
+  'ado': 'Azure DevOps',
 };
 
 // Sort order for status groups — "Done" last

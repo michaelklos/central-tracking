@@ -35,13 +35,17 @@ afterAll(() => {
 });
 
 describe('ct plugin install', () => {
-  it('reads manifest + posts plugins/install', async () => {
+  it('reads manifest + posts plugins/install (entrypoint rewritten to absolute)', async () => {
     const { calls, stdout } = await runCli(
       registerPluginCommands,
       ['plugin', 'install', manifestFile],
       { responses: { 'plugins/install': samplePlugin } },
     );
-    expect(calls).toEqual([{ endpoint: 'plugins/install', args: [samplePlugin.manifest] }]);
+    const expectedManifest = {
+      ...samplePlugin.manifest,
+      entrypoint: `node ${path.resolve(tmpDir, 'sync.js')}`,
+    };
+    expect(calls).toEqual([{ endpoint: 'plugins/install', args: [expectedManifest] }]);
     expect(stdout).toContain('Installed plugin ado');
   });
 

@@ -6,13 +6,23 @@
 
 ## Handoff Status
 
-**Current stage:** Stage 0 — done; ready for Stage 1
+**Current stage:** Stage 1 — done; ready for Stage 2
 **Last updated:** 2026-05-18
-**Last commit on this work:** b82da3a (Scaffold ADO plugin (Stage 0): schema, handlers, skeleton)
+**Last commit on this work:** _pending — commit Stage 1 changes_
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
-- **Stage 0 findings (read before Stage 1):**
+- **Stage 1 findings (read before Stage 2):**
+  - **Entrypoint resolution fixed in CLI install (option a from Stage 0 notes).** `src/cli/commands/plugin.ts:readManifestFile` now rewrites relative path tokens in the entrypoint string to absolute paths anchored at the manifest's directory. Means `ct plugin run ado pull` works from any CWD, not just repo root. Re-install via `ct plugin install plugins/ado/plugin.json` to pick up the rewrite.
+  - **Plugin tests live in `plugins/ado/src/__tests__/` and are picked up by root vitest** via include-glob added to `vitest.config.ts`. No separate runner.
+  - **`@currentIteration` macro NOT used.** WIQL is built from the iteration `path` resolved via `_apis/work/teamsettings/iterations?$timeframe=current` to avoid the team-scoped-WIQL-URL quirk. Single-quote escaping in WIQL is doubled (standard SQL-ish form).
+  - **Pull is best-effort on unmapped states.** `inverseStateMap` returns null → caller defaults to `todo` and emits a stdout warning. Plan's "DO NOT throw" rule is enforced in `pull.ts:buildTaskInput`.
+  - **Pull order:** iterations → wiql ids → workitemsbatch (fields filtered) → upsertExternalTask → workItems/{id}/comments → upsertExternalComment. Comments fetched per-task (no batch endpoint exists).
+  - **Default state-map** (when `ado state-map` is unset) lives in `plugins/ado/src/state-map.ts:DEFAULT_STATE_MAP`. Covers `todo/New`, `in-progress/Active+Committed+In Progress`, `done/Closed+Resolved+Done+Completed`. `blocked` is intentionally absent — has no obvious ADO mapping; FSM excludes it from forward transitions in Stage 3.
+  - **TaskDetail UI for ADO tasks** locks title, description, and notes; overrides comment `syncable=true`; hides delete button on mirrored comments; shows ADO panel with state, hours, refresh timestamp, and Open-in-ADO link. CSS classes: `task-detail__ado-panel`, `comment--external`, `comment__sync-badge--external`.
+  - **`SOURCE_LABELS` in TaskList** required `'ado': 'Azure DevOps'` — Stage 0 added `'ado'` to TASK_SOURCES but didn't update this map. Fixed in Stage 1.
+  - **Plugin test for `plugin install` was updated** to assert the absolutized entrypoint, matching the new `readManifestFile` rewrite.
+- **Stage 0 findings (read before Stage 1 was — kept for history):**
   - **Status name mismatch.** Plan's state-map example uses `to-do`/`completed`, but the codebase's actual `TASK_STATUSES` is `['todo','in-progress','done','blocked']`. Stage 1's state-map config must use the real ct status names (`todo`, `in-progress`, `done`) — DO NOT rename ct statuses to match the plan; update the state-map keys instead.
   - **`'ado'` added to `TASK_SOURCES`** in `src/shared/types.ts`. Source-of-truth value, used by handlers and filters.
   - **`ct plugin run <id>` now forwards extra positional args** (`src/cli/commands/plugin.ts`). Required so `ct plugin run ado pull` passes `pull` through to the plugin's yargs parser.
@@ -27,7 +37,7 @@
 ### Stage checklist
 
 - [x] **Stage 0** — Scaffolding (schema migration 007, plugin skeleton, types, config)
-- [ ] **Stage 1** — Pull + display (read-only ADO mirror in ct)
+- [x] **Stage 1** — Pull + display (read-only ADO mirror in ct)
 - [ ] **Stage 2** — Time push (CompletedWork sync via existing reportedAt machinery)
 - [ ] **Stage 3** — Comments push + state push (full bidi additive)
 
@@ -121,26 +131,37 @@ ct plugin config set ado auto-comment-on-time-push  false      # build worklog c
 
 **state-map JSON shape:**
 
+Keys MUST match ct's actual status names: `todo | in-progress | done | blocked`.
+`blocked` has no ADO equivalent and is intentionally absent from the map; state
+push for a `blocked` task is a no-op (warned to stdout).
+
 ```json
 {
-  "to-do":       { "ado": "New",    "altIn": ["New"] },
-  "in-progress": { "ado": "Active", "altIn": ["Active", "Committed"] },
-  "completed":   { "ado": "Closed", "altIn": ["Closed", "Resolved", "Done"] }
+  "todo":        { "ado": "New",    "altIn": ["New", "To Do", "Proposed"] },
+  "in-progress": { "ado": "Active", "altIn": ["Active", "Committed", "In Progress"] },
+  "done":        { "ado": "Closed", "altIn": ["Closed", "Resolved", "Done", "Completed"] }
 }
 ```
 
 - `ado` = ADO state ct pushes when ct status changes to this key.
 - `altIn` = ADO states that map back to this ct status on pull.
+- Default state-map (used when no config set) lives at
+  `plugins/ado/src/state-map.ts:DEFAULT_STATE_MAP`.
 
 ---
 
 ## FSM (status transitions on ado-source tasks)
 
+Status names: ct uses `todo | in-progress | done | blocked`. `done` is the
+"completed" terminal state for ADO mapping purposes.
+
 Allowed transitions:
-- `to-do → in-progress`
-- `to-do → completed`
-- `in-progress → completed`
-- `completed → in-progress` (reopen — warn user "ADO may reject; will revert from ADO on next pull if so")
+- `todo → in-progress`
+- `todo → done`
+- `in-progress → done`
+- `done → in-progress` (reopen — warn user "ADO may reject; will revert from ADO on next pull if so")
+- Anything → `blocked` and `blocked → todo|in-progress` are allowed locally but
+  do NOT trigger an ADO state push (no mapping). Plugin warns on stdout.
 
 Enforce in renderer (TaskDetail status dropdown filters options) AND in backend update handler (defense in depth). Backend rejection: HTTP 400 + machine-readable error code.
 
@@ -284,17 +305,17 @@ Three recurring bug families to watch for:
    - Retry once on 5xx with exponential backoff (1s, 2s).
 
 2. **`pull.ts`** orchestration:
-   - Resolve current iteration: `GET _apis/work/teamsettings/iterations?$timeframe=current` (requires team in path: `_apis/{team}/_apis/...` — see ADO REST docs).
-   - WIQL query built dynamically (no ADO macro for "pull closed"; build the string in JS):
+   - Resolve current iteration: `GET {org}/{project}/{team}/_apis/work/teamsettings/iterations?$timeframe=current`. Extract `path` from the first iteration in the response.
+   - Build WIQL string in JS using the literal iteration path (NOT the `@currentIteration` macro — that macro requires a team-scoped WIQL URL, which we avoid by resolving the path explicitly):
      ```
      SELECT [System.Id]
      FROM WorkItems
-     WHERE [System.IterationPath] = @currentIteration
+     WHERE [System.IterationPath] = '<iteration-path>'
        AND [System.WorkItemType] IN ('User Story', 'Bug', 'Task')   -- from config
        [+ AND [System.State] <> 'Closed']                            -- only if pull-closed=false
      ORDER BY [System.Id]
      ```
-     `@currentIteration` IS a valid WIQL macro; `@project` too. The closed-filter is conditional JS string concat.
+     Single quotes inside the iteration path must be doubled (SQL escape).
    - Batch fetch (max 200 per request) work items with fields: `System.Id`, `System.Title`, `System.Description`, `System.State`, `System.WorkItemType`, `Microsoft.VSTS.Scheduling.CompletedWork`, `System.ChangedDate`.
    - For each: compose `UpsertExternalTaskInput`:
      - `externalId: String(wi.id)`
@@ -349,35 +370,61 @@ Three recurring bug families to watch for:
 
 **Goal:** ct time logged → ADO `CompletedWork` (additive).
 
+**Prerequisites (do these first — none exist yet):**
+
+0. **`ado-client.ts` additions:**
+   - `patchWorkItem(id: number, ops: JsonPatchOp[]): Promise<AdoWorkItem>` — POSTs PATCH to `_apis/wit/workitems/{id}?api-version=7.1` with header
+     `Content-Type: application/json-patch+json` (override the default `application/json`).
+   - The existing `request` retry helper retries any 5xx. PATCH's 409 (rev conflict) is NOT retriable
+     by the helper — caller in `push-time.ts` handles 409 explicitly (one refetch+retry). Either expose
+     a `requestRaw` that bypasses retry or let `patchWorkItem` propagate the AxiosError so callers can
+     branch on `status === 409`. Recommend: keep client dumb, do test/retry loop in `push-time.ts`.
+
+0a. **`ct-client.ts` additions:**
+   - `getTasks(filter: { source?: string[]; hasUnreportedTime?: boolean }): Promise<CtTask[]>` →
+     `tasks/getAll` (already exists in `apiManifest.ts`). Plugin currently has no method.
+   - `getTimeEntriesByTask(taskId: string, opts?: { unreportedOnly?: boolean }): Promise<CtTimeEntry[]>`
+     → `timeEntries/getByTask`. Plugin currently has no method.
+   - `markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>` →
+     `timeEntries/markTaskReported` (route already exists).
+   - Add `CtTimeEntry` shape to `plugins/ado/src/types.ts` (id, taskId, durationSeconds, note, reportedAt).
+
 **Plugin work:**
 
 1. **`push-time.ts`:**
    - Query ct: tasks where `source='ado' AND hasUnreportedTime=true` via existing `tasks:getAll` filter `hasUnreportedTime: true`.
    - For each task:
-     a. Fetch unreported time entries: `timeEntries:getByTask` filtered to `reportedAt IS NULL`. (Add filter param if not present.)
+     a. Fetch unreported time entries via `getTimeEntriesByTask(taskId, { unreportedOnly: true })`.
+        Backend `timeEntries:getByTask` does NOT currently filter by `reportedAt`; either add the
+        filter param to the handler OR filter client-side after fetching all entries (preferred
+        for Stage 2 — smaller change, and time-entry lists per task are bounded).
      b. Sum `durationSeconds`.
      c. Round to `round-minutes` (config) via `round-mode`. Convert to hours decimal.
      d. **If rounded == 0:** skip task (entries stay unreported, accumulate next run).
      e. Fetch current ADO work item to get `rev` and current `CompletedWork`.
-     f. PATCH `https://dev.azure.com/{org}/{proj}/_apis/wit/workitems/{id}?api-version=7.1`
-        with `Content-Type: application/json-patch+json` body:
+     f. PATCH via `patchWorkItem(id, ops)` with body:
         ```json
         [{"op": "test", "path": "/rev", "value": <rev>},
          {"op": "add", "path": "/fields/Microsoft.VSTS.Scheduling.CompletedWork",
           "value": <currentHours + roundedHours>}]
         ```
         The `test` op makes the PATCH atomic vs the rev — ADO returns 409 if rev advanced.
-     g. On 200: call `timeEntries:markTaskReported(taskId, now)`. Update `external_completed_hours` from response.
-     h. On 409 (rev mismatch): refetch work item, recompute target, retry once.
+     g. On 200: call `markTaskReported(taskId, now)`. Do NOT separately update
+        `external_completed_hours` locally — the next `pull` step in `sync` overwrites it, and adding
+        a dedicated route just for this would duplicate state. Eventual consistency via pull is fine.
+     h. On 409 (rev mismatch): refetch work item, recompute target, retry once. Bypass the client's
+        5xx retry helper for this — see Prereq 0.
      i. On other 4xx/5xx: log error, leave entries unreported, continue with next task.
 
 2. **`sync.ts`** updates: `sync` command = `push-time → pull` (no comments/state push yet).
 
 **Backend work:**
 
-1. Add `reportedAt: null | undefined` filter param to `timeEntries:getByTask` if not present.
+1. Decide: add `reportedAt` filter to `timeEntries:getByTask` OR filter client-side in plugin.
+   Recommend client-side for Stage 2 (smaller blast radius).
 
-2. **Sanity check:** confirm `markTaskReported` only flips unreported entries (per existing test `markTaskReported with a timestamp marks only unreported entries`). It does — no change needed.
+2. **Sanity check:** confirm `markTaskReported` only flips unreported entries (per existing test
+   `markTaskReported with a timestamp marks only unreported entries`). It does — no change needed.
 
 **Edge handling:**
 - Partial sync interrupt: `markTaskReported` runs only after HTTP 200, so DB stays consistent.
@@ -397,55 +444,90 @@ Three recurring bug families to watch for:
 
 **Goal:** full bidi additive. User can manage state and comments entirely in ct.
 
+**Already built (do NOT redo — verify and move on):**
+- `tasks:setExternalState` handler + HTTP route + IPC + preload bridge — Stage 0. See
+  `apiManifest.ts:72`, `taskHandlers.ts:setExternalTaskState`.
+- `plugins:getConfig` HTTP route — Stage 0. See `apiManifest.ts:116`. Renderer-side access still
+  needs a `window.api.plugins.getConfig` preload bridge (no IPC for this domain yet — only HTTP).
+  Add the bridge as part of Stage 3 §3 below.
+- `comments:update` accepting `externalId` — Stage 0. See `commentHandlers.ts:70`.
+- Plugin's `CtClient.setExternalTaskState`, `getPluginConfig`, `upsertExternalComment` — Stage 0.
+
+**Prerequisites:**
+
+0. **`ado-client.ts` additions** (assumes Stage 2 already added `patchWorkItem`):
+   - `postWorkItemComment(id: number, html: string): Promise<{ id: number }>` — POST to
+     `_apis/wit/workItems/{id}/comments?api-version=7.1-preview.4`, body `{ "text": <html> }`.
+
+0a. **`ct-client.ts` additions:**
+   - `getPendingSyncComments(): Promise<CtComment[]>` → new route (see Backend §2).
+   - `updateComment(id, { synced, externalId })` → `comments/update` (route exists).
+   - `getTasksWithDirtyState(): Promise<CtTask[]>` → `tasks/getAll` with filter; OR client-side filter
+     after fetching ado-source tasks. Recommend latter (smaller surface).
+
 **Plugin work:**
 
 1. **`push-comments.ts`:**
-   - Query ct: comments where `task.source='ado' AND syncable=true AND synced=false`. (Needs new IPC query or extension of existing `comments:getByTask` to filter by sync state, or a new `comments:getPendingSync` handler.)
-   - For each comment: POST `_apis/wit/workItems/{externalId}/comments?api-version=7.1-preview.4`, body `{ "text": <markdown→html via marked> }`.
-   - On 200: update local comment `synced=true`, `externalId=<response.id>`. (Existing `comments:update` accepts `synced`; add `externalId` to update input.)
+   - Query ct: comments where `task.source='ado' AND syncable=true AND synced=false` via
+     `getPendingSyncComments` (see Backend §2 for the new route).
+   - For each comment: `ado.postWorkItemComment(externalId, marked.parse(body))`.
+   - On 200: `ct.updateComment(commentId, { synced: true, externalId: String(response.id) })`.
    - On failure: leave `synced=false`, log.
 
 2. **`push-state.ts`:**
    - Query ct: tasks where `source='ado' AND state_dirty=1`.
    - For each task:
-     a. FSM validate locally (defensive): ct status → mapped ADO state must be a forward transition from `external_state`.
-     b. PATCH `_apis/wit/workitems/{externalId}` body:
+     a. FSM validate locally (defensive): ct status → mapped ADO state must be a forward transition
+        from `external_state`. If ct status is `blocked` (no ADO mapping), skip with stdout warning
+        and leave `state_dirty=1` (no-op; next ct status change retriggers).
+     b. PATCH via `ado.patchWorkItem(id, [...])` body:
         ```json
         [{"op": "test", "path": "/rev", "value": <rev>},
          {"op": "add", "path": "/fields/System.State", "value": <mappedState>}]
         ```
-     c. On 200: `tasksSetExternalState(taskId, mappedState)` → server clears `state_dirty` and updates `external_state`.
-     d. On 400 with workflow rule error: log "ADO rejected transition from X to Y", leave `state_dirty=1`. Surface as plugin stdout warning.
+     c. On 200: `ct.setExternalTaskState(taskId, mappedState)` → server clears `state_dirty` and
+        updates `external_state`.
+     d. On 400 with workflow rule error: log "ADO rejected transition from X to Y", leave
+        `state_dirty=1`. Surface as plugin stdout warning.
 
 3. **`sync.ts`** updated: `sync` = `push-state → push-time → push-comments → pull`.
    - State first so that subsequent time/comment posts apply against the new state.
    - Pull last so display reflects final ADO state including this run's pushes.
 
 4. **Auto-comment for time push** (optional, config-gated):
-   - If `auto-comment-on-time-push=true`: after a successful time push for a task, build a comment from the entry notes batched in that push:
+   - If `auto-comment-on-time-push=true`: after a successful time push for a task, build a comment
+     from the entry notes batched in that push:
      ```
      +1h 15m logged 2026-05-16:
      - <entry 1 note>
      - <entry 2 note>
      ```
-   - POST as ADO comment in same run.
+   - POST as ADO comment via `ado.postWorkItemComment` in the same run. Reuses the time-entry
+     wrappers added in Stage 2 prereq 0a.
 
 **Backend work:**
 
-1. **`comments:update`** — accept optional `externalId` field. Update test.
+1. **`comments:getPendingSync`** new handler — return comments where `syncable=1 AND synced=0`,
+   filtered to tasks where `source='ado'` (parameterize by source for future plugins). HTTP route +
+   IPC. Use a JOIN to `tasks` rather than fetching all and filtering in JS.
 
-2. **`comments:getPendingSync`** new handler — return comments where `syncable=true AND synced=false`, optionally filtered by `taskId` or `source`. HTTP route + IPC.
+2. **Renderer-facing `plugins.getConfig` preload bridge** — `apiManifest.ts:116` exposes the route
+   over HTTP but `preload.ts` has no `plugins` namespace yet. Add `window.api.plugins.getConfig(id, key)`
+   for the TaskDetail FSM dropdown to read the state-map.
 
-3. **`tasks:setExternalState`** handler — set `external_state` to provided value, set `state_dirty=0`. HTTP route + IPC.
+3. **Renderer FSM enforcement:**
+   - `TaskDetail.tsx` status dropdown for `source==='ado'`: filter options per FSM derived from
+     current `external_state` (computed via state-map config). ct uses `todo|in-progress|done|blocked`
+     status names (NOT `to-do`/`completed`).
+   - State-map exposed to renderer via the new `plugins.getConfig('ado', 'state-map')` bridge
+     (parsed JSON). Plugin uses the same default in `state-map.ts:DEFAULT_STATE_MAP` when the key
+     is unset — renderer should mirror that default rather than failing.
+   - Reopen (`done → in-progress`): present with inline warning text: "ADO may reject; will revert
+     from ADO on next pull if so."
 
-4. **`plugins:getConfig(pluginId, key)`** new handler — return the stored config value as a string. Renderer uses this to read the state-map JSON for FSM display. HTTP route + IPC. (Existing CLI `ct plugin config get` already reads from `plugin_config`; this exposes the same to IPC/renderer.)
-
-4. **Renderer FSM enforcement:**
-   - `TaskDetail.tsx` status dropdown for `source==='ado'`: filter options per FSM derived from current `external_state` (computed via state-map config).
-   - State-map config exposed to renderer via a new IPC: `plugins:getConfig('ado', 'state-map')` returning parsed JSON.
-   - Reopen (`completed → in-progress`): present with inline warning text: "ADO may reject; will revert from ADO on next pull if so."
-
-5. **Backend FSM validation** in `tasks:update`: if `source='ado'` and `status` changes, reject transitions not in the allowed set. HTTP 400 with code `INVALID_AD0_TRANSITION`.
+4. **Backend FSM validation** in `tasks:update`: if `source='ado'` and `status` changes, reject
+   transitions not in the allowed set. HTTP 400 with code `INVALID_ADO_TRANSITION` (note: original
+   plan had a typo `INVALID_AD0_TRANSITION` with a zero; use letter O).
 
 **Exit criteria:**
 - [ ] Syncable+unsynced comments post to ADO, get marked `synced=true` with returned `externalId`.
@@ -459,6 +541,14 @@ Three recurring bug families to watch for:
 ---
 
 ## Cross-cutting concerns
+
+**Infra already wired (Stage 1) — don't re-do:**
+- Plugin tests live at `plugins/ado/src/__tests__/` and are picked up by root `vitest.config.ts`
+  include globs. No separate runner.
+- `ct plugin install` rewrites relative entrypoint paths to absolute (manifest-dir-anchored).
+  `ct plugin run ado <cmd>` works from any CWD. No need to document "run from repo root."
+- `'ado'` is in `TASK_SOURCES`, `SOURCE_LABELS` in `TaskList.tsx` includes `'Azure DevOps'`,
+  TaskDetail renders ADO panel + locks title/notes/desc + badges mirrored comments.
 
 **Testing:**
 - Mock ADO REST via `msw` (preferred) or `nock`.

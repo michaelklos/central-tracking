@@ -56,3 +56,59 @@ export interface PluginConfigEntry {
   key: string;
   value: string;
 }
+
+// ─── ADO API response shapes ──────────────────────────────────────────────
+
+export interface AdoIteration {
+  id: string;
+  name: string;
+  path: string;
+  attributes: {
+    startDate: string | null;
+    finishDate: string | null;
+    timeFrame: 'past' | 'current' | 'future';
+  };
+}
+
+export interface AdoWiqlResult {
+  workItems: { id: number; url: string }[];
+}
+
+export interface AdoWorkItemFields {
+  'System.Id'?: number;
+  'System.Title'?: string;
+  'System.Description'?: string;
+  'System.State'?: string;
+  'System.WorkItemType'?: string;
+  'System.ChangedDate'?: string;
+  'System.IterationPath'?: string;
+  'Microsoft.VSTS.Scheduling.CompletedWork'?: number;
+  [key: string]: unknown;
+}
+
+export interface AdoWorkItem {
+  id: number;
+  rev: number;
+  fields: AdoWorkItemFields;
+  url: string;
+}
+
+export interface AdoWorkItemBatchResponse {
+  count: number;
+  value: AdoWorkItem[];
+}
+
+export interface AdoWorkItemComment {
+  id: number;
+  workItemId: number;
+  text: string;
+  createdBy: { displayName: string; uniqueName: string };
+  createdDate: string;
+  modifiedDate?: string;
+}
+
+export interface AdoWorkItemCommentsResponse {
+  totalCount: number;
+  count: number;
+  comments: AdoWorkItemComment[];
+}

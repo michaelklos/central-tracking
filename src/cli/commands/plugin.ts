@@ -5,15 +5,42 @@ import type { Argv } from 'yargs';
 import { runCommand, output, say, fail } from '../runtime';
 import type { Plugin, PluginManifest } from '../../shared/types';
 
+/**
+ * Rewrite relative path tokens inside the entrypoint string to absolute paths
+ * resolved against the manifest's directory. Lets `ct plugin run <id>` work
+ * from any CWD, not just the repo root.
+ *
+ * Heuristic: skip the first token (the executable, e.g. `node`), skip flags,
+ * skip already-absolute paths, and resolve anything that contains a path
+ * separator or a `.js`/`.cjs`/`.mjs` extension.
+ */
+function absolutizeEntrypoint(entrypoint: string, manifestDir: string): string {
+  const tokens = entrypoint.split(/\s+/);
+  return tokens
+    .map((t, i) => {
+      if (i === 0) return t;
+      if (t.startsWith('-')) return t;
+      if (path.isAbsolute(t)) return t;
+      const looksLikePath = t.includes('/') || t.includes('\\') || /\.(js|cjs|mjs)$/.test(t);
+      return looksLikePath ? path.resolve(manifestDir, t) : t;
+    })
+    .join(' ');
+}
+
 function readManifestFile(filePath: string): PluginManifest {
   const abs = path.resolve(filePath);
   if (!fs.existsSync(abs)) fail(`Plugin manifest not found: ${abs}`);
   const raw = fs.readFileSync(abs, 'utf-8');
+  let manifest: PluginManifest;
   try {
-    return JSON.parse(raw) as PluginManifest;
+    manifest = JSON.parse(raw) as PluginManifest;
   } catch (err) {
     fail(`Invalid JSON in ${abs}: ${(err as Error).message}`);
   }
+  if (manifest.entrypoint) {
+    manifest.entrypoint = absolutizeEntrypoint(manifest.entrypoint, path.dirname(abs));
+  }
+  return manifest;
 }
 
 function formatPluginList(plugins: Plugin[]): string {

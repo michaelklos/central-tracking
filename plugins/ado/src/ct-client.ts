@@ -54,6 +54,10 @@ export class CtClient {
   }
 
   // ─── Tasks ───
+  getTaskById(id: string): Promise<CtTask | null> {
+    return this.call('tasks/getById', [id]);
+  }
+
   upsertExternalTask(input: UpsertExternalTaskInput): Promise<CtTask> {
     return this.call('tasks/upsertExternal', [input]);
   }

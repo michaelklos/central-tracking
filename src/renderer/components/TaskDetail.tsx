@@ -169,7 +169,8 @@ export function TaskDetail() {
     if (!task) return;
     const body = newComment.trim();
     if (!body) return;
-    await window.api.comments.create({ taskId: task.id, body, syncable: commentSyncable });
+    const syncable = task.source === 'ado' ? true : commentSyncable;
+    await window.api.comments.create({ taskId: task.id, body, syncable });
     setNewComment('');
     await loadComments();
   }, [task, newComment, commentSyncable, loadComments]);
@@ -307,6 +308,10 @@ export function TaskDetail() {
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
 
   const hasNotes = (task.notes ?? '').length > 0;
+  const isAdo = task.source === 'ado';
+  const refreshedAtLabel = task.externalRefreshedAt
+    ? new Date(task.externalRefreshedAt).toLocaleString()
+    : 'never';
 
   // Show scroll sentinel for auto-loading (first 3 batches), then "Load more" link
   const showScrollSentinel = timeEntriesHasMore && timeEntryLoadCount < AUTO_LOAD_MAX_BATCHES && !isLoadingEntries;
@@ -338,7 +343,12 @@ export function TaskDetail() {
               autoFocus
             />
           ) : (
-            <h2 className="task-detail__title" onClick={() => setEditingTitle(true)}>
+            <h2
+              className={`task-detail__title${isAdo ? ' task-detail__title--readonly' : ''}`}
+              onClick={isAdo ? undefined : () => setEditingTitle(true)}
+              title={isAdo ? 'Title owned by ADO (read-only)' : undefined}
+            >
+              {isAdo && <span aria-hidden="true" className="task-detail__lock">🔒 </span>}
               {task.title}
             </h2>
           )}
@@ -407,6 +417,37 @@ export function TaskDetail() {
             )}
           </div>
         )}
+
+        {isAdo && (
+          <div className="task-detail__ado-panel">
+            <div className="task-detail__ado-row">
+              <span className="task-detail__ado-state">
+                State: <strong>{task.externalState ?? 'unknown'}</strong>
+              </span>
+              {task.externalUrl && (
+                <a
+                  href={task.externalUrl}
+                  className="task-detail__ado-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (task.externalUrl) window.api.shell.openExternal(task.externalUrl);
+                  }}
+                >
+                  Open in ADO ↗
+                </a>
+              )}
+            </div>
+            <div className="task-detail__ado-row task-detail__ado-row--sub">
+              <span>ADO logged: {(task.externalCompletedHours ?? 0).toFixed(2)} hrs</span>
+              <span>Last refresh: {refreshedAtLabel}</span>
+              {task.stateDirty && (
+                <span className="task-detail__ado-dirty" title="ct status change not yet pushed to ADO">
+                  ● state pending push
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="task-detail__tabs">
@@ -450,7 +491,10 @@ export function TaskDetail() {
             </div>
 
             <div className="task-detail__field">
-              <label>Description</label>
+              <label>
+                Description
+                {isAdo && <span className="task-detail__readonly-hint"> (read-only — ADO owns)</span>}
+              </label>
               <textarea
                 rows={4}
                 value={descDraft}
@@ -458,6 +502,7 @@ export function TaskDetail() {
                 onBlur={handleSaveDesc}
                 onKeyDown={descMd.onKeyDown}
                 placeholder="Add a description..."
+                disabled={isAdo}
               />
             </div>
 
@@ -547,14 +592,16 @@ export function TaskDetail() {
                 onKeyDown={commentMd.onKeyDown}
               />
               <div className="task-detail__comment-actions">
-                <label className="task-detail__sync-toggle">
-                  <input
-                    type="checkbox"
-                    checked={commentSyncable}
-                    onChange={(e) => setCommentSyncable(e.target.checked)}
-                  />
-                  Sync to source
-                </label>
+                {!isAdo && (
+                  <label className="task-detail__sync-toggle">
+                    <input
+                      type="checkbox"
+                      checked={commentSyncable}
+                      onChange={(e) => setCommentSyncable(e.target.checked)}
+                    />
+                    Sync to source
+                  </label>
+                )}
                 <button className="task-detail__comment-submit" onClick={handleAddComment}>
                   Add Comment
                 </button>
@@ -564,31 +611,38 @@ export function TaskDetail() {
             {comments.length === 0 && (
               <p className="task-detail__empty">No comments yet.</p>
             )}
-            {comments.map((comment) => (
-              <div key={comment.id} className="comment">
-                <div className="comment__header">
-                  <span className="comment__date">
-                    {new Date(comment.createdAt).toLocaleString()}
-                  </span>
-                  <div className="comment__badges">
-                    {comment.syncable ? (
-                      <span className={`comment__sync-badge ${comment.synced ? 'comment__sync-badge--synced' : ''}`}>
-                        {comment.synced ? 'synced' : 'will sync'}
-                      </span>
-                    ) : (
-                      <span className="comment__sync-badge comment__sync-badge--local">local only</span>
-                    )}
-                    <button
-                      className="comment__delete"
-                      onClick={() => handleDeleteComment(comment.id)}
-                    >
-                      &times;
-                    </button>
+            {comments.map((comment) => {
+              const fromAdo = comment.externalId !== null;
+              return (
+                <div key={comment.id} className={`comment${fromAdo ? ' comment--external' : ''}`}>
+                  <div className="comment__header">
+                    <span className="comment__date">
+                      {new Date(comment.createdAt).toLocaleString()}
+                    </span>
+                    <div className="comment__badges">
+                      {fromAdo ? (
+                        <span className="comment__sync-badge comment__sync-badge--external">ADO</span>
+                      ) : comment.syncable ? (
+                        <span className={`comment__sync-badge ${comment.synced ? 'comment__sync-badge--synced' : ''}`}>
+                          {comment.synced ? 'synced' : 'will sync'}
+                        </span>
+                      ) : (
+                        <span className="comment__sync-badge comment__sync-badge--local">local only</span>
+                      )}
+                      {!fromAdo && (
+                        <button
+                          className="comment__delete"
+                          onClick={() => handleDeleteComment(comment.id)}
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  <p className="comment__body">{comment.body}</p>
                 </div>
-                <p className="comment__body">{comment.body}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -602,9 +656,12 @@ export function TaskDetail() {
               onBlur={handleSaveNotes}
               onKeyDown={notesMd.onKeyDown}
               placeholder="Add notes..."
+              disabled={isAdo}
             />
             <div className="task-detail__notes-hint">
-              Auto-saves on blur. {window.api.platform === 'darwin' ? '⌘S' : 'Ctrl+S'} saves immediately.
+              {isAdo
+                ? 'Notes mirror ADO description (read-only).'
+                : `Auto-saves on blur. ${window.api.platform === 'darwin' ? '⌘S' : 'Ctrl+S'} saves immediately.`}
             </div>
           </div>
         )}
