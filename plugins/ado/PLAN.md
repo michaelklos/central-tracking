@@ -8,7 +8,7 @@
 
 **Current stage:** Stage 1 — done; ready for Stage 2
 **Last updated:** 2026-05-18
-**Last commit on this work:** _pending — commit Stage 1 changes_
+**Last commit on this work:** 93f9496 (Implement ADO plugin Stage 1: pull + display)
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
