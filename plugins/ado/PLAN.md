@@ -8,7 +8,7 @@
 
 **Current stage:** Stage 2 — done; ready for Stage 3
 **Last updated:** 2026-05-18
-**Last commit on this work:** (to be filled after commit) — Stage 2 commit
+**Last commit on this work:** f1d304a (Implement ADO plugin Stage 2: time push)
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
