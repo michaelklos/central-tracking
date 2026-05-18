@@ -6,12 +6,25 @@
 
 ## Handoff Status
 
-**Current stage:** Stage 2 — done; ready for Stage 3
+**Current stage:** Stage 3 — done; plugin v1 feature-complete
 **Last updated:** 2026-05-18
-**Last commit on this work:** f1d304a (Implement ADO plugin Stage 2: time push)
+**Last commit on this work:** 8391b4e (Implement ADO plugin Stage 3: comments push + state push)
 **Open questions blocking progress:** none
 **Notes from prior session:**
 - Plan locked after 4 rounds of clarification. Scope is firm — do not re-debate ownership/conflict rules.
+- **Stage 3 findings (read before next work on this plugin):**
+  - **`DomainError` class added at `src/main/errors.ts`** — first typed error in the codebase. `httpServer.ts` unwraps it into a `{ok:false, error:{code, httpStatus}}` envelope instead of the generic INTERNAL/NOT_FOUND mapping. Use for any new backend handler that needs callers to branch on the failure mode (e.g., `INVALID_ADO_TRANSITION` is the first user). Plain `Error` still works (mapped to INTERNAL).
+  - **FSM lives in three files; keep them aligned.** `src/main/ipc/taskHandlers.ts:ADO_FORWARD_TRANSITIONS` (backend), `src/renderer/utils/adoFsm.ts:ADO_FORWARD` (UI dropdown filter), `plugins/ado/src/push-state.ts:ALLOWED` (plugin defensive check). The renderer can't import plugin code; the backend can't import renderer code. Three copies is intentional. If you change one, change all three.
+  - **`ADO_DEFAULT_STATE_MAP` duplicated.** Lives at both `plugins/ado/src/state-map.ts:DEFAULT_STATE_MAP` and `src/shared/types.ts:ADO_DEFAULT_STATE_MAP`. Same reason as FSM — renderer can't import plugin. Update both if mapping changes.
+  - **`plugins:getConfig` is the first plugins-namespace IPC channel.** Previously every `plugins/*` route was HTTP-only (`ipcChannel: null` in apiManifest). The renderer needs read access to plugin config to drive UI rules (e.g., state-map); install/manage stays HTTP-only. Bridge is `window.api.plugins.getConfig(id, key)`. New `registerPluginHandlers(ipcMain, db)` in `main.ts`; mirrors the other domain registrars.
+  - **apiManifest parity test scans `pluginHandlers.ts` now.** When a plugin-namespace route gains an IPC binding, the parity test caught the missing scan target. Same will happen for any future namespace that exposes IPC.
+  - **`postWorkItemComment` uses `application/json` (NOT `application/json-patch+json`).** Comment POST body is plain JSON `{text:html}`, not a json-patch document. `patchWorkItem` is the only thing that overrides Content-Type.
+  - **Plugin's `push-state.ts:pushOneTask` skips when prior ADO state (inverse-mapped) cannot legally reach the new ct status.** Belt-and-suspenders against the rare race where ADO state was re-pulled mid-edit; backend FSM already validated at update time. If the inverse-map returns null (unmapped ADO state), the FSM check silently passes — only blocks when we have BOTH sides mapped and they form a disallowed transition.
+  - **`pushOneTask` outcome carries `entries: CtTimeEntry[]`** so `auto-comment-on-time-push` can build a body from the pushed entries' notes without a second fetch. Empty-note entries are filtered out by `buildAutoCommentBody`; if every entry has no note, the comment is just the `+Xh logged YYYY-MM-DD:` header line.
+  - **Auto-comment failures do NOT fail the sync.** Time PATCH already succeeded; a missing comment is cosmetic. `postAutoComments` swallows errors into `warnings`. Other after-PATCH bookkeeping (markTaskReported, setExternalTaskState, updateComment) MUST propagate — those failures cause double-writes on the next run.
+  - **`PendingSyncComment` (shared type) parameterizes by `taskSource`.** Backend handler accepts a source filter so future plugins (Jira, GitHub) share the route. ADO plugin calls `getPendingSyncComments('ado')` explicitly.
+  - **CLI subcommands added.** `push-time`, `push-state`, `push-comments` (granular), plus existing `push`/`sync`/`pull`/`refresh`. `push` is aliased to `push-time` for back-compat with the Stage 2 CLI surface.
+  - **Test runner pattern unchanged from Stage 2.** Plain `vi.fn()` mocks of `AdoClient`/`CtClient`; no `msw`/`nock`. push-state/push-comments/sync follow the same `makeMocks`+`cast` shape as `push-time.test.ts`.
 - **Stage 2 findings (read before Stage 3):**
   - **No backend changes were needed.** Plan §0a flagged a potential `reportedAt` filter on `timeEntries:getByTask`; we filtered client-side instead (smaller blast radius, plan's recommended path). `tasks/getAll` similarly takes no filter args — `CtClient.getTasks(filter)` fetches all then filters in plugin.
   - **`patchWorkItem` bypasses the `request` retry helper.** It uses `this.http.patch` directly so an AxiosError on 409 propagates intact. The 5xx retry helper would have masked the 409 status from callers. `push-time.ts` does its own one-shot 409 retry (refetch rev, recompute, retry).
@@ -48,7 +61,7 @@
 - [x] **Stage 0** — Scaffolding (schema migration 007, plugin skeleton, types, config)
 - [x] **Stage 1** — Pull + display (read-only ADO mirror in ct)
 - [x] **Stage 2** — Time push (CompletedWork sync via existing reportedAt machinery)
-- [ ] **Stage 3** — Comments push + state push (full bidi additive)
+- [x] **Stage 3** — Comments push + state push (full bidi additive)
 
 ### Assistant instructions for handoff maintenance
 
