@@ -83,9 +83,10 @@ export function createMockApi(): CentralTrackingAPI {
       list: vi.fn().mockResolvedValue([]),
       setEnabled: vi.fn().mockResolvedValue({}),
       getConfig: vi.fn().mockResolvedValue(null),
-      setConfig: vi.fn().mockResolvedValue(undefined),
+      setConfig: vi.fn().mockResolvedValue({ stored: 'plaintext' }),
       listConfig: vi.fn().mockResolvedValue([]),
       deleteConfig: vi.fn().mockResolvedValue(undefined),
+      schema: vi.fn().mockResolvedValue([]),
     },
     log: {
       error: vi.fn(),

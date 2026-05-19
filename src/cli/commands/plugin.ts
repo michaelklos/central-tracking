@@ -3,7 +3,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import type { Argv } from 'yargs';
 import { runCommand, output, say, fail } from '../runtime';
-import type { Plugin, PluginManifest } from '../../shared/types';
+import type { Plugin, PluginManifest, PluginConfigSchemaEntry } from '../../shared/types';
 
 /**
  * Rewrite relative path tokens inside the entrypoint string to absolute paths
@@ -41,6 +41,52 @@ function readManifestFile(filePath: string): PluginManifest {
     manifest.entrypoint = absolutizeEntrypoint(manifest.entrypoint, path.dirname(abs));
   }
   return manifest;
+}
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { data += chunk; });
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', reject);
+  });
+}
+
+function statusLabel(s: PluginConfigSchemaEntry['status']): string {
+  switch (s) {
+    case 'unset': return 'unset';
+    case 'set': return 'set';
+    case 'encrypted': return 'encrypted';
+    case 'plaintext-secret': return 'plaintext-secret ⚠';
+  }
+}
+
+function formatPluginSchema(plugin: Plugin, schema: PluginConfigSchemaEntry[]): string {
+  const header = `${plugin.id} (${plugin.name}, v${plugin.version})\n`;
+  if (schema.length === 0) {
+    return `${header}\n  (no configSchema declared in plugin.json — set keys are stored as-is)`;
+  }
+  const rows = schema.map((s) => ({
+    key: s.key,
+    required: s.required ? 'yes' : 'no',
+    secret: s.secret ? 'yes' : 'no',
+    status: statusLabel(s.status),
+    env: s.envVarName ?? '',
+    desc: s.description ?? '',
+  }));
+  const widths = {
+    key: Math.max(3, ...rows.map((r) => r.key.length)),
+    required: Math.max(8, ...rows.map((r) => r.required.length)),
+    secret: Math.max(6, ...rows.map((r) => r.secret.length)),
+    status: Math.max(6, ...rows.map((r) => r.status.length)),
+    env: Math.max(12, ...rows.map((r) => r.env.length)),
+  };
+  const head = `  ${'KEY'.padEnd(widths.key)}  ${'REQUIRED'.padEnd(widths.required)}  ${'SECRET'.padEnd(widths.secret)}  ${'STATUS'.padEnd(widths.status)}  ${'ENV OVERRIDE'.padEnd(widths.env)}  DESCRIPTION`;
+  const lines = rows.map((r) =>
+    `  ${r.key.padEnd(widths.key)}  ${r.required.padEnd(widths.required)}  ${r.secret.padEnd(widths.secret)}  ${r.status.padEnd(widths.status)}  ${r.env.padEnd(widths.env)}  ${r.desc}`,
+  );
+  return [header, head, ...lines].join('\n');
 }
 
 function formatPluginList(plugins: Plugin[]): string {
@@ -115,36 +161,81 @@ export function registerPluginCommands(yargs: Argv): Argv {
             (yy) =>
               yy
                 .positional('id', { type: 'string', demandOption: true })
-                .positional('key', { type: 'string', demandOption: true }),
+                .positional('key', { type: 'string', demandOption: true })
+                .option('reveal', { type: 'boolean', default: false, describe: 'Print cleartext for secret keys (default: masked)' }),
             (argv) =>
               runCommand(argv, async ({ client }) => {
-                const value = await client.plugins.getConfig(argv.id as string, argv.key as string);
+                const value = await client.plugins.getConfig(
+                  argv.id as string,
+                  argv.key as string,
+                  { reveal: argv.reveal as boolean },
+                );
                 output(argv, { key: argv.key, value }, () => (value ?? ''));
               }),
           )
           .command(
-            'set <id> <key> <value>',
+            'set <id> <key> [value]',
             'Write a plugin config value',
             (yy) =>
               yy
                 .positional('id', { type: 'string', demandOption: true })
                 .positional('key', { type: 'string', demandOption: true })
-                .positional('value', { type: 'string', demandOption: true }),
+                .positional('value', { type: 'string', describe: 'Value (omit when using --secret-from-stdin)' })
+                .option('secret', { type: 'boolean', default: false, describe: 'Force-treat as secret (encrypt via OS keychain)' })
+                .option('secret-from-stdin', { type: 'boolean', default: false, describe: 'Read value from stdin; implies --secret; keeps value out of shell history' })
+                .option('allow-plaintext', { type: 'boolean', default: false, describe: 'Allow plaintext storage when OS keyring is unavailable' }),
             (argv) =>
               runCommand(argv, async ({ client }) => {
-                await client.plugins.setConfig(argv.id as string, argv.key as string, argv.value as string);
-                say(`Set ${argv.id}.${argv.key}`);
+                const fromStdin = argv['secret-from-stdin'] as boolean;
+                let value = argv.value as string | undefined;
+                if (fromStdin && value !== undefined) {
+                  fail('Cannot pass <value> when --secret-from-stdin is set.');
+                }
+                if (fromStdin) {
+                  value = await readStdin();
+                  if (!value) fail('No value received on stdin.');
+                  // Strip a single trailing newline (common when piping `echo`).
+                  if (value.endsWith('\n')) value = value.slice(0, -1);
+                  if (value.endsWith('\r')) value = value.slice(0, -1);
+                }
+                if (value === undefined) {
+                  fail('Specify <value> or use --secret-from-stdin.');
+                }
+                const secret = (argv.secret as boolean) || fromStdin;
+                const allowPlaintext = argv['allow-plaintext'] as boolean;
+                const res = await client.plugins.setConfig(
+                  argv.id as string,
+                  argv.key as string,
+                  value as string,
+                  { secret, allowPlaintext },
+                );
+                const tag = res.stored === 'encrypted' ? ' (encrypted)' : '';
+                say(`Set ${argv.id}.${argv.key}${tag}`);
+                if (res.warning) say(`⚠  ${res.warning}`);
               }),
           )
           .command(
             'list <id>',
             'List all config keys for a plugin',
-            (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+            (yy) =>
+              yy
+                .positional('id', { type: 'string', demandOption: true })
+                .option('reveal', { type: 'boolean', default: false, describe: 'Print cleartext for secret keys (default: masked)' }),
             (argv) =>
               runCommand(argv, async ({ client }) => {
-                const entries = await client.plugins.listConfig(argv.id as string);
+                const entries = await client.plugins.listConfig(
+                  argv.id as string,
+                  { reveal: argv.reveal as boolean },
+                );
                 output(argv, entries, (es) =>
-                  es.length === 0 ? 'No config set.' : es.map((e) => `  ${e.key} = ${e.value}`).join('\n'),
+                  es.length === 0
+                    ? 'No config set.'
+                    : es.map((e) => {
+                        const tag = e.secret
+                          ? e.stored === 'encrypted' ? ' [encrypted]' : ' [plaintext-secret]'
+                          : '';
+                        return `  ${e.key} = ${e.value}${tag}`;
+                      }).join('\n'),
                 );
               }),
           )
@@ -164,6 +255,18 @@ export function registerPluginCommands(yargs: Argv): Argv {
           .demandCommand(1, 'Specify a config subcommand'),
       )
       .command(
+        'schema <id>',
+        'Show a plugin\'s declared config keys (required/secret/status/env)',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const plugin = await client.plugins.get(argv.id as string);
+            if (!plugin) fail(`Plugin not found: ${argv.id}`);
+            const schema = await client.plugins.schema(argv.id as string);
+            output(argv, schema, () => formatPluginSchema(plugin, schema));
+          }),
+      )
+      .command(
         'run <id> [pluginArgs..]',
         'Spawn a plugin\'s entrypoint with CT_* env vars (extra args are forwarded)',
         (yy) =>
@@ -175,6 +278,25 @@ export function registerPluginCommands(yargs: Argv): Argv {
             const plugin = await client.plugins.get(argv.id as string);
             if (!plugin) fail(`Plugin not found: ${argv.id}`);
             if (!plugin.manifest.entrypoint) fail(`Plugin ${plugin.id} has no entrypoint`);
+
+            // Required-key gating: refuse to spawn if a declared-required key
+            // is unset AND no env override is present. Saves the plugin from
+            // crashing mid-run with a less helpful error.
+            const schema = await client.plugins.schema(plugin.id);
+            const missing: string[] = [];
+            for (const s of schema) {
+              if (!s.required || s.status !== 'unset') continue;
+              const envName = s.envVarName ?? null;
+              if (envName && process.env[envName]) continue;
+              missing.push(s.key);
+            }
+            if (missing.length > 0) {
+              fail(
+                `Missing required config for plugin "${plugin.id}": ${missing.join(', ')}.\n` +
+                  `Set with:  ct plugin config set ${plugin.id} <key> <value>\n` +
+                  `Or run:    ct plugin schema ${plugin.id}   to see all keys.`,
+              );
+            }
 
             const [cmd, ...args] = plugin.manifest.entrypoint.split(/\s+/);
             const forwarded = (argv.pluginArgs as string[]) ?? [];

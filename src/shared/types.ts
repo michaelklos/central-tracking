@@ -324,6 +324,21 @@ export interface ImportResult {
 // ─── Plugins ────────────────────────────────────────────────────────────────
 
 /**
+ * Per-key declaration in a plugin's `configSchema`. Drives:
+ *  - whether the value is encrypted at rest via Electron safeStorage,
+ *  - whether the value can be sourced from `CT_PLUGIN_<ID>_<KEY>` env var,
+ *  - required-key gating at `ct plugin run` time,
+ *  - the `ct plugin schema <id>` listing.
+ */
+export interface PluginConfigKeySpec {
+  required: boolean;
+  /** Sensitive values are encrypted at rest and masked in CLI output. */
+  secret: boolean;
+  /** Human-readable hint shown by `ct plugin schema <id>`. */
+  description?: string;
+}
+
+/**
  * Plugin manifest loaded from `plugin.json`. Supplied by the plugin author;
  * `ct plugin install` validates and persists a snapshot into the plugins table.
  */
@@ -337,6 +352,12 @@ export interface PluginManifest {
   events?: string[];
   /** Loopback webhook URL that receives POSTed events. */
   webhook?: { url: string };
+  /**
+   * Declared config keys with required/secret/description metadata.
+   * When omitted, the plugin's config behaves as today (settable but no
+   * encryption hints, no required-key validation, no schema listing).
+   */
+  configSchema?: Record<string, PluginConfigKeySpec>;
 }
 
 export interface Plugin {
@@ -351,8 +372,37 @@ export interface Plugin {
 export interface PluginConfigEntry {
   pluginId: string;
   key: string;
+  /**
+   * Cleartext when the caller is authorised to reveal (HTTP route with
+   * reveal:true). Masked string (`[encrypted]` or `[plaintext-secret]`) when
+   * the boundary refused to reveal. Never raw ciphertext — that's an
+   * implementation detail of `secretStorage`.
+   */
   value: string;
+  /** From the plugin manifest's `configSchema[key].secret` (false if undeclared). */
+  secret: boolean;
+  /** How the value is stored on disk for this row. */
+  stored: 'encrypted' | 'plaintext';
 }
+
+/**
+ * Merged view of a plugin's `configSchema` + actual DB state. Drives
+ * `ct plugin schema <id>` and the required-key gating in `ct plugin run`.
+ */
+export interface PluginConfigSchemaEntry {
+  key: string;
+  required: boolean;
+  secret: boolean;
+  description?: string;
+  /** `plaintext-secret` flags a declared-secret key whose row is still raw. */
+  status: 'unset' | 'set' | 'encrypted' | 'plaintext-secret';
+  /** Set for secret keys. `CT_PLUGIN_<ID_UPPER>_<KEY_UPPER>` (- → _). */
+  envVarName: string | null;
+}
+
+/** Masked sentinel returned in place of a cleartext value when reveal=false. */
+export const PLUGIN_SECRET_MASK_ENCRYPTED = '[encrypted]';
+export const PLUGIN_SECRET_MASK_PLAINTEXT = '[plaintext-secret]';
 
 export interface WebhookEvent {
   event: string;        // e.g. "task.created"
@@ -460,14 +510,28 @@ export interface CentralTrackingAPI {
     list(): Promise<Plugin[]>;
     /** Toggle a plugin's enabled flag. Returns the updated plugin row. */
     setEnabled(id: string, enabled: boolean): Promise<Plugin>;
-    /** Read a single plugin config value. Returns null if unset. */
+    /**
+     * Read a single plugin config value (masked sentinel for secret keys —
+     * the renderer cannot reveal cleartext over this bridge by design).
+     */
     getConfig(id: string, key: string): Promise<string | null>;
-    /** Write a single plugin config value (upsert). */
-    setConfig(id: string, key: string, value: string): Promise<void>;
-    /** List all config entries for a plugin. */
+    /**
+     * Write a single plugin config value. Pass `opts.secret` to force
+     * encryption when the manifest does not declare it; `opts.allowPlaintext`
+     * to proceed without encryption when the keyring is unavailable.
+     */
+    setConfig(
+      id: string,
+      key: string,
+      value: string,
+      opts?: { secret?: boolean; allowPlaintext?: boolean },
+    ): Promise<{ stored: 'encrypted' | 'plaintext'; warning?: string }>;
+    /** List all config entries for a plugin (secrets masked). */
     listConfig(id: string): Promise<PluginConfigEntry[]>;
     /** Delete a single plugin config key. */
     deleteConfig(id: string, key: string): Promise<void>;
+    /** Manifest-declared schema merged with current DB state. */
+    schema(id: string): Promise<PluginConfigSchemaEntry[]>;
   };
   shell: {
     openExternal(url: string): Promise<void>;

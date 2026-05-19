@@ -116,18 +116,25 @@ const api = {
   },
 
   // Plugin lifecycle + config (renderer manages enable state and reads the
-  // ADO state-map etc.).
+  // ADO state-map etc.). Secret values are ALWAYS masked over this bridge —
+  // there is no reveal opt by design. CLI/plugins go via HTTP and can opt in.
   plugins: {
     list: () => ipcRenderer.invoke('plugins:list'),
     setEnabled: (id: string, enabled: boolean) =>
       ipcRenderer.invoke('plugins:setEnabled', id, enabled),
     getConfig: (id: string, key: string): Promise<string | null> =>
       ipcRenderer.invoke('plugins:getConfig', id, key),
-    setConfig: (id: string, key: string, value: string): Promise<void> =>
-      ipcRenderer.invoke('plugins:setConfig', id, key, value),
+    setConfig: (
+      id: string,
+      key: string,
+      value: string,
+      opts?: { secret?: boolean; allowPlaintext?: boolean },
+    ): Promise<{ stored: 'encrypted' | 'plaintext'; warning?: string }> =>
+      ipcRenderer.invoke('plugins:setConfig', id, key, value, opts),
     listConfig: (id: string) => ipcRenderer.invoke('plugins:listConfig', id),
     deleteConfig: (id: string, key: string): Promise<void> =>
       ipcRenderer.invoke('plugins:deleteConfig', id, key),
+    schema: (id: string) => ipcRenderer.invoke('plugins:schema', id),
   },
 
   // CLI tool installation (Mac only; Windows handled by NSIS installer)

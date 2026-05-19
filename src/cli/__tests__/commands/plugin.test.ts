@@ -129,19 +129,53 @@ describe('ct plugin config', () => {
       ['plugin', 'config', 'get', 'ado', 'api-key'],
       { responses: { 'plugins/getConfig': 'secret' } },
     );
-    expect(calls).toEqual([{ endpoint: 'plugins/getConfig', args: ['ado', 'api-key'] }]);
+    expect(calls).toEqual([
+      { endpoint: 'plugins/getConfig', args: ['ado', 'api-key', { reveal: false }] },
+    ]);
     expect(stdout.trim()).toBe('secret');
   });
 
-  it('set posts plugins/setConfig', async () => {
+  it('get --reveal forwards reveal:true', async () => {
+    const { calls } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'config', 'get', 'ado', 'api-key', '--reveal'],
+      { responses: { 'plugins/getConfig': 'secret' } },
+    );
+    expect(calls).toEqual([
+      { endpoint: 'plugins/getConfig', args: ['ado', 'api-key', { reveal: true }] },
+    ]);
+  });
+
+  it('set posts plugins/setConfig with opts', async () => {
     const { calls } = await runCli(
       registerPluginCommands,
       ['plugin', 'config', 'set', 'ado', 'api-key', 's3cr3t'],
-      { responses: { 'plugins/setConfig': undefined } },
+      { responses: { 'plugins/setConfig': { stored: 'plaintext' } } },
     );
     expect(calls).toEqual([
-      { endpoint: 'plugins/setConfig', args: ['ado', 'api-key', 's3cr3t'] },
+      { endpoint: 'plugins/setConfig', args: ['ado', 'api-key', 's3cr3t', { secret: false, allowPlaintext: false }] },
     ]);
+  });
+
+  it('set --secret forwards secret:true', async () => {
+    const { stdout, calls } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'config', 'set', 'ado', 'api-key', 's3cr3t', '--secret'],
+      { responses: { 'plugins/setConfig': { stored: 'encrypted' } } },
+    );
+    expect(calls).toEqual([
+      { endpoint: 'plugins/setConfig', args: ['ado', 'api-key', 's3cr3t', { secret: true, allowPlaintext: false }] },
+    ]);
+    expect(stdout).toContain('(encrypted)');
+  });
+
+  it('set echoes the warning when server returns one', async () => {
+    const { stdout } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'config', 'set', 'ado', 'api-key', 's3cr3t', '--secret', '--allow-plaintext'],
+      { responses: { 'plugins/setConfig': { stored: 'plaintext', warning: 'fallback' } } },
+    );
+    expect(stdout).toContain('fallback');
   });
 
   it('list empty → "No config set."', async () => {
@@ -153,13 +187,54 @@ describe('ct plugin config', () => {
     expect(stdout).toContain('No config set');
   });
 
-  it('list renders key=value', async () => {
+  it('list renders key=value with secret tag for encrypted entries', async () => {
     const { stdout } = await runCli(
       registerPluginCommands,
       ['plugin', 'config', 'list', 'ado'],
-      { responses: { 'plugins/listConfig': [{ key: 'api-key', value: 's3cr3t' }] } },
+      {
+        responses: {
+          'plugins/listConfig': [
+            { key: 'api-key', value: '[encrypted]', secret: true, stored: 'encrypted' },
+            { key: 'host', value: 'example.com', secret: false, stored: 'plaintext' },
+          ],
+        },
+      },
     );
-    expect(stdout).toContain('api-key = s3cr3t');
+    expect(stdout).toContain('api-key = [encrypted] [encrypted]');
+    expect(stdout).toContain('host = example.com');
+  });
+
+  it('list --reveal forwards reveal:true', async () => {
+    const { calls } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'config', 'list', 'ado', '--reveal'],
+      { responses: { 'plugins/listConfig': [] } },
+    );
+    expect(calls).toEqual([
+      { endpoint: 'plugins/listConfig', args: ['ado', { reveal: true }] },
+    ]);
+  });
+
+  it('schema renders required/secret/status/env columns', async () => {
+    const { stdout } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'schema', 'ado'],
+      {
+        responses: {
+          'plugins/get': { id: 'ado', name: 'Azure DevOps Sync', version: '0.1.0', enabled: true, manifest: { id: 'ado', name: 'Azure DevOps Sync', version: '0.1.0' }, installedAt: '' },
+          'plugins/schema': [
+            { key: 'pat',  required: true,  secret: true,  status: 'encrypted', envVarName: 'CT_PLUGIN_ADO_PAT', description: 'Token' },
+            { key: 'host', required: true,  secret: false, status: 'set',       envVarName: null, description: 'Host' },
+          ],
+        },
+      },
+    );
+    expect(stdout).toContain('KEY');
+    expect(stdout).toContain('REQUIRED');
+    expect(stdout).toContain('SECRET');
+    expect(stdout).toContain('STATUS');
+    expect(stdout).toContain('CT_PLUGIN_ADO_PAT');
+    expect(stdout).toContain('encrypted');
   });
 
   it('delete posts plugins/deleteConfig', async () => {
@@ -171,5 +246,53 @@ describe('ct plugin config', () => {
     expect(calls).toEqual([
       { endpoint: 'plugins/deleteConfig', args: ['ado', 'api-key'] },
     ]);
+  });
+});
+
+describe('ct plugin run required-key gating', () => {
+  it('fails fast when a required config key is unset and no env override is present', async () => {
+    delete process.env.CT_PLUGIN_ADO_PAT;
+    const { stderr, exitCode } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'run', 'ado'],
+      {
+        responses: {
+          'plugins/get': samplePlugin,
+          'plugins/schema': [
+            { key: 'pat',          required: true,  secret: true,  status: 'unset', envVarName: 'CT_PLUGIN_ADO_PAT' },
+            { key: 'organization', required: true,  secret: false, status: 'set',   envVarName: null },
+          ],
+        },
+      },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Missing required config');
+    expect(stderr).toContain('pat');
+  });
+
+  it('passes the gate when env var satisfies the requirement', async () => {
+    process.env.CT_PLUGIN_ADO_PAT = 'from-env';
+    // Don't actually spawn — only test the gate. Use an entrypoint that exits 0.
+    const fakePlugin = {
+      ...samplePlugin,
+      manifest: { ...samplePlugin.manifest, entrypoint: 'node -e "process.exit(0)"' },
+    };
+    const { stderr, exitCode } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'run', 'ado'],
+      {
+        responses: {
+          'plugins/get': fakePlugin,
+          'plugins/schema': [
+            { key: 'pat', required: true, secret: true, status: 'unset', envVarName: 'CT_PLUGIN_ADO_PAT' },
+          ],
+        },
+      },
+    );
+    delete process.env.CT_PLUGIN_ADO_PAT;
+    expect(stderr).not.toContain('Missing required config');
+    // The harness only records exitCode when the CLI calls process.exit;
+    // a clean spawn-and-await path leaves it null, which is fine here.
+    expect([0, null]).toContain(exitCode);
   });
 });

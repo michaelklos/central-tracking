@@ -26,30 +26,53 @@ If you already had an older copy installed, re-run `ct plugin install` after eac
 
 ## Configure
 
-Required:
+Set the required keys first. The PAT is declared `secret: true` in the plugin manifest, so it is encrypted at rest via the OS keychain (macOS Keychain / Windows DPAPI / Linux libsecret-kwallet) and never returned in cleartext from `ct plugin config list`. See [`docs/plugins.md`](../../docs/plugins.md#plugin-secrets) for the full standard.
+
+**Required:**
 
 ```bash
-ct plugin config set ado pat          <personal-access-token>
+# PAT: pipe via stdin so the token never lands in your shell history.
+echo "$ADO_PAT" | ct plugin config set ado pat --secret-from-stdin
+
 ct plugin config set ado organization <org-slug>
 ct plugin config set ado project      <project-name>
 ```
 
-PAT needs `Work Items: Read & write` (and `Read` is enough for pull-only). Token lives only in `plugin_config`; it is not logged.
+PAT needs `Work Items: Read & write` (or `Read` only if you'll just `pull`).
 
-Optional:
+**Optional:**
 
 ```bash
-ct plugin config set ado team                       <team-name>            # needed for current-iteration WIQL
-ct plugin config set ado round-minutes              15                     # default 15
-ct plugin config set ado round-mode                 nearest                # nearest|up|down
-ct plugin config set ado work-item-types            "User Story,Bug,Task"  # pull filter
-ct plugin config set ado pull-closed                false                  # include closed items?
-ct plugin config set ado auto-comment-on-time-push  false                  # post a worklog comment built from entry notes
-ct plugin config set ado tracks-reported            true                   # see "Reported state tracking"
-ct plugin config set ado state-map                  '<json>'               # see below
+ct plugin config set ado team                       <team-name>
+ct plugin config set ado round-minutes              15
+ct plugin config set ado round-mode                 nearest               # nearest|up|down
+ct plugin config set ado work-item-types            "User Story,Bug,Task"
+ct plugin config set ado pull-closed                false
+ct plugin config set ado auto-comment-on-time-push  false
+ct plugin config set ado tracks-reported            true                  # see "Reported state tracking"
+ct plugin config set ado state-map                  '<json>'              # see below
 ```
 
-Inspect current values: `ct plugin config list ado`.
+**Inspect what is set / what is missing / which keys are encrypted:**
+
+```bash
+ct plugin schema ado          # required, secret, status, env-var-name, description
+ct plugin config list ado     # values (secrets masked as [encrypted])
+ct plugin config list ado --reveal   # values (secrets in cleartext — be careful)
+```
+
+**Sourcing the PAT from a password manager instead of storing it:**
+
+Declared-secret keys honour `CT_PLUGIN_ADO_<KEY>` env vars at plugin-run time, taking precedence over the DB. Example with 1Password CLI:
+
+```bash
+export CT_PLUGIN_ADO_PAT="$(op read 'op://Personal/ADO/pat')"
+ct plugin run ado sync
+```
+
+Non-secret keys do NOT honour env vars (would be surprising). Use `ct plugin config set` for those.
+
+**Linux without a keyring** — if `safeStorage` is unavailable (no libsecret-1-0 / no gnome-keyring / no kwalletd), `ct plugin config set ... --secret` fails with a `NO_KEYRING` error. Install the package for your DE (`gnome-keyring` on GNOME, `kwallet` on KDE) and ensure the session keyring is unlocked before launching the app. As a last resort, re-run with `--allow-plaintext`; the value is stored plaintext and a warning is printed.
 
 ### State map
 

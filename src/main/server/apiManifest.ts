@@ -34,6 +34,8 @@ import { parseImportContent, executeImport } from '../import/importExecutor';
 import {
   installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
   getPluginConfig, setPluginConfig, deletePluginConfig, listPluginConfig,
+  getPluginConfigSchema, maskListEntries, maskSecretValue,
+  type SetPluginConfigOptions,
 } from '../ipc/pluginHandlers';
 
 export type ApiHandler = (db: Database, ...args: unknown[]) => unknown;
@@ -120,10 +122,23 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'plugins/install',      ipcChannel: null,                   mutates: true,  event: 'plugin.installed',     handler: (db, manifest) => installPlugin(db, manifest) },
   { route: 'plugins/uninstall',    ipcChannel: null,                   mutates: true,  event: 'plugin.uninstalled',   handler: (db, id) => uninstallPlugin(db, id as string) },
   { route: 'plugins/setEnabled',   ipcChannel: 'plugins:setEnabled',   mutates: true,  event: 'plugin.updated',       handler: (db, id, enabled) => setPluginEnabled(db, id as string, enabled as boolean) },
-  { route: 'plugins/getConfig',    ipcChannel: 'plugins:getConfig',    mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
-  { route: 'plugins/listConfig',   ipcChannel: 'plugins:listConfig',   mutates: false, handler: (db, id) => listPluginConfig(db, id as string) },
-  { route: 'plugins/setConfig',    ipcChannel: 'plugins:setConfig',    mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value) => setPluginConfig(db, id as string, key as string, value as string) },
+  { route: 'plugins/getConfig',    ipcChannel: 'plugins:getConfig',    mutates: false, handler: (db, id, key, opts) => {
+    const value = getPluginConfig(db, id as string, key as string);
+    if (value === null) return null;
+    const o = opts as { reveal?: boolean } | undefined;
+    if (o?.reveal) return value;
+    const schema = getPluginConfigSchema(db, id as string).find((s) => s.key === key);
+    if (!schema?.secret) return value;
+    return maskSecretValue(schema.status === 'plaintext-secret' ? 'plaintext' : 'encrypted');
+  } },
+  { route: 'plugins/listConfig',   ipcChannel: 'plugins:listConfig',   mutates: false, handler: (db, id, opts) => {
+    const entries = listPluginConfig(db, id as string);
+    const o = opts as { reveal?: boolean } | undefined;
+    return o?.reveal ? entries : maskListEntries(entries);
+  } },
+  { route: 'plugins/setConfig',    ipcChannel: 'plugins:setConfig',    mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value, opts) => setPluginConfig(db, id as string, key as string, value as string, (opts as SetPluginConfigOptions | undefined) ?? {}) },
   { route: 'plugins/deleteConfig', ipcChannel: 'plugins:deleteConfig', mutates: true,  event: 'plugin.configChanged', handler: (db, id, key) => deletePluginConfig(db, id as string, key as string) },
+  { route: 'plugins/schema',       ipcChannel: 'plugins:schema',       mutates: false, handler: (db, id) => getPluginConfigSchema(db, id as string) },
 ];
 
 /** Route key (e.g. "tasks/getAll") → route entry. Used by the HTTP server. */

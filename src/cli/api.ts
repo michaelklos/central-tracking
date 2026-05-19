@@ -24,6 +24,7 @@ import type {
   Plugin,
   PluginManifest,
   PluginConfigEntry,
+  PluginConfigSchemaEntry,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
   PendingSyncComment,
@@ -103,10 +104,18 @@ export interface ApiClient {
     install(manifest: PluginManifest): Promise<Plugin>;
     uninstall(id: string): Promise<void>;
     setEnabled(id: string, enabled: boolean): Promise<Plugin>;
-    getConfig(id: string, key: string): Promise<string | null>;
-    listConfig(id: string): Promise<PluginConfigEntry[]>;
-    setConfig(id: string, key: string, value: string): Promise<void>;
+    /** `opts.reveal=true` returns cleartext for secret keys; default masks. */
+    getConfig(id: string, key: string, opts?: { reveal?: boolean }): Promise<string | null>;
+    /** `opts.reveal=true` returns cleartext for secret entries; default masks. */
+    listConfig(id: string, opts?: { reveal?: boolean }): Promise<PluginConfigEntry[]>;
+    setConfig(
+      id: string,
+      key: string,
+      value: string,
+      opts?: { secret?: boolean; allowPlaintext?: boolean },
+    ): Promise<{ stored: 'encrypted' | 'plaintext'; warning?: string }>;
     deleteConfig(id: string, key: string): Promise<void>;
+    schema(id: string): Promise<PluginConfigSchemaEntry[]>;
   };
 }
 
@@ -188,10 +197,12 @@ export function createApiClient(request: RawRequest): ApiClient {
       install: (manifest) => request<Plugin>('plugins/install', [manifest]),
       uninstall: (id) => request<void>('plugins/uninstall', [id]),
       setEnabled: (id, enabled) => request<Plugin>('plugins/setEnabled', [id, enabled]),
-      getConfig: (id, key) => request<string | null>('plugins/getConfig', [id, key]),
-      listConfig: (id) => request<PluginConfigEntry[]>('plugins/listConfig', [id]),
-      setConfig: (id, key, value) => request<void>('plugins/setConfig', [id, key, value]),
+      getConfig: (id, key, opts) => request<string | null>('plugins/getConfig', [id, key, opts ?? {}]),
+      listConfig: (id, opts) => request<PluginConfigEntry[]>('plugins/listConfig', [id, opts ?? {}]),
+      setConfig: (id, key, value, opts) =>
+        request<{ stored: 'encrypted' | 'plaintext'; warning?: string }>('plugins/setConfig', [id, key, value, opts ?? {}]),
       deleteConfig: (id, key) => request<void>('plugins/deleteConfig', [id, key]),
+      schema: (id) => request<PluginConfigSchemaEntry[]>('plugins/schema', [id]),
     },
   };
 }

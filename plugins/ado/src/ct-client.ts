@@ -12,6 +12,7 @@ import type {
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
   PluginConfigEntry,
+  PluginConfigSchemaEntry,
 } from './types';
 
 export interface GetTasksFilter {
@@ -31,6 +32,14 @@ export interface CtClientOptions {
   baseUrl?: string;
   token?: string;
   timeoutMs?: number;
+}
+
+/**
+ * `CT_PLUGIN_<ID_UPPER>_<KEY_UPPER>` with hyphens converted to underscores
+ * on both sides. Mirrors the server-side helper in `pluginHandlers.ts`.
+ */
+export function envVarNameFor(pluginId: string, key: string): string {
+  return `CT_PLUGIN_${pluginId.toUpperCase().replace(/-/g, '_')}_${key.toUpperCase().replace(/-/g, '_')}`;
 }
 
 export class CtClient {
@@ -60,12 +69,56 @@ export class CtClient {
   }
 
   // ─── Plugin config ───
-  listPluginConfig(): Promise<PluginConfigEntry[]> {
-    return this.call('plugins/listConfig', [this.pluginId]);
+
+  /**
+   * Returns every persisted config entry for this plugin with cleartext
+   * values (HTTP request includes `reveal: true`; the plugin process needs
+   * actual values to run, and authenticates with the session token).
+   *
+   * For keys declared `secret: true` in the manifest's `configSchema`, the
+   * presence of `CT_PLUGIN_<ID_UPPER>_<KEY_UPPER>` in the parent process env
+   * shadows the DB value — this is the recommended way to source secrets
+   * from a vault / password manager (1Password CLI, pass, direnv, …) instead
+   * of storing them in the SQLite db.
+   *
+   * Non-secret keys are NOT env-overridable (env shadowing of config like
+   * `round-minutes` would be surprising). Use `ct plugin config set` for
+   * those.
+   */
+  async listPluginConfig(): Promise<PluginConfigEntry[]> {
+    const [fromDb, schema] = await Promise.all([
+      this.call<PluginConfigEntry[]>('plugins/listConfig', [this.pluginId, { reveal: true }]),
+      this.call<PluginConfigSchemaEntry[]>('plugins/schema', [this.pluginId]),
+    ]);
+    const secretSet = new Set(schema.filter((s) => s.secret).map((s) => s.key));
+    const result: PluginConfigEntry[] = fromDb.map((e) => {
+      if (!secretSet.has(e.key)) return e;
+      const envName = envVarNameFor(this.pluginId, e.key);
+      const fromEnv = process.env[envName];
+      return fromEnv === undefined ? e : { ...e, value: fromEnv };
+    });
+    // Surface env-only secrets that are NOT in the DB (so loadConfig sees
+    // them and required-key validation passes).
+    for (const s of schema) {
+      if (!s.secret) continue;
+      if (result.some((e) => e.key === s.key)) continue;
+      const envName = envVarNameFor(this.pluginId, s.key);
+      const fromEnv = process.env[envName];
+      if (fromEnv !== undefined) {
+        result.push({
+          pluginId: this.pluginId,
+          key: s.key,
+          value: fromEnv,
+          secret: true,
+          stored: 'plaintext',
+        });
+      }
+    }
+    return result;
   }
 
   getPluginConfig(key: string): Promise<string | null> {
-    return this.call('plugins/getConfig', [this.pluginId, key]);
+    return this.call('plugins/getConfig', [this.pluginId, key, { reveal: true }]);
   }
 
   // ─── Tasks ───

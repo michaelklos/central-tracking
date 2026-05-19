@@ -74,7 +74,19 @@ export interface UpsertExternalCommentInput {
 export interface PluginConfigEntry {
   pluginId: string;
   key: string;
+  /** Cleartext when the caller passed reveal:true; masked sentinel otherwise. */
   value: string;
+  secret: boolean;
+  stored: 'encrypted' | 'plaintext';
+}
+
+export interface PluginConfigSchemaEntry {
+  key: string;
+  required: boolean;
+  secret: boolean;
+  description?: string;
+  status: 'unset' | 'set' | 'encrypted' | 'plaintext-secret';
+  envVarName: string | null;
 }
 
 // ─── ADO API response shapes ──────────────────────────────────────────────

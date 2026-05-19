@@ -2,5 +2,18 @@
   "id": "ado",
   "name": "Azure DevOps Sync",
   "version": "0.1.0",
-  "entrypoint": "node plugins/ado/dist/index.js"
+  "entrypoint": "node plugins/ado/dist/index.js",
+  "configSchema": {
+    "pat":                       { "required": true,  "secret": true,  "description": "Azure DevOps personal access token (scope: Work Items Read & Write)" },
+    "organization":              { "required": true,  "secret": false, "description": "ADO organization slug (e.g. 'contoso')" },
+    "project":                   { "required": true,  "secret": false, "description": "ADO project name" },
+    "team":                      { "required": false, "secret": false, "description": "Team name for current-iteration WIQL" },
+    "round-minutes":             { "required": false, "secret": false, "description": "Time bucket for ADO push (default 15)" },
+    "round-mode":                { "required": false, "secret": false, "description": "nearest | up | down (default nearest)" },
+    "state-map":                 { "required": false, "secret": false, "description": "JSON state map (see plugins/ado/README.md)" },
+    "work-item-types":           { "required": false, "secret": false, "description": "Comma-separated pull filter (default 'User Story,Bug,Task')" },
+    "pull-closed":               { "required": false, "secret": false, "description": "Include closed items on pull (default false)" },
+    "auto-comment-on-time-push": { "required": false, "secret": false, "description": "Post worklog comment from entry notes (default false)" },
+    "tracks-reported":           { "required": false, "secret": false, "description": "Auto-mark entries reported on push (default true)" }
+  }
 }
