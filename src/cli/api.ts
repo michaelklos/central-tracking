@@ -53,6 +53,8 @@ export interface ApiClient {
     deleteAll(): Promise<{ deletedCount: number }>;
     upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
     setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
+    link(id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }): Promise<Task>;
+    unlink(id: string): Promise<Task>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;
@@ -68,6 +70,10 @@ export interface ApiClient {
     getSummaryReport(start: string, end: string): Promise<SummaryReportEntry[]>;
     getByDateRangeWithTasks(start: string, end: string): Promise<TimeEntryWithTask[]>;
     markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>;
+    batchMarkReported(
+      taskIds: string[],
+      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+    ): Promise<{ changed: number }>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;
@@ -128,6 +134,8 @@ export function createApiClient(request: RawRequest): ApiClient {
       upsertExternal: (input) => request<Task>('tasks/upsertExternal', [input]),
       setExternalState: (id, externalState) =>
         request<{ ok: true }>('tasks/setExternalState', [id, externalState]),
+      link: (id, input) => request<Task>('tasks/link', [id, input]),
+      unlink: (id) => request<Task>('tasks/unlink', [id]),
     },
     timeEntries: {
       getByTask: (taskId) => request<TimeEntry[]>('timeEntries/getByTask', [taskId]),
@@ -147,6 +155,8 @@ export function createApiClient(request: RawRequest): ApiClient {
         request<TimeEntryWithTask[]>('timeEntries/getByDateRangeWithTasks', [start, end]),
       markTaskReported: (taskId, reportedAt) =>
         request<{ changed: number }>('timeEntries/markTaskReported', [taskId, reportedAt]),
+      batchMarkReported: (taskIds, opts) =>
+        request<{ changed: number }>('timeEntries/batchMarkReported', [taskIds, opts]),
     },
     comments: {
       getByTask: (taskId) => request<Comment[]>('comments/getByTask', [taskId]),

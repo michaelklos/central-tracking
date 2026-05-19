@@ -341,6 +341,63 @@ export function Sidebar() {
                     selected={filter.categoryIds ?? []}
                     onChange={(v) => setFilter((prev) => ({ ...prev, categoryIds: v }))}
                   />
+                  <div className="sidebar__date-filter" title="Show only tasks with time entries in this range (inclusive)">
+                    <div className="sidebar__date-filter-label">Time logged between</div>
+                    <div className="sidebar__date-filter-row">
+                      <input
+                        type="date"
+                        className="sidebar__date-input"
+                        value={filter.dateStart ?? ''}
+                        onChange={(e) =>
+                          setFilter((prev) => ({
+                            ...prev,
+                            dateStart: e.target.value || undefined,
+                          }))
+                        }
+                      />
+                      {filter.dateStart && (
+                        <button
+                          type="button"
+                          className="sidebar__date-clear"
+                          title="Clear start date"
+                          onClick={() => setFilter((prev) => ({ ...prev, dateStart: undefined }))}
+                        >
+                          ×
+                        </button>
+                      )}
+                      <span className="sidebar__date-sep">to</span>
+                      <input
+                        type="date"
+                        className="sidebar__date-input"
+                        value={filter.dateEnd ?? ''}
+                        onChange={(e) =>
+                          setFilter((prev) => ({
+                            ...prev,
+                            dateEnd: e.target.value || undefined,
+                          }))
+                        }
+                      />
+                      {filter.dateEnd && (
+                        <button
+                          type="button"
+                          className="sidebar__date-clear"
+                          title="Clear end date"
+                          onClick={() => setFilter((prev) => ({ ...prev, dateEnd: undefined }))}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    {(filter.dateStart || filter.dateEnd) && (
+                      <button
+                        type="button"
+                        className="sidebar__date-clear-all"
+                        onClick={() => setFilter((prev) => ({ ...prev, dateStart: undefined, dateEnd: undefined }))}
+                      >
+                        Clear date filter
+                      </button>
+                    )}
+                  </div>
                   <label className="sidebar__toggle-row" title="Hide tasks whose time entries are all reported">
                     <input
                       type="checkbox"
@@ -367,7 +424,7 @@ export function Sidebar() {
                     />
                     <span>Only show uncategorized</span>
                   </label>
-                  {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length || filter.hasUnreportedTime || filter.uncategorized) && (
+                  {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length || filter.hasUnreportedTime || filter.uncategorized || filter.dateStart || filter.dateEnd) && (
                     <button
                       className="sidebar__clear-filters"
                       onClick={() => { setFilter({}); setLocalSearch(''); }}

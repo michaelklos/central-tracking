@@ -239,6 +239,13 @@ export interface TaskFilterParams {
   hasUnreportedTime?: boolean;
   /** Include only tasks that have no categories assigned. */
   uncategorized?: boolean;
+  /** YYYY-MM-DD. Include only tasks with at least one time entry whose
+   *  start_time falls on or after this date. Empty/undefined = unbounded. */
+  dateStart?: string;
+  /** YYYY-MM-DD. Include only tasks with at least one time entry whose
+   *  start_time falls on or before this date (inclusive end-of-day).
+   *  Empty/undefined = unbounded. */
+  dateEnd?: string;
 }
 
 export type TaskQueryParams = PaginationParams & TaskFilterParams & { sortBy?: TaskSortBy };
@@ -379,6 +386,15 @@ export interface CentralTrackingAPI {
     resetApp(): Promise<void>;
     upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
     setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
+    /**
+     * Manually link an existing task to a remote ticket served by `pluginId`.
+     * `mode: 'link'` just stores plugin_id/external_id (task stays editable).
+     * `mode: 'mirror'` also flips `source` to the plugin's source key so the
+     * task behaves as a pulled mirror (locked, FSM enforced, refreshable).
+     */
+    link(id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }): Promise<Task>;
+    /** Reverse of link. For mirror-mode tasks, also resets source to 'ad-hoc'. */
+    unlink(id: string): Promise<Task>;
   };
   timeEntries: {
     getByTask(taskId: string): Promise<TimeEntry[]>;
@@ -400,6 +416,14 @@ export interface CentralTrackingAPI {
      * on the task. Returns the count of rows changed.
      */
     markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>;
+    /**
+     * Bulk-set reportedAt across many tasks, optionally restricted to a date
+     * range (YYYY-MM-DD, inclusive end-of-day). `reportedAt: null` clears.
+     */
+    batchMarkReported(
+      taskIds: string[],
+      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+    ): Promise<{ changed: number }>;
   };
   comments: {
     getByTask(taskId: string): Promise<Comment[]>;
@@ -432,8 +456,18 @@ export interface CentralTrackingAPI {
     uninstall(): Promise<{ ok: boolean; error?: string }>;
   };
   plugins: {
+    /** List installed plugins (enabled and disabled). */
+    list(): Promise<Plugin[]>;
+    /** Toggle a plugin's enabled flag. Returns the updated plugin row. */
+    setEnabled(id: string, enabled: boolean): Promise<Plugin>;
     /** Read a single plugin config value. Returns null if unset. */
     getConfig(id: string, key: string): Promise<string | null>;
+    /** Write a single plugin config value (upsert). */
+    setConfig(id: string, key: string, value: string): Promise<void>;
+    /** List all config entries for a plugin. */
+    listConfig(id: string): Promise<PluginConfigEntry[]>;
+    /** Delete a single plugin config key. */
+    deleteConfig(id: string, key: string): Promise<void>;
   };
   shell: {
     openExternal(url: string): Promise<void>;

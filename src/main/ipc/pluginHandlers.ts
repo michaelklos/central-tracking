@@ -173,5 +173,10 @@ export function getWebhookSubscribers(db: Database): WebhookSubscriber[] {
 // (e.g. the ADO state-map drives the TaskDetail status dropdown FSM).
 
 export function registerPluginHandlers(ipcMain: IpcMain, db: Database): void {
+  ipcMain.handle('plugins:list', () => listPlugins(db));
+  ipcMain.handle('plugins:setEnabled', (_event, id: string, enabled: boolean) => setPluginEnabled(db, id, enabled));
   ipcMain.handle('plugins:getConfig', (_event, id: string, key: string) => getPluginConfig(db, id, key));
+  ipcMain.handle('plugins:listConfig', (_event, id: string) => listPluginConfig(db, id));
+  ipcMain.handle('plugins:setConfig', (_event, id: string, key: string, value: string) => setPluginConfig(db, id, key, value));
+  ipcMain.handle('plugins:deleteConfig', (_event, id: string, key: string) => deletePluginConfig(db, id, key));
 }

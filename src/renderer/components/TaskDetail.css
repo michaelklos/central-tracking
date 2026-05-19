@@ -227,6 +227,32 @@
   margin-left: 8px;
 }
 
+.task-detail__link-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+}
+
+.task-detail__link-btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-detail__link-btn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 .task-detail__cat-list {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HelpPopover } from './HelpPopover';
 import { ConfirmDialog } from './ConfirmDialog';
+import { PluginsSettings } from './PluginsSettings';
 import { useTaskContext } from '../context/TaskContext';
 import './OptionsMenu.css';
 
@@ -213,6 +214,11 @@ ct task --help`}</pre>
           </label>
         ))}
       </div>
+      <h3 className="options-menu__title options-menu__title--section">Plugins</h3>
+      <div className="options-menu__list">
+        <PluginsSettings />
+      </div>
+
       <h3 className="options-menu__title options-menu__title--section">Categories</h3>
       <div className="options-menu__list">
         <ul className="options-menu__cat-list">

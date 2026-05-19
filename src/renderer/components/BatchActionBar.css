@@ -96,3 +96,43 @@
 .batch-bar__cancel:hover {
   background: var(--color-surface-hover);
 }
+
+.batch-bar__hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.batch-bar__hint--warn {
+  color: var(--color-warning, #b45309);
+}
+
+.batch-bar__date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.batch-bar__date-row input[type='date'] {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.batch-bar__reported-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.batch-bar__notice {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}

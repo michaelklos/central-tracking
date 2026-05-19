@@ -28,6 +28,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
             .option('category', { type: 'string', describe: 'Filter by category ID' })
             .option('has-unreported', { type: 'boolean', describe: 'Show only tasks with un-reported time entries' })
             .option('uncategorized', { type: 'boolean', describe: 'Show only tasks with no categories assigned' })
+            .option('date-start', { type: 'string', describe: 'Only tasks with a time entry on/after YYYY-MM-DD' })
+            .option('date-end', { type: 'string', describe: 'Only tasks with a time entry on/before YYYY-MM-DD (inclusive end-of-day)' })
             .option('sort', { type: 'string', describe: 'Sort: manual|recent|created|alphabetical|most-time-today' })
             .option('limit', { type: 'number', default: 50, describe: 'Max results' })
             .option('offset', { type: 'number', default: 0, describe: 'Skip results' })
@@ -53,6 +55,8 @@ export function registerTaskCommands(yargs: Argv): Argv {
             if (argv.category) params.categoryId = argv.category;
             if (argv['has-unreported']) params.hasUnreportedTime = true;
             if (argv.uncategorized) params.uncategorized = true;
+            if (argv['date-start']) params.dateStart = argv['date-start'] as string;
+            if (argv['date-end']) params.dateEnd = argv['date-end'] as string;
 
             const result = argv.deleted
               ? await client.tasks.getDeleted({ offset: argv.offset, limit: argv.limit })
@@ -252,6 +256,38 @@ export function registerTaskCommands(yargs: Argv): Argv {
               new Date().toISOString(),
             );
             output(argv, result, (r) => `Marked ${r.changed} entr${r.changed === 1 ? 'y' : 'ies'} as reported`);
+          }),
+      )
+      .command(
+        'link <id>',
+        'Link a task to a remote ticket served by a plugin',
+        (yy) =>
+          yy
+            .positional('id', { type: 'string', demandOption: true, describe: 'Task UUID, prefix, or name substring' })
+            .option('plugin', { type: 'string', demandOption: true, describe: 'Plugin id (e.g. "ado")' })
+            .option('external', { type: 'string', demandOption: true, describe: 'External ticket id (e.g. ADO work item number)' })
+            .option('mirror', { type: 'boolean', default: false, describe: 'Full mirror: also flips source so the task is locked and refreshable' }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const mode: 'link' | 'mirror' = argv.mirror ? 'mirror' : 'link';
+            const task = await client.tasks.link(argv.id as string, {
+              pluginId: argv.plugin as string,
+              externalId: argv.external as string,
+              mode,
+            });
+            output(argv, task, (t) =>
+              `Linked task ${t.id} → ${t.pluginId}#${t.externalId} (${mode} mode)`,
+            );
+          }),
+      )
+      .command(
+        'unlink <id>',
+        'Remove the plugin link from a task',
+        (yy) => yy.positional('id', { type: 'string', demandOption: true, describe: 'Task UUID, prefix, or name substring' }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const task = await client.tasks.unlink(argv.id as string);
+            output(argv, task, (t) => `Unlinked task ${t.id}`);
           }),
       )
       .command(

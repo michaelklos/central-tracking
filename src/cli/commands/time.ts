@@ -135,6 +135,29 @@ export function registerTimeCommands(yargs: Argv): Argv {
             output(argv, entry, (e) => `Marked entry ${e.id} as unreported`);
           }),
       )
+      .command(
+        'mark-reported',
+        'Bulk mark/unmark reported across many tasks, optionally within a date range',
+        (yy) =>
+          yy
+            .option('tasks', { type: 'string', array: true, demandOption: true, describe: 'Task UUID(s)/prefix(es)' })
+            .option('start', { type: 'string', describe: 'Lower-bound date YYYY-MM-DD (inclusive)' })
+            .option('end', { type: 'string', describe: 'Upper-bound date YYYY-MM-DD (inclusive end-of-day)' })
+            .option('unreported', { type: 'boolean', default: false, describe: 'Clear reportedAt instead of setting it' }),
+        (argv) =>
+          runCommand(argv, async ({ client }) => {
+            const tasks = (argv.tasks as string[]) ?? [];
+            if (tasks.length === 0) fail('Specify at least one --tasks <id>.');
+            const reportedAt = argv.unreported ? null : new Date().toISOString();
+            const result = await client.timeEntries.batchMarkReported(tasks, {
+              reportedAt,
+              dateStart: argv.start as string | undefined,
+              dateEnd: argv.end as string | undefined,
+            });
+            const verb = argv.unreported ? 'unreported' : 'reported';
+            output(argv, result, (r) => `Marked ${r.changed} entr${r.changed === 1 ? 'y' : 'ies'} as ${verb}`);
+          }),
+      )
       .demandCommand(1, 'Specify a time subcommand')
   );
 }

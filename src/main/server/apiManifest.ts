@@ -7,6 +7,7 @@ import {
   restoreTask, batchRestoreTasks, purgeDeletedTask, emptyRecycleBin,
   restoreAllDeleted, deleteAllTasks,
   upsertExternalTask, setExternalTaskState,
+  linkTaskToPlugin, unlinkTaskFromPlugin,
 } from '../ipc/taskHandlers';
 
 import {
@@ -15,6 +16,7 @@ import {
   getActiveTimeEntry, stopActiveTimeEntry, getTodayTotal,
   getTimeEntriesByDateRange, getTimeEntryReport, getSummaryReport,
   getTimeEntriesByDateRangeWithTasks, markTaskEntriesReported,
+  batchMarkTaskEntriesReported,
 } from '../ipc/timeEntryHandlers';
 
 import {
@@ -71,6 +73,8 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/deleteAll',        ipcChannel: 'tasks:deleteAll',        mutates: true,  event: 'task.deleted',   handler: (db) => deleteAllTasks(db) },
   { route: 'tasks/upsertExternal',   ipcChannel: 'tasks:upsertExternal',   mutates: true,  event: 'task.updated',   handler: (db, input) => upsertExternalTask(db, input as never) },
   { route: 'tasks/setExternalState', ipcChannel: 'tasks:setExternalState', mutates: true,  event: 'task.updated',   handler: (db, id, externalState) => setExternalTaskState(db, id as string, externalState as string) },
+  { route: 'tasks/link',             ipcChannel: 'tasks:link',             mutates: true,  event: 'task.updated',   handler: (db, id, input) => linkTaskToPlugin(db, id as string, input as { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) },
+  { route: 'tasks/unlink',           ipcChannel: 'tasks:unlink',           mutates: true,  event: 'task.updated',   handler: (db, id) => unlinkTaskFromPlugin(db, id as string) },
 
   // Time entries
   { route: 'timeEntries/getByTask',               ipcChannel: 'timeEntries:getByTask',               mutates: false, handler: (db, taskId) => getTimeEntriesByTask(db, taskId as string) },
@@ -86,6 +90,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'timeEntries/getSummaryReport',        ipcChannel: 'timeEntries:getSummaryReport',        mutates: false, handler: (db, start, end) => getSummaryReport(db, start as string, end as string) },
   { route: 'timeEntries/getByDateRangeWithTasks', ipcChannel: 'timeEntries:getByDateRangeWithTasks', mutates: false, handler: (db, start, end) => getTimeEntriesByDateRangeWithTasks(db, start as string, end as string) },
   { route: 'timeEntries/markTaskReported',        ipcChannel: 'timeEntries:markTaskReported',        mutates: true,  event: 'timeEntry.updated', handler: (db, taskId, reportedAt) => markTaskEntriesReported(db, taskId as string, reportedAt as string | null) },
+  { route: 'timeEntries/batchMarkReported',       ipcChannel: 'timeEntries:batchMarkReported',       mutates: true,  event: 'timeEntry.updated', handler: (db, taskIds, opts) => batchMarkTaskEntriesReported(db, taskIds as string[], opts as { reportedAt: string | null; dateStart?: string; dateEnd?: string }) },
 
   // Comments
   { route: 'comments/getByTask', ipcChannel: 'comments:getByTask', mutates: false, handler: (db, taskId) => getCommentsByTask(db, taskId as string) },
@@ -109,16 +114,16 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'import/parseContent', ipcChannel: null,             mutates: false, handler: (db, content) => parseImportContent(db, content as string) },
   { route: 'import/execute',      ipcChannel: 'import:execute', mutates: true,  event: 'import.executed', handler: (db, items) => executeImport(db, items as never[]) },
 
-  // Plugins — CLI-only surface (no IPC, no UI). Webhook dispatch reads from the plugins table.
-  { route: 'plugins/list',         ipcChannel: null, mutates: false, handler: (db) => listPlugins(db) },
-  { route: 'plugins/get',          ipcChannel: null, mutates: false, handler: (db, id) => getPlugin(db, id as string) },
-  { route: 'plugins/install',      ipcChannel: null, mutates: true,  event: 'plugin.installed',   handler: (db, manifest) => installPlugin(db, manifest) },
-  { route: 'plugins/uninstall',    ipcChannel: null, mutates: true,  event: 'plugin.uninstalled', handler: (db, id) => uninstallPlugin(db, id as string) },
-  { route: 'plugins/setEnabled',   ipcChannel: null, mutates: true,  event: 'plugin.updated',     handler: (db, id, enabled) => setPluginEnabled(db, id as string, enabled as boolean) },
-  { route: 'plugins/getConfig',    ipcChannel: 'plugins:getConfig', mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
-  { route: 'plugins/listConfig',   ipcChannel: null, mutates: false, handler: (db, id) => listPluginConfig(db, id as string) },
-  { route: 'plugins/setConfig',    ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value) => setPluginConfig(db, id as string, key as string, value as string) },
-  { route: 'plugins/deleteConfig', ipcChannel: null, mutates: true,  event: 'plugin.configChanged', handler: (db, id, key) => deletePluginConfig(db, id as string, key as string) },
+  // Plugins — both CLI and renderer surfaces. Webhook dispatch reads from the plugins table.
+  { route: 'plugins/list',         ipcChannel: 'plugins:list',         mutates: false, handler: (db) => listPlugins(db) },
+  { route: 'plugins/get',          ipcChannel: null,                   mutates: false, handler: (db, id) => getPlugin(db, id as string) },
+  { route: 'plugins/install',      ipcChannel: null,                   mutates: true,  event: 'plugin.installed',     handler: (db, manifest) => installPlugin(db, manifest) },
+  { route: 'plugins/uninstall',    ipcChannel: null,                   mutates: true,  event: 'plugin.uninstalled',   handler: (db, id) => uninstallPlugin(db, id as string) },
+  { route: 'plugins/setEnabled',   ipcChannel: 'plugins:setEnabled',   mutates: true,  event: 'plugin.updated',       handler: (db, id, enabled) => setPluginEnabled(db, id as string, enabled as boolean) },
+  { route: 'plugins/getConfig',    ipcChannel: 'plugins:getConfig',    mutates: false, handler: (db, id, key) => getPluginConfig(db, id as string, key as string) },
+  { route: 'plugins/listConfig',   ipcChannel: 'plugins:listConfig',   mutates: false, handler: (db, id) => listPluginConfig(db, id as string) },
+  { route: 'plugins/setConfig',    ipcChannel: 'plugins:setConfig',    mutates: true,  event: 'plugin.configChanged', handler: (db, id, key, value) => setPluginConfig(db, id as string, key as string, value as string) },
+  { route: 'plugins/deleteConfig', ipcChannel: 'plugins:deleteConfig', mutates: true,  event: 'plugin.configChanged', handler: (db, id, key) => deletePluginConfig(db, id as string, key as string) },
 ];
 
 /** Route key (e.g. "tasks/getAll") → route entry. Used by the HTTP server. */

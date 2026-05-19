@@ -1,0 +1,76 @@
+.plugins-settings__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.plugins-settings__row {
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.plugins-settings__row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plugins-settings__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.plugins-settings__name {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.plugins-settings__version {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+.plugins-settings__error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-danger, #dc2626);
+}
+
+.plugins-settings__empty {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.plugins-settings__empty code {
+  font-style: normal;
+}
+
+.plugins-settings__subrow {
+  margin-top: 6px;
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plugins-settings__subrow label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}

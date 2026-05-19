@@ -453,4 +453,177 @@ describe('Task IPC Handlers', () => {
       expect(titles).not.toContain('Clothed');
     });
   });
+
+  describe('linkTaskToPlugin / unlinkTaskFromPlugin', () => {
+    let pluginIpc: ReturnType<typeof createMockIpcMain>;
+    beforeEach(async () => {
+      pluginIpc = createMockIpcMain();
+      const { registerPluginHandlers } = await import('../pluginHandlers');
+      registerPluginHandlers(pluginIpc as never, db);
+      await pluginIpc.invoke('plugins:list'); // ensure handler registered
+      // Seed a plugin so link() can reference it.
+      db.instance
+        .prepare('INSERT INTO plugins (id, name, version, enabled, manifest, installed_at) VALUES (?, ?, ?, 1, ?, ?)')
+        .run('ado', 'Azure DevOps', '0.1.0', JSON.stringify({ id: 'ado', name: 'Azure DevOps', version: '0.1.0' }), new Date().toISOString());
+    });
+
+    it('link mode sets plugin_id and external_id, leaves source intact', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Local thing' });
+      const linked = await ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '12345', mode: 'link' });
+      expect(linked.pluginId).toBe('ado');
+      expect(linked.externalId).toBe('12345');
+      expect(linked.source).toBe('ad-hoc'); // unchanged
+    });
+
+    it('mirror mode also flips source to the ado source key', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Mirror target' });
+      const linked = await ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '99', mode: 'mirror' });
+      expect(linked.pluginId).toBe('ado');
+      expect(linked.source).toBe('ado');
+    });
+
+    it('mirror mode for a non-ado plugin uses the generic "plugin" source', async () => {
+      db.instance
+        .prepare('INSERT INTO plugins (id, name, version, enabled, manifest, installed_at) VALUES (?, ?, ?, 1, ?, ?)')
+        .run('jira', 'Jira', '0.0.1', JSON.stringify({ id: 'jira', name: 'Jira', version: '0.0.1' }), new Date().toISOString());
+      const t = await ipc.invoke('tasks:create', { title: 'Mirror jira' });
+      const linked = await ipc.invoke('tasks:link', t.id, { pluginId: 'jira', externalId: 'PROJ-1', mode: 'mirror' });
+      expect(linked.source).toBe('plugin');
+    });
+
+    it('rejects link to a disabled plugin', async () => {
+      db.instance.prepare('UPDATE plugins SET enabled = 0 WHERE id = ?').run('ado');
+      const t = await ipc.invoke('tasks:create', { title: 'No-go' });
+      await expect(
+        ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '1', mode: 'link' }),
+      ).rejects.toThrow(/disabled/);
+    });
+
+    it('rejects empty external ID', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Bad input' });
+      await expect(
+        ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '   ', mode: 'link' }),
+      ).rejects.toThrow(/externalId/);
+    });
+
+    it('unlink (link-mode origin) clears plugin_id/external_id; source unchanged', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Link-only' });
+      await ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '7', mode: 'link' });
+      const unlinked = await ipc.invoke('tasks:unlink', t.id);
+      expect(unlinked.pluginId).toBeNull();
+      expect(unlinked.externalId).toBeNull();
+      expect(unlinked.source).toBe('ad-hoc');
+    });
+
+    it('unlink (mirror-mode origin) resets source to ad-hoc and clears mirrored columns', async () => {
+      const t = await ipc.invoke('tasks:create', { title: 'Was mirror' });
+      await ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '88', mode: 'mirror' });
+      // Pretend a pull happened and populated external_state/url.
+      db.instance
+        .prepare("UPDATE tasks SET external_state = 'Active', external_url = 'https://x', external_completed_hours = 2 WHERE id = ?")
+        .run(t.id);
+      const unlinked = await ipc.invoke('tasks:unlink', t.id);
+      expect(unlinked.pluginId).toBeNull();
+      expect(unlinked.externalId).toBeNull();
+      expect(unlinked.source).toBe('ad-hoc');
+      expect(unlinked.externalState).toBeNull();
+      expect(unlinked.externalUrl).toBeNull();
+      expect(unlinked.externalCompletedHours).toBeNull();
+    });
+  });
+
+  describe('date-range filter', () => {
+    let timeIpc: ReturnType<typeof createMockIpcMain>;
+    beforeEach(async () => {
+      timeIpc = createMockIpcMain();
+      const { registerTimeEntryHandlers } = await import('../timeEntryHandlers');
+      registerTimeEntryHandlers(timeIpc as never, db);
+    });
+
+    async function seedTaskWithEntry(title: string, isoStart: string, isoEnd: string) {
+      const task = await ipc.invoke('tasks:create', { title });
+      await timeIpc.invoke('timeEntries:create', {
+        taskId: task.id,
+        startTime: isoStart,
+        endTime: isoEnd,
+      });
+      return task;
+    }
+
+    it('returns only tasks with at least one entry in [dateStart, dateEnd]', async () => {
+      await seedTaskWithEntry('In Range', '2026-03-15T10:00:00.000Z', '2026-03-15T11:00:00.000Z');
+      await seedTaskWithEntry('Out Of Range', '2026-02-01T10:00:00.000Z', '2026-02-01T11:00:00.000Z');
+      await ipc.invoke('tasks:create', { title: 'No Entries' });
+
+      const res = await ipc.invoke('tasks:getActive', { dateStart: '2026-03-01', dateEnd: '2026-03-31' });
+      const titles = res.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('In Range');
+      expect(titles).not.toContain('Out Of Range');
+      expect(titles).not.toContain('No Entries');
+    });
+
+    it('boundary dates are inclusive (start of day on dateStart, end of day on dateEnd)', async () => {
+      await seedTaskWithEntry('Start Edge', '2026-03-01T00:00:00.000Z', '2026-03-01T00:30:00.000Z');
+      await seedTaskWithEntry('End Edge', '2026-03-31T23:30:00.000Z', '2026-03-31T23:59:00.000Z');
+
+      const res = await ipc.invoke('tasks:getActive', { dateStart: '2026-03-01', dateEnd: '2026-03-31' });
+      const titles = res.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('Start Edge');
+      expect(titles).toContain('End Edge');
+    });
+
+    it('only dateStart given acts as lower-bound only', async () => {
+      await seedTaskWithEntry('Before', '2026-02-15T10:00:00.000Z', '2026-02-15T11:00:00.000Z');
+      await seedTaskWithEntry('Future', '2026-06-15T10:00:00.000Z', '2026-06-15T11:00:00.000Z');
+
+      const res = await ipc.invoke('tasks:getActive', { dateStart: '2026-03-01' });
+      const titles = res.items.map((t: { title: string }) => t.title);
+      expect(titles).not.toContain('Before');
+      expect(titles).toContain('Future');
+    });
+
+    it('only dateEnd given acts as upper-bound only', async () => {
+      await seedTaskWithEntry('Old', '2025-12-01T10:00:00.000Z', '2025-12-01T11:00:00.000Z');
+      await seedTaskWithEntry('After', '2026-04-01T10:00:00.000Z', '2026-04-01T11:00:00.000Z');
+
+      const res = await ipc.invoke('tasks:getActive', { dateEnd: '2026-03-31' });
+      const titles = res.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('Old');
+      expect(titles).not.toContain('After');
+    });
+
+    it('both bounds blank is a no-op (full list returns)', async () => {
+      await ipc.invoke('tasks:create', { title: 'A' });
+      await ipc.invoke('tasks:create', { title: 'B' });
+
+      const res = await ipc.invoke('tasks:getActive', { dateStart: '', dateEnd: '' });
+      const titles = res.items.map((t: { title: string }) => t.title);
+      expect(titles).toContain('A');
+      expect(titles).toContain('B');
+    });
+
+    it('ANDs with status filter', async () => {
+      const inRangeTodo = await seedTaskWithEntry('Todo InRange', '2026-03-10T10:00:00.000Z', '2026-03-10T11:00:00.000Z');
+      const inRangeDone = await seedTaskWithEntry('Done InRange', '2026-03-12T10:00:00.000Z', '2026-03-12T11:00:00.000Z');
+      await ipc.invoke('tasks:update', inRangeDone.id, { status: 'done' });
+      // suppress unused variable warning
+      void inRangeTodo;
+
+      const active = await ipc.invoke('tasks:getActive', {
+        dateStart: '2026-03-01',
+        dateEnd: '2026-03-31',
+        status: ['todo'],
+      });
+      const activeTitles = active.items.map((t: { title: string }) => t.title);
+      expect(activeTitles).toContain('Todo InRange');
+      expect(activeTitles).not.toContain('Done InRange');
+
+      const done = await ipc.invoke('tasks:getDone', {
+        dateStart: '2026-03-01',
+        dateEnd: '2026-03-31',
+      });
+      const doneTitles = done.items.map((t: { title: string }) => t.title);
+      expect(doneTitles).toContain('Done InRange');
+    });
+  });
 });

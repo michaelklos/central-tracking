@@ -299,6 +299,75 @@
   border-color: var(--color-primary);
 }
 
+/* Date-range filter */
+.sidebar__date-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.sidebar__date-filter-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sidebar__date-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sidebar__date-input {
+  flex: 1 1 100px;
+  min-width: 100px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar__date-clear {
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sidebar__date-clear:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.sidebar__date-sep {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.sidebar__date-clear-all {
+  align-self: flex-start;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.sidebar__date-clear-all:hover {
+  color: var(--color-primary);
+}
+
 /* Categories */
 .sidebar__cat-list {
   list-style: none;

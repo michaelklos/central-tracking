@@ -138,7 +138,13 @@ async function pushOneTask(
   // PATCH succeeded — ADO accepted the delta. If markTaskReported fails the
   // next run would double-push, so let the error propagate up to the caller
   // rather than silently swallowing it.
-  await ct.markTaskReported(task.id, new Date().toISOString());
+  //
+  // When tracksReported is disabled the user owns reported state manually:
+  // re-running push-time will re-push the same entries because they remain
+  // unreported. That is an explicit choice surfaced in the plugin settings UI.
+  if (config.tracksReported) {
+    await ct.markTaskReported(task.id, new Date().toISOString());
+  }
   return { kind: 'pushed', hoursPushed: deltaHours, entries };
 }
 

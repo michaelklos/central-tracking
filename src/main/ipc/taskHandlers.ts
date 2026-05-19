@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
 import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
+import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 
 /**
@@ -178,6 +179,26 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
     clauses.push(
       `NOT EXISTS (SELECT 1 FROM task_categories WHERE task_id = tasks.id)`,
     );
+  }
+
+  const dateStart = params?.dateStart && params.dateStart.length > 0 ? params.dateStart : undefined;
+  const dateEnd = params?.dateEnd && params.dateEnd.length > 0 ? params.dateEnd : undefined;
+  if (dateStart || dateEnd) {
+    // Include only tasks with at least one time entry whose start_time falls
+    // within the bounds. Each bound is independent: omitted = unbounded on
+    // that side.
+    const conds: string[] = ['task_id = tasks.id'];
+    const dateValues: unknown[] = [];
+    if (dateStart) {
+      conds.push('start_time >= ?');
+      dateValues.push(toIsoStartOfDay(dateStart));
+    }
+    if (dateEnd) {
+      conds.push('start_time <= ?');
+      dateValues.push(toIsoEndOfDay(dateEnd));
+    }
+    clauses.push(`EXISTS (SELECT 1 FROM time_entries WHERE ${conds.join(' AND ')})`);
+    values.push(...dateValues);
   }
 
   return { clauses, values };
@@ -654,6 +675,91 @@ export function setExternalTaskState(
   return { ok: true };
 }
 
+/**
+ * Manually link an existing task to a remote ticket served by `pluginId`.
+ *
+ * - `mode='link'` — store `plugin_id` and `external_id` only. `source` stays
+ *   whatever it was (typically `manual`). Title/notes remain user-editable.
+ *   The plugin can push time/comments using the external id but does not pull
+ *   state into ct.
+ * - `mode='mirror'` — additionally set `source='ado'` for the ado plugin (or
+ *   the generic `plugin` source otherwise). The task becomes a full mirror:
+ *   the renderer locks title/notes, the FSM applies, and the next pull will
+ *   refresh state from the remote.
+ *
+ * Throws a DomainError if the plugin is missing/disabled or the externalId is
+ * empty so the caller can surface a clear message.
+ */
+export function linkTaskToPlugin(
+  db: Database,
+  taskId: string,
+  input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' },
+): Task {
+  const externalId = input.externalId.trim();
+  if (!externalId) {
+    throw new DomainError('VALIDATION_ERROR', 'externalId must be a non-empty string');
+  }
+  const plugin = db.instance
+    .prepare('SELECT id, enabled FROM plugins WHERE id = ?')
+    .get(input.pluginId) as { id: string; enabled: number } | undefined;
+  if (!plugin) {
+    throw new DomainError('NOT_FOUND', `Plugin not found: ${input.pluginId}`);
+  }
+  if (plugin.enabled !== 1) {
+    throw new DomainError('VALIDATION_ERROR', `Plugin "${input.pluginId}" is disabled`);
+  }
+
+  const resolvedId = resolveTaskId(db, taskId);
+  const sets: string[] = ['plugin_id = ?', 'external_id = ?'];
+  const values: unknown[] = [input.pluginId, externalId];
+  if (input.mode === 'mirror') {
+    const mirrorSource = input.pluginId === 'ado' ? 'ado' : 'plugin';
+    sets.push('source = ?');
+    values.push(mirrorSource);
+  }
+  sets.push("updated_at = datetime('now')");
+  values.push(resolvedId);
+  db.instance.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+
+  const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(resolvedId) as TaskRow | undefined;
+  if (!row) throw new DomainError('NOT_FOUND', `Task not found: ${taskId}`);
+  return rowToTask(db, row);
+}
+
+/**
+ * Reverse of `linkTaskToPlugin`. Always clears `plugin_id` and `external_id`.
+ * For tasks that were full-mirror (source != 'manual'), also resets the
+ * mirrored state columns and source back to `manual` so the task behaves
+ * like any other local task.
+ */
+export function unlinkTaskFromPlugin(db: Database, taskId: string): Task {
+  const resolvedId = resolveTaskId(db, taskId);
+  const current = db.instance
+    .prepare('SELECT source FROM tasks WHERE id = ?')
+    .get(resolvedId) as { source: string } | undefined;
+  if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${taskId}`);
+
+  const sets: string[] = ['plugin_id = NULL', 'external_id = NULL'];
+  // Full-mirror tasks have source flipped to 'ado' or 'plugin' on link; restore
+  // them to 'ad-hoc' and clear the mirrored columns so the task behaves
+  // like any locally-created task again.
+  if (current.source === 'ado' || current.source === 'plugin') {
+    sets.push(
+      "source = 'ad-hoc'",
+      'external_url = NULL',
+      'external_state = NULL',
+      'external_completed_hours = NULL',
+      'external_refreshed_at = NULL',
+      'state_dirty = 0',
+    );
+  }
+  sets.push("updated_at = datetime('now')");
+  db.instance.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(resolvedId);
+
+  const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(resolvedId) as TaskRow;
+  return rowToTask(db, row);
+}
+
 export function resetApp(db: Database): void {
   db.instance.transaction(() => {
     db.instance.prepare('DELETE FROM task_categories').run();
@@ -688,4 +794,10 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:resetApp', () => resetApp(db));
   ipcMain.handle('tasks:upsertExternal', (_event, input: UpsertExternalTaskInput) => upsertExternalTask(db, input));
   ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string) => setExternalTaskState(db, id, externalState));
+  ipcMain.handle(
+    'tasks:link',
+    (_event, id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>
+      linkTaskToPlugin(db, id, input),
+  );
+  ipcMain.handle('tasks:unlink', (_event, id: string) => unlinkTaskFromPlugin(db, id));
 }

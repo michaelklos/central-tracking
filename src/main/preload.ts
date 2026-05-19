@@ -46,6 +46,9 @@ const api = {
     upsertExternal: (input: UpsertExternalTaskInput) => ipcRenderer.invoke('tasks:upsertExternal', input),
     setExternalState: (id: string, externalState: string) =>
       ipcRenderer.invoke('tasks:setExternalState', id, externalState),
+    link: (id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>
+      ipcRenderer.invoke('tasks:link', id, input),
+    unlink: (id: string) => ipcRenderer.invoke('tasks:unlink', id),
   },
 
   // Time entries
@@ -69,6 +72,10 @@ const api = {
       ipcRenderer.invoke('timeEntries:getByDateRangeWithTasks', start, end),
     markTaskReported: (taskId: string, reportedAt: string | null) =>
       ipcRenderer.invoke('timeEntries:markTaskReported', taskId, reportedAt),
+    batchMarkReported: (
+      taskIds: string[],
+      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+    ) => ipcRenderer.invoke('timeEntries:batchMarkReported', taskIds, opts),
   },
 
   // Comments
@@ -108,10 +115,19 @@ const api = {
     execute: (items: ImportPreviewItem[]) => ipcRenderer.invoke('import:execute', items),
   },
 
-  // Plugin config read-only access (renderer reads the ADO state-map etc.)
+  // Plugin lifecycle + config (renderer manages enable state and reads the
+  // ADO state-map etc.).
   plugins: {
+    list: () => ipcRenderer.invoke('plugins:list'),
+    setEnabled: (id: string, enabled: boolean) =>
+      ipcRenderer.invoke('plugins:setEnabled', id, enabled),
     getConfig: (id: string, key: string): Promise<string | null> =>
       ipcRenderer.invoke('plugins:getConfig', id, key),
+    setConfig: (id: string, key: string, value: string): Promise<void> =>
+      ipcRenderer.invoke('plugins:setConfig', id, key, value),
+    listConfig: (id: string) => ipcRenderer.invoke('plugins:listConfig', id),
+    deleteConfig: (id: string, key: string): Promise<void> =>
+      ipcRenderer.invoke('plugins:deleteConfig', id, key),
   },
 
   // CLI tool installation (Mac only; Windows handled by NSIS installer)

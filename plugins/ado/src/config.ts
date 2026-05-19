@@ -10,6 +10,11 @@ export interface AdoConfig {
   workItemTypes: string[];
   pullClosed: boolean;
   autoCommentOnTimePush: boolean;
+  /** When false, push-time skips the post-push markTaskReported call so the
+   *  user controls reported state manually. Default true. Mirrors the
+   *  per-plugin `tracks-reported` toggle that the renderer reads to suppress
+   *  unreported badges and batch actions. */
+  tracksReported: boolean;
   stateMap: Record<string, { ado: string; altIn: string[] }> | null;
 }
 
@@ -54,6 +59,9 @@ export async function loadConfig(client: CtClient): Promise<AdoConfig> {
       : ['User Story', 'Bug', 'Task'],
     pullClosed: map['pull-closed'] === 'true',
     autoCommentOnTimePush: map['auto-comment-on-time-push'] === 'true',
+    // Default true so the historical push behaviour (auto-mark reported on
+    // success) keeps working unless the user explicitly opts out.
+    tracksReported: map['tracks-reported'] !== 'false',
     stateMap,
   };
 }

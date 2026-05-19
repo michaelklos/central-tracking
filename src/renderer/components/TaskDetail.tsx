@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
+import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
 import { useMarkdownTextarea } from '../hooks/useMarkdownTextarea';
 import { TimeEntryEditor } from './TimeEntryEditor';
 import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
+import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
 import { getStringSetting } from './OptionsMenu';
 import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
 import { allowedAdoStatusTargets } from '../utils/adoFsm';
@@ -24,6 +26,7 @@ export function TaskDetail() {
   const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal, refreshActiveEntry } = useTimerContext();
+  const pluginCaps = usePluginCapabilities();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -45,6 +48,8 @@ export function TaskDetail() {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
 
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
@@ -405,7 +410,7 @@ export function TaskDetail() {
           </button>
         </div>
 
-        {task.totalTimeSeconds > 0 && (
+        {task.totalTimeSeconds > 0 && shouldShowReportedFor(task.pluginId, pluginCaps) && (
           <div className="task-detail__report-state">
             {task.hasUnreportedTime ? (
               <>
@@ -502,6 +507,31 @@ export function TaskDetail() {
               <span className="task-detail__source-badge">{task.source}</span>
               {task.externalId && (
                 <span className="task-detail__external-id">#{task.externalId}</span>
+              )}
+              {task.pluginId && task.externalId && !isAdo && (
+                <span
+                  className="task-detail__link-badge"
+                  title={`Linked to ${task.pluginId} ticket ${task.externalId}`}
+                >
+                  ⛓ {task.pluginId}#{task.externalId}
+                </span>
+              )}
+              {task.pluginId == null ? (
+                <button
+                  type="button"
+                  className="task-detail__link-btn"
+                  onClick={() => setShowLinkDialog(true)}
+                >
+                  Link to plugin…
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="task-detail__link-btn"
+                  onClick={() => setShowUnlinkConfirm(true)}
+                >
+                  Unlink
+                </button>
               )}
             </div>
 
@@ -693,6 +723,35 @@ export function TaskDetail() {
             deleteTask(task.id);
           }}
           onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {showLinkDialog && (
+        <LinkPluginDialog
+          onCancel={() => setShowLinkDialog(false)}
+          onSubmit={async (input: LinkSubmit) => {
+            await window.api.tasks.link(task.id, input);
+            setShowLinkDialog(false);
+            await refreshActiveTasks();
+          }}
+        />
+      )}
+
+      {showUnlinkConfirm && (
+        <ConfirmDialog
+          title="Unlink plugin"
+          message={
+            task.source === 'ado' || task.source === 'plugin'
+              ? `Unlink "${task.title}" from ${task.pluginId}? The task becomes a local task again (source reset to ad-hoc) and mirrored state will be cleared.`
+              : `Remove plugin link from "${task.title}"? The task itself stays.`
+          }
+          confirmLabel="Unlink"
+          onConfirm={async () => {
+            setShowUnlinkConfirm(false);
+            await window.api.tasks.unlink(task.id);
+            await refreshActiveTasks();
+          }}
+          onCancel={() => setShowUnlinkConfirm(false)}
         />
       )}
     </div>

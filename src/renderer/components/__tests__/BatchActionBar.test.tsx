@@ -7,10 +7,15 @@ import { createMockApi } from '../../../test/mocks/api';
 
 // Mock TaskContext
 const mockContext = {
+  tasks: [
+    { id: 'task-1', pluginId: null, title: 'A', source: 'ad-hoc' },
+    { id: 'task-2', pluginId: null, title: 'B', source: 'ad-hoc' },
+  ],
   selectedTaskIds: new Set(['task-1', 'task-2']),
   exitBatchMode: vi.fn(),
   batchUpdateTasks: vi.fn(),
   batchDeleteTasks: vi.fn(),
+  batchMarkSelectedReported: vi.fn().mockResolvedValue({ changed: 0 }),
   categories: [
     { id: 'cat-1', name: 'Bug', color: '#ff0000', createdAt: '2026-01-01' },
   ],

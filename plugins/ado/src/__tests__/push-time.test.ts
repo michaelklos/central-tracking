@@ -19,6 +19,7 @@ function makeConfig(overrides: Partial<AdoConfig> = {}): AdoConfig {
     workItemTypes: ['Task'],
     pullClosed: false,
     autoCommentOnTimePush: false,
+    tracksReported: true,
     stateMap: null,
     ...overrides,
   };
@@ -372,5 +373,21 @@ describe('pushTime', () => {
     m.ado.patchWorkItem.mockResolvedValue(makeWorkItem(101, 2, 0.5));
     m.ct.markTaskReported.mockRejectedValue(new Error('db locked'));
     await expect(pushTime(castMocks(m).ado, castMocks(m).ct, makeConfig())).rejects.toThrow('db locked');
+  });
+
+  it('skips markTaskReported when tracksReported=false (user manages reported state)', async () => {
+    const task = makeTask('t1', '101');
+    const m = makeMocks(
+      [task],
+      { t1: [makeEntry('t1', 1800)] },
+      { 101: makeWorkItem(101, 1, 0) },
+    );
+    m.ado.patchWorkItem.mockResolvedValue(makeWorkItem(101, 2, 0.5));
+
+    const res = await pushTime(castMocks(m).ado, castMocks(m).ct, makeConfig({ tracksReported: false }));
+
+    expect(res.tasksPushed).toBe(1);
+    expect(m.ado.patchWorkItem).toHaveBeenCalledTimes(1);
+    expect(m.ct.markTaskReported).not.toHaveBeenCalled();
   });
 });

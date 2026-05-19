@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
 import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus } from '../../shared/types';
+import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 
 interface TimeEntryRow {
   id: string;
@@ -299,6 +300,61 @@ export function markTaskEntriesReported(
   return { changed: result.changes };
 }
 
+/**
+ * Bulk-set reported_at on time entries across many tasks, optionally restricted
+ * to a date range. Semantics match `markTaskEntriesReported`:
+ *
+ * - `reportedAt: string` → flip only currently-unreported rows.
+ * - `reportedAt: null` → clear reported_at on any row in scope.
+ *
+ * `dateStart` / `dateEnd` are YYYY-MM-DD; bounds are inclusive end-of-day.
+ * Both empty/undefined = no date restriction (whole task history).
+ */
+export function batchMarkTaskEntriesReported(
+  db: Database,
+  taskIds: string[],
+  opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+): { changed: number } {
+  if (taskIds.length === 0) return { changed: 0 };
+
+  const dateStart = opts.dateStart && opts.dateStart.length > 0 ? opts.dateStart : undefined;
+  const dateEnd = opts.dateEnd && opts.dateEnd.length > 0 ? opts.dateEnd : undefined;
+
+  const placeholders = taskIds.map(() => '?').join(', ');
+  const dateClauses: string[] = [];
+  const dateValues: unknown[] = [];
+  if (dateStart) {
+    dateClauses.push('start_time >= ?');
+    dateValues.push(toIsoStartOfDay(dateStart));
+  }
+  if (dateEnd) {
+    dateClauses.push('start_time <= ?');
+    dateValues.push(toIsoEndOfDay(dateEnd));
+  }
+  const dateWhere = dateClauses.length > 0 ? ` AND ${dateClauses.join(' AND ')}` : '';
+
+  const run = db.instance.transaction((reportedAt: string | null) => {
+    if (reportedAt === null) {
+      const sql = `UPDATE time_entries SET reported_at = NULL
+                   WHERE task_id IN (${placeholders})
+                     AND reported_at IS NOT NULL${dateWhere}`;
+      const stmt = db.instance.prepare(sql);
+      const res = stmt.run(...taskIds, ...dateValues);
+      return res.changes;
+    } else {
+      const sql = `UPDATE time_entries SET reported_at = ?
+                   WHERE task_id IN (${placeholders})
+                     AND reported_at IS NULL${dateWhere}`;
+      const stmt = db.instance.prepare(sql);
+      const res = stmt.run(reportedAt, ...taskIds, ...dateValues);
+      return res.changes;
+    }
+  });
+
+  const changed = run(opts.reportedAt) as number;
+  return { changed };
+}
+
 export function stopActiveTimeEntry(db: Database): TimeEntry | null {
   const active = db.instance
     .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
@@ -336,4 +392,9 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
   ipcMain.handle('timeEntries:getByDateRangeWithTasks', (_event, start: string, end: string) => getTimeEntriesByDateRangeWithTasks(db, start, end));
   ipcMain.handle('timeEntries:stopActive', () => stopActiveTimeEntry(db));
   ipcMain.handle('timeEntries:markTaskReported', (_event, taskId: string, reportedAt: string | null) => markTaskEntriesReported(db, taskId, reportedAt));
+  ipcMain.handle(
+    'timeEntries:batchMarkReported',
+    (_event, taskIds: string[], opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string }) =>
+      batchMarkTaskEntriesReported(db, taskIds, opts),
+  );
 }

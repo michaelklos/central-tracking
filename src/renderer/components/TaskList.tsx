@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useTaskContext } from '../context/TaskContext';
 import { useTimerContext } from '../context/TimerContext';
+import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { formatDuration } from '../utils/time';
 import { SplitButton } from './SplitButton';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -71,6 +72,7 @@ export function TaskList() {
     setSortBy,
   } = useTaskContext();
   const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
+  const pluginCaps = usePluginCapabilities();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [addAsTodo, setAddAsTodo] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>('status');
@@ -457,7 +459,7 @@ export function TaskList() {
                             {(task.notes ?? '').length > 0 && (
                               <span className="task-item__notes-badge" title="Has notes">&#128221;</span>
                             )}
-                            {task.totalTimeSeconds > 0 && (
+                            {task.totalTimeSeconds > 0 && shouldShowReportedFor(task.pluginId, pluginCaps) && (
                               task.hasUnreportedTime ? (
                                 <span
                                   className="task-item__report-chip task-item__report-chip--pending"

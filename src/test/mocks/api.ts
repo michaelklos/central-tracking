@@ -25,6 +25,8 @@ export function createMockApi(): CentralTrackingAPI {
       resetApp: vi.fn().mockResolvedValue(undefined),
       upsertExternal: vi.fn().mockResolvedValue({}),
       setExternalState: vi.fn().mockResolvedValue({ ok: true }),
+      link: vi.fn().mockResolvedValue({}),
+      unlink: vi.fn().mockResolvedValue({}),
     },
     timeEntries: {
       getByTask: vi.fn().mockResolvedValue([]),
@@ -39,6 +41,8 @@ export function createMockApi(): CentralTrackingAPI {
       getReport: vi.fn().mockResolvedValue([]),
       getSummaryReport: vi.fn().mockResolvedValue([]),
       getByDateRangeWithTasks: vi.fn().mockResolvedValue([]),
+      markTaskReported: vi.fn().mockResolvedValue({ changed: 0 }),
+      batchMarkReported: vi.fn().mockResolvedValue({ changed: 0 }),
     },
     comments: {
       getByTask: vi.fn().mockResolvedValue([]),
@@ -74,6 +78,14 @@ export function createMockApi(): CentralTrackingAPI {
     },
     shell: {
       openExternal: vi.fn().mockResolvedValue(undefined),
+    },
+    plugins: {
+      list: vi.fn().mockResolvedValue([]),
+      setEnabled: vi.fn().mockResolvedValue({}),
+      getConfig: vi.fn().mockResolvedValue(null),
+      setConfig: vi.fn().mockResolvedValue(undefined),
+      listConfig: vi.fn().mockResolvedValue([]),
+      deleteConfig: vi.fn().mockResolvedValue(undefined),
     },
     log: {
       error: vi.fn(),

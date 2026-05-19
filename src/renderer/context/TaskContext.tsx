@@ -36,6 +36,16 @@ interface TaskContextValue {
   deselectAllTasks(): void;
   batchUpdateTasks(input: BatchUpdateInput): Promise<void>;
   batchDeleteTasks(): Promise<void>;
+  /**
+   * Mark every time entry of the currently-selected tasks as reported (pass
+   * an ISO timestamp) or unreported (pass null). Optional date range narrows
+   * to entries whose start_time falls within [dateStart, dateEnd] inclusive.
+   * Resolves with the number of rows updated.
+   */
+  batchMarkSelectedReported(
+    reportedAt: string | null,
+    dateRange?: { dateStart?: string; dateEnd?: string },
+  ): Promise<{ changed: number }>;
 
   // Recycle bin operations
   loadDeletedTasks(): Promise<void>;
@@ -90,6 +100,10 @@ export interface TaskFilter {
   hasUnreportedTime?: boolean;
   /** When true, restrict listings to tasks with no categories assigned. */
   uncategorized?: boolean;
+  /** YYYY-MM-DD lower bound: only tasks with a time entry on or after this date. */
+  dateStart?: string;
+  /** YYYY-MM-DD upper bound (inclusive end-of-day). */
+  dateEnd?: string;
 }
 
 const TaskContext = createContext<TaskContextValue | null>(null);
@@ -150,70 +164,69 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // Combined view of all loaded tasks (for TaskDetail lookup by ID)
   const tasks = useMemo(() => [...activeTasks, ...doneTasks], [activeTasks, doneTasks]);
 
+  // Map renderer-side filter (plural keys) onto TaskQueryParams (singular keys).
+  // Centralized so date-range and any future filter only need one place to wire.
+  const filterToParams = useCallback(() => ({
+    search: filter.search,
+    searchIn: filter.searchIn,
+    status: filter.statuses,
+    source: filter.sources,
+    categoryId: filter.categoryIds,
+    hasUnreportedTime: filter.hasUnreportedTime,
+    uncategorized: filter.uncategorized,
+    dateStart: filter.dateStart,
+    dateEnd: filter.dateEnd,
+  }), [filter]);
+
   const refreshActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: 0, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, searchIn: filter.searchIn,
-      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
+      ...filterToParams(),
     });
     setActiveTasks(res.items);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, [sortBy, filter]);
+  }, [sortBy, filterToParams]);
 
   const loadMoreActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: activeTasks.length, limit: ACTIVE_TASKS_LIMIT, sortBy,
-      search: filter.search, searchIn: filter.searchIn,
-      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
+      ...filterToParams(),
     });
     setActiveTasks((prev) => [...prev, ...res.items]);
     setActiveTasksTotal(res.total);
     setActiveTasksHasMore(res.hasMore);
-  }, [activeTasks.length, sortBy, filter]);
+  }, [activeTasks.length, sortBy, filterToParams]);
 
   const loadDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: 0, limit: DONE_TASKS_LIMIT, sortBy,
-      search: filter.search, searchIn: filter.searchIn,
-      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
+      ...filterToParams(),
     });
     setDoneTasks(res.items);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
     setDoneTasksLoaded(true);
-  }, [sortBy, filter]);
+  }, [sortBy, filterToParams]);
 
   const loadMoreDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: doneTasks.length, limit: DONE_TASKS_LIMIT, sortBy,
-      search: filter.search, searchIn: filter.searchIn,
-      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
+      ...filterToParams(),
     });
     setDoneTasks((prev) => [...prev, ...res.items]);
     setDoneTasksTotal(res.total);
     setDoneTasksHasMore(res.hasMore);
-  }, [doneTasks.length, sortBy, filter]);
+  }, [doneTasks.length, sortBy, filterToParams]);
 
   // Also refresh the done total count (for badge) even when done tasks aren't loaded
   const refreshDoneCount = useCallback(async () => {
     const res = await window.api.tasks.getDone({
       offset: 0, limit: 0, sortBy,
-      search: filter.search, searchIn: filter.searchIn,
-      status: filter.statuses, source: filter.sources, categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
+      ...filterToParams(),
     });
     setDoneTasksTotal(res.total);
-  }, [sortBy, filter]);
+  }, [sortBy, filterToParams]);
 
   // Deleted tasks (recycle bin) loading
   const loadDeletedTasks = useCallback(async () => {
@@ -349,17 +362,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [refreshCategories]);
 
   const selectAllActiveTasks = useCallback(async () => {
-    const ids = await window.api.tasks.getActiveIds({
-      search: filter.search,
-      searchIn: filter.searchIn,
-      status: filter.statuses,
-      source: filter.sources,
-      categoryId: filter.categoryIds,
-      hasUnreportedTime: filter.hasUnreportedTime,
-      uncategorized: filter.uncategorized,
-    });
+    const ids = await window.api.tasks.getActiveIds(filterToParams());
     setSelectedTaskIds(new Set(ids));
-  }, [filter]);
+  }, [filterToParams]);
 
   // ─── Batch mode ──────────────────────────────────────────────────────
 
@@ -405,6 +410,26 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       await refreshDoneCount();
     }
   }, [selectedTaskIds, exitBatchMode, refreshActiveTasks, doneTasksLoaded, loadDoneTasks, refreshDoneCount]);
+
+  const batchMarkSelectedReported = useCallback(async (
+    reportedAt: string | null,
+    dateRange?: { dateStart?: string; dateEnd?: string },
+  ) => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return { changed: 0 };
+    const result = await window.api.timeEntries.batchMarkReported(ids, {
+      reportedAt,
+      dateStart: dateRange?.dateStart,
+      dateEnd: dateRange?.dateEnd,
+    });
+    // Reported state is computed on Task rows (unreportedTimeSeconds), so the
+    // task list needs a refresh to reflect new unreported badges/totals.
+    await refreshActiveTasks();
+    if (doneTasksLoaded) {
+      await loadDoneTasks();
+    }
+    return result;
+  }, [selectedTaskIds, refreshActiveTasks, doneTasksLoaded, loadDoneTasks]);
 
   const batchDeleteTasks = useCallback(async () => {
     const ids = Array.from(selectedTaskIds);
@@ -518,6 +543,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     deselectAllTasks,
     batchUpdateTasks,
     batchDeleteTasks,
+    batchMarkSelectedReported,
     loadDeletedTasks,
     loadMoreDeletedTasks,
     restoreTask,

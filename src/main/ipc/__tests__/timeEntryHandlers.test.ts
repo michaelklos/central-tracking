@@ -183,6 +183,101 @@ describe('TimeEntry IPC Handlers', () => {
       expect(all.every((e: { reportedAt: string | null }) => e.reportedAt === null)).toBe(true);
     });
 
+    describe('batchMarkReported', () => {
+      let secondTaskId: string;
+      beforeEach(async () => {
+        const t = await taskIpc.invoke('tasks:create', { title: 'Second' });
+        secondTaskId = t.id;
+        await ipc.invoke('timeEntries:create', {
+          taskId: testTaskId,
+          startTime: '2026-03-05T10:00:00.000Z',
+          endTime: '2026-03-05T10:30:00.000Z',
+        });
+        await ipc.invoke('timeEntries:create', {
+          taskId: testTaskId,
+          startTime: '2026-04-05T10:00:00.000Z',
+          endTime: '2026-04-05T10:30:00.000Z',
+        });
+        await ipc.invoke('timeEntries:create', {
+          taskId: secondTaskId,
+          startTime: '2026-03-10T10:00:00.000Z',
+          endTime: '2026-03-10T10:30:00.000Z',
+        });
+      });
+
+      it('marks all entries for selected tasks reported when no date range given', async () => {
+        const result = await ipc.invoke('timeEntries:batchMarkReported', [testTaskId, secondTaskId], {
+          reportedAt: '2026-05-01T10:00:00.000Z',
+        });
+        expect(result.changed).toBe(3);
+
+        const allFirst = await ipc.invoke('timeEntries:getByTask', testTaskId);
+        const allSecond = await ipc.invoke('timeEntries:getByTask', secondTaskId);
+        expect(allFirst.every((e: { reportedAt: string | null }) => e.reportedAt !== null)).toBe(true);
+        expect(allSecond.every((e: { reportedAt: string | null }) => e.reportedAt !== null)).toBe(true);
+      });
+
+      it('restricts to entries within [dateStart, dateEnd] inclusive', async () => {
+        const result = await ipc.invoke('timeEntries:batchMarkReported', [testTaskId, secondTaskId], {
+          reportedAt: '2026-05-01T10:00:00.000Z',
+          dateStart: '2026-03-01',
+          dateEnd: '2026-03-31',
+        });
+        // Only the two March entries should flip
+        expect(result.changed).toBe(2);
+
+        const firstEntries = await ipc.invoke('timeEntries:getByTask', testTaskId);
+        const aprilEntry = firstEntries.find((e: { startTime: string }) => e.startTime.startsWith('2026-04'));
+        const marchEntry = firstEntries.find((e: { startTime: string }) => e.startTime.startsWith('2026-03'));
+        expect(aprilEntry.reportedAt).toBeNull();
+        expect(marchEntry.reportedAt).not.toBeNull();
+      });
+
+      it('preserves already-reported timestamps when marking reported', async () => {
+        // Pre-report one entry with an older timestamp.
+        const firstEntries = await ipc.invoke('timeEntries:getByTask', testTaskId);
+        const marchEntry = firstEntries.find((e: { startTime: string }) => e.startTime.startsWith('2026-03'));
+        await ipc.invoke('timeEntries:update', marchEntry.id, { reportedAt: '2026-04-01T00:00:00.000Z' });
+
+        const result = await ipc.invoke('timeEntries:batchMarkReported', [testTaskId], {
+          reportedAt: '2026-06-01T00:00:00.000Z',
+        });
+        // Only the April entry was unreported, so only 1 changes.
+        expect(result.changed).toBe(1);
+
+        const refreshed = await ipc.invoke('timeEntries:getByTask', testTaskId);
+        const stillMarch = refreshed.find((e: { id: string }) => e.id === marchEntry.id);
+        expect(stillMarch.reportedAt).toBe('2026-04-01T00:00:00.000Z');
+      });
+
+      it('reportedAt:null clears reported_at within scope (date range respected)', async () => {
+        // Pre-mark every entry as reported.
+        await ipc.invoke('timeEntries:batchMarkReported', [testTaskId, secondTaskId], {
+          reportedAt: '2026-05-01T10:00:00.000Z',
+        });
+        // Now unmark only March entries.
+        const result = await ipc.invoke('timeEntries:batchMarkReported', [testTaskId, secondTaskId], {
+          reportedAt: null,
+          dateStart: '2026-03-01',
+          dateEnd: '2026-03-31',
+        });
+        expect(result.changed).toBe(2);
+
+        const firstEntries = await ipc.invoke('timeEntries:getByTask', testTaskId);
+        const aprilEntry = firstEntries.find((e: { startTime: string }) => e.startTime.startsWith('2026-04'));
+        const marchEntry = firstEntries.find((e: { startTime: string }) => e.startTime.startsWith('2026-03'));
+        expect(aprilEntry.reportedAt).not.toBeNull();
+        expect(marchEntry.reportedAt).toBeNull();
+      });
+
+      it('empty taskIds returns changed=0 and is a no-op', async () => {
+        const result = await ipc.invoke('timeEntries:batchMarkReported', [], {
+          reportedAt: '2026-05-01T10:00:00.000Z',
+        });
+        expect(result.changed).toBe(0);
+      });
+    });
+
     it('recurring scenario: log → mark reported → log again → task has unreported time for the new entry only', async () => {
       // Week 1: log 30m on the recurring task and report it.
       const week1 = await ipc.invoke('timeEntries:create', {
