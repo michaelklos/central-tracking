@@ -89,7 +89,7 @@ Global flags: --json (machine-readable output), --debug (log HTTP traffic), --ti
 ```
 
 Full per-command reference: `.claude/cli-reference.md`  
-Plugin development guide: `.claude/plugins.md`
+Plugin development guide: `docs/plugins.md`
 
 ### Building the CLI
 

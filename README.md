@@ -100,6 +100,32 @@ ct task list --json                 # Machine-readable output
 
 See `ct --help` or `ct <command> --help` for full usage.
 
+### Plugins
+
+External integrations run as separate processes that talk to the running app over its loopback HTTP server. Each plugin ships its own README with install steps and configuration.
+
+**Bundled plugins:**
+
+| Plugin | Description | Docs |
+|---|---|---|
+| `ado` | Azure DevOps work item sync (pull current sprint; push time / state / comments) | [`plugins/ado/README.md`](plugins/ado/README.md) |
+
+**Manage plugins:**
+
+```bash
+ct plugin install <manifest.json>  # Register a plugin
+ct plugin list                     # Show installed plugins (id, version, enabled)
+ct plugin enable <id>              # Re-enable a disabled plugin
+ct plugin disable <id>             # Stop running / receiving events
+ct plugin uninstall <id>           # Remove plugin and clear its config
+ct plugin config set <id> <k> <v>  # Per-plugin configuration
+ct plugin run <id> [args...]       # Spawn the plugin's entrypoint
+```
+
+Enable/disable also lives in Settings → Plugins inside the app. The "Track reported time" toggle per plugin gates unreported badges and the auto-mark-on-push behaviour for that plugin's tasks.
+
+Writing your own plugin? See [`docs/plugins.md`](docs/plugins.md) for the manifest format, lifecycle, webhook payloads, and the CLI-only-script alternative.
+
 ### CLI Reference
 
 The block below is auto-generated from `ct --help`. Regenerate with `npm run docs`; `npm run docs:check` fails if the committed reference has drifted.
