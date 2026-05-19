@@ -4,16 +4,20 @@ A desktop task and time tracking application built with Electron, React, and Typ
 
 ## Features
 
-- **Task management** — Create, edit, reorder, and organize tasks with statuses (todo, in-progress, done, blocked) and sources (ad-hoc, email, meeting-prep, plugin)
+- **Task management** — Create, edit, reorder, and organize tasks with statuses (todo, in-progress, done, blocked) and sources (ad-hoc, email, meeting-prep, plugin, ado)
 - **Task lifecycle** — Complete/reactivate tasks with auto-stop/start timer, collapsible "Done" group
 - **Time tracking** — Start/stop timer per task, view elapsed time, track daily and total time per task, cumulative "Today" total in timer bar
 - **Manual time entries** — Add completed time entries manually, edit existing entries with validation
+- **Reported time** — Mark time entries as reported to an external system; unreported-time badges per task; batch mark across multiple tasks with optional date range
 - **Notes** — Free-form notes per task with indicator badges and dedicated tab
-- **Categories & labels** — Color-coded categories that can be assigned to tasks for filtering
-- **Comments** — Add notes to tasks, with optional sync-to-external-system flag
-- **Reporting** — Date range picker, stacked bar chart visualization (recharts), CSV export
-- **Filtering** — Search tasks by text, filter by status, source, or category
-- **UI productivity** — Split action button, always-on-top pin, settings menu, scrollable panels
+- **Categories & labels** — Color-coded categories that can be assigned to tasks for filtering; pie chart breakdown in report view
+- **Comments** — Add notes to tasks, with optional sync-to-external-system flag; external comments can be mirrored in (read-only)
+- **Reporting** — Date range picker, stacked bar chart and timeline visualization (recharts), category pie charts, CSV export
+- **Filtering** — Search tasks by text, filter by status, source, category, or unreported-time flag; date range filter on task lists
+- **External sync** — Link tasks to external work items (ADO); pull state and title from external systems; push time, status, and comments back; `state_dirty` flag tracks unpushed local status changes
+- **Plugin task linking** — Manually link any ad-hoc task to an external plugin work item in link mode (ct owns title/notes) or mirror mode (external system is source of truth)
+- **Secret storage** — Plugin config secrets encrypted at rest via OS keychain (macOS Keychain, Windows DPAPI, Linux libsecret); never returned in cleartext from bridge or CLI
+- **UI productivity** — Split action button, always-on-top pin, settings menu, scrollable panels, batch action bar
 - **CLI (`ct`)** — Full-featured command-line interface for all operations; changes appear in the UI in real-time. Supports `--json` for machine-readable output.
 - **Agent-friendly** — External integrations (ADO, Jira, custom scripts) use CLI commands rather than in-process plugins
 - **Debug mode** — Verbose logging with `--debug` flag
@@ -1336,26 +1340,35 @@ src/
     main.ts          # App bootstrap, window creation, HTTP server startup
     preload.ts       # Context bridge API
     logger.ts        # Debug logger
+    secretStorage.ts # OS-keychain encryption wrapper for plugin secrets
+    errors.ts        # DomainError class for structured IPC/HTTP errors
     database/        # SQLite database + migrations
-    ipc/             # IPC handlers by domain (tasks, timeEntries, comments, categories, reports)
+    ipc/             # IPC handlers by domain (tasks, timeEntries, comments, categories, reports, plugins)
     server/          # Local HTTP server for CLI communication
+      apiManifest.ts # Route table shared by IPC registration and HTTP server
     reports/         # Pure report generation (CSV)
     import/          # Import parsing and execution
   cli/               # CLI tool (`ct`)
     main.ts          # Entry point, yargs command tree
     client.ts        # Server discovery and HTTP client
     formatters.ts    # Human-readable output formatting
-    commands/        # Command modules (task, timer, time, report, comment, category, import, status)
+    commands/        # Command modules (task, timer, time, report, comment, category, import, status, plugin)
   renderer/          # React UI
     App.tsx          # Root component with HashRouter
     components/      # Layout, Sidebar, TaskList, TaskDetail, TimerBar,
                      # ReportView, DateRangePicker, SplitButton, OptionsMenu,
-                     # TimeEntryEditor
+                     # TimeEntryEditor, BatchActionBar, LinkPluginDialog,
+                     # PluginsSettings, CategoryPieCharts, TimelineView,
+                     # MultiSelectDropdown
     context/         # TaskContext, TimerContext
-    utils/           # Helpers (time, duration, validation)
+    hooks/           # useMarkdownTextarea, useIntersectionObserver, usePluginCapabilities
+    utils/           # Helpers (time, duration, validation, adoFsm)
   shared/
     types.ts         # Shared TypeScript types
+    dateRange.ts     # Date range helpers
   test/              # Test infrastructure and mocks
+plugins/
+  ado/               # Azure DevOps sync plugin (pull sprint items; push time/state/comments)
 ```
 
 ## Roadmap

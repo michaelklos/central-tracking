@@ -37,10 +37,13 @@ src/
     main.ts          # App entry point, window creation, IPC registration, HTTP server startup
     preload.ts       # Context bridge (exposes CentralTrackingAPI to renderer)
     logger.ts        # Debug logger (--debug flag)
+    secretStorage.ts # OS-keychain encryption wrapper (safeStorage; enc:v1:<base64> format)
+    errors.ts        # DomainError class for structured IPC/HTTP error serialization
     database/        # SQLite database class + migrations
-    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, reports, import, cli
+    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, reports, import, cli, plugins
     server/          # Local HTTP server for CLI communication
-      httpServer.ts  # HTTP server with route table mapping to handler functions
+      httpServer.ts  # HTTP server; delegates routing to apiManifest
+      apiManifest.ts # Route table (route, ipcChannel, handler, mutates, event) — shared by IPC + HTTP
       auth.ts        # Token generation, server file management, validation
     reports/         # Pure report logic (no Electron dependency)
       csvGenerator.ts
@@ -52,30 +55,38 @@ src/
     main.ts          # Entry point, yargs command tree
     client.ts        # HTTP client (reads ct-server.json, auth)
     formatters.ts    # Human-readable output (tables, durations, report text)
-    commands/        # Command modules: task, timer, time, report, comment, category, import, status
+    commands/        # Command modules: task, timer, time, report, comment, category, import, status, plugin
     __tests__/       # CLI unit + integration tests
   renderer/          # React frontend (webpack-bundled)
     App.tsx          # Root component, wraps providers + HashRouter
     components/      # Layout, Sidebar, TaskList, TaskDetail, TimerBar,
                      # ReportView, DateRangePicker, SplitButton, OptionsMenu,
-                     # TimeEntryEditor, HelpPopover, ConfirmDialog
+                     # TimeEntryEditor, HelpPopover, ConfirmDialog,
+                     # BatchActionBar, LinkPluginDialog, PluginsSettings,
+                     # CategoryPieCharts, TimelineView, MultiSelectDropdown
     context/         # TaskContext (CRUD + filtering), TimerContext (active timer)
     hooks/           # useMarkdownTextarea (Cmd+S save, markdown list continuation)
                      # useIntersectionObserver (infinite scroll sentinel)
+                     # usePluginCapabilities (reads plugin config schema for UI feature gates)
     utils/           # Helpers (time formatting, duration parsing, validation)
+                     # adoFsm.ts (client-side ADO status transition rules)
   shared/
     types.ts         # Shared TypeScript types (Task, TimeEntry, Comment, etc.)
+    dateRange.ts     # Date range helpers (toIsoStartOfDay, toIsoEndOfDay)
   test/              # Test infrastructure
     setup.ts         # Global test setup
     mocks/           # Mock factories (api, electron, database)
+plugins/
+  ado/               # Azure DevOps sync plugin (stages 0-3: pull, push-time, push-state, push-comments)
 ```
 
 - **Main ↔ Renderer communication**: IPC via `contextBridge` / `ipcRenderer.invoke`. The API shape is defined in `CentralTrackingAPI` in `src/shared/types.ts`.
 - **Main ↔ CLI communication**: Local HTTP server (127.0.0.1) with bearer token auth. CLI discovers the server via `{userData}/ct-server.json`.
 - **Real-time UI updates**: HTTP server fires `webContents.send('ct:data-changed')` after mutations. Renderer contexts subscribe and refresh with 100ms debounce.
-- **Handler extraction**: IPC handler business logic is extracted as named exports (e.g., `createTask`, `getActiveTasks`). Both IPC registration and HTTP routes call these same functions.
+- **Handler extraction**: IPC handler business logic is extracted as named exports (e.g., `createTask`, `getActiveTasks`). Both IPC registration and HTTP routes call these same functions via `src/main/server/apiManifest.ts`.
 - **Database**: SQLite with WAL mode, foreign keys enabled. Schema managed via sequential migrations in `src/main/database/migrations.ts`.
 - **Routing**: HashRouter with `/` (tasks) and `/reports` (reporting view).
+- **Plugin webhooks**: Mutating HTTP routes carry an `event` field (e.g., `task.updated`). After a mutation, the server dispatches that event to all enabled plugins registered for it.
 
 ## CLI (`ct`)
 
@@ -176,30 +187,40 @@ npm run start:debug      # Launches with --debug flag
 - IPC handlers are organized by domain in `src/main/ipc/`
 - Handler business logic extracted as named exports for reuse by HTTP server
 - Electron-free modules (`reports/csvGenerator.ts`, `import/importExecutor.ts`) for logic shared between IPC and HTTP
+- Structured errors use `DomainError` from `src/main/errors.ts` (code + message); serializes cleanly over IPC and HTTP
 - UUIDs for all entity IDs (via `uuid` package)
 - SQLite column names use `snake_case`; TypeScript types use `camelCase`
 
 ## Database
 
 - Located at `{userData}/central-tracking.db` (Electron's `app.getPath('userData')`)
-- Tables: `tasks`, `time_entries`, `comments`, `categories`, `task_categories`, `plugin_config`, `schema_version`
+- Tables: `tasks`, `time_entries`, `comments`, `categories`, `task_categories`, `plugin_config`, `plugins`, `schema_version`
 - Migrations are sequential SQL strings in `src/main/database/migrations.ts`
 - **Migration 001**: Initial schema (all tables)
 - **Migration 002**: `ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT '';`
 - **Migration 003**: Indexes for paginated queries
 - **Migration 004**: Soft-delete support (`deleted_at` column on tasks)
 - **Migration 005**: Plugin registry (`plugins` table for installed plugin metadata)
+- **Migration 006**: `ALTER TABLE time_entries ADD COLUMN reported_at TEXT DEFAULT NULL;` (tracks when time was marked as reported to an external system)
+- **Migration 007**: External sync fields on tasks (`external_url`, `external_state`, `external_completed_hours`, `external_refreshed_at`, `state_dirty`) and `external_id` on comments; unique index on `(source, external_id)`
 
 ## IPC API Surface
 
 | Channel | Description |
 |---|---|
 | `tasks:*` | Task CRUD (getAll, getById, create, update, delete, reorder, batch ops) |
+| `tasks:upsertExternal`, `tasks:setExternalState` | Plugin-driven external task mirroring and state push |
+| `tasks:link`, `tasks:unlink` | Manually link/mirror a task to an external plugin work item |
 | `timeEntries:*` | Time entry CRUD + singleton timer (getByTask, create, update, delete, getActive, stopActive) |
 | `timeEntries:getTodayTotal` | Today's aggregate time |
-| `timeEntries:getByDateRange`, `timeEntries:getReport` | Reporting queries |
+| `timeEntries:getByDateRange`, `timeEntries:getReport`, `timeEntries:getSummaryReport` | Reporting queries |
+| `timeEntries:getByTaskPaginated`, `timeEntries:getByDateRangeWithTasks` | Paginated and cross-task queries |
+| `timeEntries:markTaskReported`, `timeEntries:batchMarkReported` | Mark time entries as reported to an external system; batch supports optional date range |
 | `comments:*` | Comment CRUD |
+| `comments:upsertExternal`, `comments:getPendingSync` | Mirror external comments; query syncable comments needing push |
 | `categories:*` | Category CRUD + assignToTask |
+| `plugins:list`, `plugins:setEnabled` | Plugin registry queries and enable/disable |
+| `plugins:getConfig`, `plugins:listConfig`, `plugins:setConfig`, `plugins:deleteConfig`, `plugins:schema` | Per-plugin config management (secrets encrypted via `secretStorage.ts`) |
 | `reports:exportCsv` | CSV export with save dialog |
 | `cli:isInstalled`, `cli:install`, `cli:uninstall` | CLI tool install/uninstall (macOS only) |
 | `window:setAlwaysOnTop`, `window:getAlwaysOnTop` | Window management |
@@ -210,7 +231,9 @@ All endpoints: `POST /api/{domain}/{operation}` with JSON body `{ "args": [...] 
 
 Response: `{ "ok": true, "data": <result> }` or `{ "ok": false, "error": { "code": "...", "message": "..." } }`.
 
-The route table in `src/main/server/httpServer.ts` maps 1:1 to the extracted handler functions. Each route is tagged with `mutates: boolean` to trigger UI refresh notifications.
+The route table is in `src/main/server/apiManifest.ts` and maps 1:1 to the extracted handler functions. Each route declares:
+- `mutates: boolean` — triggers `ct:data-changed` renderer refresh on `true`
+- `event?: string` — event name dispatched to plugin webhooks on mutation (e.g. `task.updated`, `comment.created`)
 
 ## Testing
 
