@@ -22,6 +22,7 @@ function makeEntry(overrides: Partial<TimeEntryWithTask> = {}): TimeEntryWithTas
     endTime: localTime(10, 0),
     durationSeconds: 3600,
     note: '',
+    reportedAt: null,
     createdAt: localTime(9, 0),
     taskTitle: 'Test Task',
     taskSource: 'ad-hoc',

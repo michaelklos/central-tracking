@@ -12,6 +12,7 @@ const makeEntry = (overrides: Partial<TimeEntry> = {}): TimeEntry => ({
   endTime: '2024-06-15T10:30:00.000Z',
   durationSeconds: 5400,
   note: 'test note',
+  reportedAt: null,
   createdAt: '2024-06-15T09:00:00.000Z',
   ...overrides,
 });

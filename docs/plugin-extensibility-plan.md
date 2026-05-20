@@ -463,6 +463,56 @@ Newest entry at the top. Each entry should answer:
 Update the **Status** table at the top of this file in the same edit
 so the at-a-glance view stays accurate.
 
+### 2026-05-20 (5) — tsc cleanup (stacked on P1)
+
+- **Done:** `claude/p3-tsc-cleanup` off `claude/p1-plugin-extensibility`.
+  Brings root `tsc --noEmit` from 390 errors to **0** without
+  touching production behaviour. 690 tests still pass.
+  - `src/test/mocks/electron.ts:invoke` is now generic
+    (`invoke<T = any>(channel, …args): Promise<T>`); the 359
+    `TS18046 'cat' is of type 'unknown'` errors across IPC handler
+    tests collapse to zero without per-call type arguments.
+  - `Task`/`TimeEntry`/`TimeEntryWithTask` test fixtures filled
+    in for fields added in migrations 004/006/007:
+    `unreportedTimeSeconds`, `hasUnreportedTime`, `deletedAt`,
+    `externalUrl`/`externalState`/`externalCompletedHours`/
+    `externalRefreshedAt`, `stateDirty`, `reportedAt`. Hits
+    `TaskDetail.{lifecycle,notes,validation}.test.tsx`,
+    `TaskList.groups.test.tsx`, `TimeEntryEditor.test.tsx`,
+    `TimelineView.test.tsx`, `timeline.test.ts`,
+    `timeValidation.test.ts`. `mockTaskContext.{tasks,activeTasks,
+    doneTasks}` typed as `Task[]` so re-assignment doesn't infer
+    `never[]`.
+  - ADO test fixtures: `makeConfig` in `sync.test.ts` /
+    `push-state.test.ts` / `pull.test.ts` / `state-map.test.ts`
+    now sets `tracksReported: true` (added to `AdoConfig` in P1).
+    `sync.test.ts` imports `CtTask`/`CtTimeEntry` from
+    `../types` (the re-export source), not from `../push-time`
+    where they're only locally imported.
+  - `formatters.test.ts`: status/source typed `as const` so the
+    fixture matches `TaskRow`'s narrowed enums.
+  - `import.ts` 'format' subcommand: builder is `{}`, handler
+    wrapped in a block so it returns `void` (yargs overload
+    rejected `boolean` return from `process.stdout.write`).
+  - `CategoryPieCharts.tsx`: `renderTooltip` / `renderLabel`
+    accept the recharts `unknown`-like callback signature and
+    narrow inside (the shape was already implicitly trusted by
+    the snapshot test).
+  - `TimeEntryScrollSentinel.tsx` / `useIntersectionObserver`:
+    return `RefObject<HTMLDivElement>` (not
+    `RefObject<HTMLDivElement | null>`) so the ref props
+    satisfies React 18.3's `LegacyRef<HTMLDivElement>`.
+  - `src/test/setup.ts`: import `beforeEach` from `vitest`,
+    cast `window` via `unknown` first.
+  - `ct-client.test.ts:89`: explicit `(c: unknown[])` on the
+    `.find` callback so noImplicitAny stops flagging it.
+- **In flight:** none.
+- **Next:** Review on `claude/p3-tsc-cleanup`. After P0 → P1 → P3
+  merge in sequence, `tsc --noEmit` at root can be wired into
+  CI without burying real errors under the pre-existing
+  baseline.
+- **Blockers / open questions:** none.
+
 ### 2026-05-20 (4) — P1 bundle implemented (stacked on P0)
 
 - **Done:** Items 4, 5, 6 landed on `claude/p1-plugin-extensibility`

@@ -6,10 +6,18 @@ export function createMockIpcMain() {
     handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler);
     }),
-    invoke: async (channel: string, ...args: unknown[]) => {
+    /**
+     * `T` is the awaited return type of the registered handler. Defaulting to
+     * `any` (not `unknown`) so existing tests that destructure the result —
+     * `expect(task.id).toBeDefined()` — keep working without per-call type
+     * arguments. The runtime call is still untyped under the hood; the
+     * generic just lets the test reader assert via property access without
+     * fighting strict mode at every call site.
+     */
+    invoke: async <T = any>(channel: string, ...args: unknown[]): Promise<T> => {
       const handler = handlers.get(channel);
       if (!handler) throw new Error(`No handler for channel: ${channel}`);
-      return handler({}, ...args);
+      return handler({}, ...args) as T;
     },
     handlers,
   };

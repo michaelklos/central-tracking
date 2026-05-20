@@ -14,8 +14,8 @@ function thresholdKey(t: IntersectionObserverInit['threshold']): string {
 
 export function useIntersectionObserver(
   options?: IntersectionObserverInit
-): [RefObject<HTMLDivElement | null>, boolean] {
-  const ref = useRef<HTMLDivElement | null>(null);
+): [RefObject<HTMLDivElement>, boolean] {
+  const ref = useRef<HTMLDivElement>(null);
   const [isIntersecting, setIsIntersecting] = useState(false);
   const optionsRef = useRef(options);
   optionsRef.current = options;
