@@ -15,6 +15,20 @@ implementation steps, test plan, and migration notes where applicable.
 
 ---
 
+## Status
+
+| Priority | Items | State | Owner | Branch |
+|---|---|---|---|---|
+| **P0** | 1, 2, 3 (bundled) | **Active — next up** | unassigned | tbd |
+| P1 | 4, 5, 6 | Queued — start after P0 merges | — | — |
+| P2 | 7, 8, 9 | Deferred until plugin #2 has a working POC | — | — |
+
+**Current focus:** P0 bundle. Single owner recommended — items share a
+migration (008) and ADO call-site updates; splitting them creates
+merge pain. See the Handoff log at the bottom for live progress.
+
+---
+
 ## P0 — Land these together (one migration, one PR)
 
 Items 1, 2, and 3 all touch `src/shared/types.ts`, the task schema, or
@@ -22,6 +36,8 @@ the ADO plugin's imports. Doing them piecemeal would mean either two
 migrations or a partially-typed plugin client. Bundle them.
 
 ### 1. Decouple `TaskSource` from ADO; key external tasks by `pluginId`
+
+**Status:** Not started.
 
 **Problem.** `TASK_SOURCES` hardcodes `'ado'` at `src/shared/types.ts:3`,
 and the unique index keying external tasks is `(source, external_id)`
@@ -85,6 +101,8 @@ idempotent (use `WHERE source = 'ado'` guards).
 
 ### 2. Move ADO-specific types out of `src/shared/types.ts`
 
+**Status:** Not started.
+
 **Problem.** `AdoStateMapEntry`, `AdoStateMap`, and
 `ADO_DEFAULT_STATE_MAP` live in `src/shared/types.ts:182-191`. The
 renderer imports them directly to render state-map config UI. A
@@ -117,6 +135,8 @@ grows linearly with plugin count) or reuse the wrong types.
 ---
 
 ### 3. Extract `@central-tracking/plugin-client` (or local equivalent)
+
+**Status:** Not started.
 
 **Problem.** `plugins/ado/src/ct-client.ts` (189 LOC) and
 `plugins/ado/src/config.ts` (67 LOC) contain the HTTP wrapper, env-var
@@ -379,3 +399,39 @@ the work):
 After all of this, a new plugin should be ~50 LOC of glue + its
 sync-specific logic, with no edits to `src/shared/types.ts`, no
 migrations, and no copy-pasted client code.
+
+---
+
+## Handoff log
+
+Newest entry at the top. Each entry should answer:
+- **Done:** what landed (commit hashes, PR numbers).
+- **In flight:** what's mid-implementation, where the cursor is, any
+  WIP commits.
+- **Next:** what the next session should pick up first.
+- **Blockers / open questions:** anything that needs a human decision
+  before proceeding.
+
+Update the **Status** table at the top of this file in the same edit
+so the at-a-glance view stays accurate.
+
+### 2026-05-20 — Plan created
+
+- **Done:** Audit + ranked recommendations. Plan committed
+  (`ecf11ec`) and pushed to
+  `claude/review-codebase-recommendations-mMBQ8`. P0/P1/P2 grouping
+  agreed. Status table + handoff log structure added.
+- **In flight:** none.
+- **Next:** start P0 item 1 (migration 008 + `pluginId` column + 
+  `(plugin_id, external_id)` unique index). Item 1 is the gating
+  schema change; items 2 and 3 can begin once 1 is at PR-ready state.
+- **Blockers / open questions:**
+  - Item 1 step 1: should sideloaded-plugin uninstall grow a
+    `tasks-owned` refusal, or just succeed and orphan the task rows?
+    Current uninstall (`uninstallPlugin` in `pluginHandlers.ts`)
+    refuses bundled plugins only. The migration introduces an FK
+    that would otherwise fail loudly on uninstall — easier to make
+    that an explicit check.
+  - Item 3: confirm `plugins/_shared/` (local file dep) is the right
+    landing place vs `packages/plugin-client/` if we ever want a
+    monorepo layout. Not blocking — can move later.
