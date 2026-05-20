@@ -19,12 +19,17 @@ implementation steps, test plan, and migration notes where applicable.
 
 | Priority | Items | State | Owner | Branch |
 |---|---|---|---|---|
-| **P0** | 1, 2, 3 (bundled) | **Active — next up** | unassigned | tbd |
+| **P0** | 1, 2, 3 (bundled) | **Implemented — in review** | claude | `claude/p0-plugin-extensibility` |
 | P1 | 4, 5, 6 | Queued — start after P0 merges | — | — |
 | P2 | 7, 8, 9 | Deferred until plugin #2 has a working POC | — | — |
 
-**Current focus:** P0 bundle. Single owner recommended — items share a
-migration (008) and ADO call-site updates; splitting them creates
+**Note on migration number:** the schema in `migrations.ts` already had
+migration 008 (`plugins.source` column) when this plan was written. The
+plan's references to "migration 008" landed as **migration 009**. The
+substance is unchanged; only the index shifted.
+
+**Current focus:** P0 review. Single owner recommended — items share a
+migration (009) and ADO call-site updates; splitting them creates
 merge pain. See the Handoff log at the bottom for live progress.
 
 ---
@@ -457,6 +462,79 @@ Newest entry at the top. Each entry should answer:
 
 Update the **Status** table at the top of this file in the same edit
 so the at-a-glance view stays accurate.
+
+### 2026-05-20 (3) — P0 bundle implemented
+
+- **Done:** All three P0 items landed on branch
+  `claude/p0-plugin-extensibility` (off
+  `claude/review-codebase-recommendations-mMBQ8`). 678 tests pass (665
+  existing + 13 new in the shared package).
+  - **Item 1** — Migration **009** (not 008; 008 was already taken by
+    `plugins.source`) recreates `tasks` with the FK
+    `plugin_id REFERENCES plugins(id) ON DELETE RESTRICT`, a CHECK
+    constraint scoping `source` to `('ad-hoc','email','meeting-prep','plugin')`,
+    and the new `UNIQUE (plugin_id, external_id) WHERE external_id IS NOT NULL`
+    index. Backfill: `source='ado'` rows become `source='plugin',
+    plugin_id='ado'` when the ADO plugin row exists; orphans (legacy
+    `source='ado'` with no `plugins.ado` row) get `plugin_id=NULL`.
+    `runMigrations` gained an optional `upTo` argument so tests can run
+    migrations up to v8 and validate the v9 transition.
+    - `UpsertExternalTaskInput.pluginId` is now required; matching is
+      on `(plugin_id, external_id)`; `source='plugin'` is forced on
+      insert. ADO push-time/push-state filter via
+      `getTasks({ pluginId: 'ado', … })` instead of the old
+      `source: ['ado']`; `getPendingSyncComments` filters by
+      `t.plugin_id`. `linkTaskToPlugin` always sets `source='plugin'`
+      on mirror (the `pluginId === 'ado'` special case is gone).
+      `updateTask` FSM check moved from `source==='ado'` to
+      `plugin_id==='ado'`.
+    - `uninstallPlugin(db, id, { convertTasksToAdHoc })` is the new
+      shape. Preflight returns `{ requiresConfirmation: true, taskCount }`;
+      the convert phase runs one transaction that clears
+      `external_*`/`plugin_id`/`state_dirty`, resets `source='ad-hoc'`,
+      clears `comments.external_id` on owned tasks, and deletes the
+      plugin row (sideloaded only). CLI: `ct plugin uninstall <id>`
+      prompts in TTY; `--force` skips the prompt and is required in
+      `--json` mode. Renderer confirm dialog deferred to a follow-up
+      (the renderer's plugins-settings UI doesn't yet expose an
+      uninstall button at all; CLI is the supported path today).
+    - Importer downgrade: `importExecutor` now nulls out
+      `pluginId`/falls back to `source='ad-hoc'` when the markdown
+      parser tagged a numeric ticket as `pluginId='ado'`/`'jira'` but
+      the plugin row isn't installed, so the new FK doesn't block
+      imports in fresh DBs.
+  - **Item 2** — `AdoStateMapEntry`/`AdoStateMap`/`ADO_DEFAULT_STATE_MAP`
+    moved from `src/shared/types.ts` to `plugins/ado/src/types.ts`.
+    `plugins/ado/src/state-map.ts` and `config.ts` now use the named
+    types instead of the inline structural one. The renderer doesn't
+    import these (it never did); when it needs a plugin state map it
+    will go through the per-plugin capabilities endpoint (P1).
+  - **Item 3** — New workspace `plugins/_shared` (`@central-tracking/plugin-client`)
+    holds the `CtClient`, `loadConfig`, and shared payload types.
+    Composite TS project with declaration output; ADO's tsconfig has
+    `references: [{ path: '../_shared' }]` and a path alias to
+    `../_shared/dist`. `plugins/ado/src/{ct-client.ts,types.ts}` are
+    now thin re-export shims. `CtClient`'s constructor takes
+    `pluginId` as a required first arg (the previous `CT_PLUGIN_ID`
+    env fallback is gone — explicit beats implicit). `loadConfig` is
+    generic: `(client, requiredKeys, parse)` factors the
+    required-key gate so each plugin keeps only the parse step. Tests
+    added at `plugins/_shared/src/__tests__/{ct-client,load-config}.test.ts`
+    cover env-shadowing and missing-key gating against a non-ADO
+    pluginId (`jira`) to prove the surface is plugin-agnostic.
+- **In flight:** none.
+- **Next:** Code review on `claude/p0-plugin-extensibility`; merge.
+  P1 items 4/5/6 are independent and can pick up afterwards in any
+  order.
+- **Blockers / open questions:**
+  - The renderer's plugin-settings UI doesn't have an uninstall
+    button today. The new `uninstallPlugin` preflight + convert shape
+    is fully wired in the IPC, HTTP API, and CLI; adding the renderer
+    dialog is purely additive UI work and can land any time after
+    this PR.
+  - Existing root-level `npx tsc --noEmit` reports 390 errors — same
+    count as before this branch (all in renderer test setup and
+    third-party recharts/test scaffolding). No new errors introduced.
 
 ### 2026-05-20 (2) — Open questions resolved
 

@@ -181,7 +181,39 @@ export function registerBundledPlugin(db: Database, manifestInput: unknown): Plu
   return getPlugin(db, manifest.id) as Plugin;
 }
 
-export function uninstallPlugin(db: Database, id: string): void {
+export interface UninstallPluginOptions {
+  /** Set true to convert referencing tasks to local ad-hoc tasks and delete
+   *  the plugin row in one transaction. Without it, the call is a preflight
+   *  that returns the task count so the caller can confirm. */
+  convertTasksToAdHoc?: boolean;
+}
+
+export type UninstallPluginResult =
+  | { uninstalled: true; convertedTasks: number }
+  | { requiresConfirmation: true; taskCount: number };
+
+/**
+ * Two-phase uninstall.
+ *
+ * Preflight (default — no `convertTasksToAdHoc`): counts tasks referencing the
+ * plugin and returns `{ requiresConfirmation: true, taskCount }` without
+ * touching any rows. The caller (CLI / renderer) surfaces the count and the
+ * warning that conversion is irreversible.
+ *
+ * Convert (`convertTasksToAdHoc: true`): runs a single transaction that
+ *   1) clears the external_* columns and resets `source='ad-hoc'`,
+ *      `plugin_id=NULL`, `state_dirty=0` on every referencing task,
+ *   2) clears `external_id` on those tasks' comments so a future reinstall
+ *      doesn't try to push pre-existing local comments to a re-bound remote,
+ *   3) deletes the plugin's config rows and the plugin row itself.
+ *
+ * Bundled plugins are refused in both phases — they're disabled, not removed.
+ */
+export function uninstallPlugin(
+  db: Database,
+  id: string,
+  opts: UninstallPluginOptions = {},
+): UninstallPluginResult {
   const row = db.instance.prepare('SELECT source FROM plugins WHERE id = ?').get(id) as
     | { source: string }
     | undefined;
@@ -191,8 +223,45 @@ export function uninstallPlugin(db: Database, id: string): void {
       `Bundled plugins can't be uninstalled. Disable instead with \`ct plugin disable ${id}\`.`,
     );
   }
-  db.instance.prepare('DELETE FROM plugin_config WHERE plugin_id = ?').run(id);
-  db.instance.prepare('DELETE FROM plugins WHERE id = ?').run(id);
+
+  const taskCountRow = db.instance
+    .prepare('SELECT COUNT(*) as n FROM tasks WHERE plugin_id = ?')
+    .get(id) as { n: number };
+  const taskCount = taskCountRow.n;
+
+  if (!opts.convertTasksToAdHoc) {
+    return { requiresConfirmation: true, taskCount };
+  }
+
+  const tx = db.instance.transaction(() => {
+    db.instance
+      .prepare(
+        `UPDATE comments SET external_id = NULL, updated_at = datetime('now')
+         WHERE task_id IN (SELECT id FROM tasks WHERE plugin_id = ?)
+           AND external_id IS NOT NULL`,
+      )
+      .run(id);
+    db.instance
+      .prepare(
+        `UPDATE tasks SET
+           plugin_id = NULL,
+           source = 'ad-hoc',
+           external_id = NULL,
+           external_url = NULL,
+           external_state = NULL,
+           external_completed_hours = NULL,
+           external_refreshed_at = NULL,
+           state_dirty = 0,
+           updated_at = datetime('now')
+         WHERE plugin_id = ?`,
+      )
+      .run(id);
+    db.instance.prepare('DELETE FROM plugin_config WHERE plugin_id = ?').run(id);
+    db.instance.prepare("DELETE FROM plugins WHERE id = ? AND source = 'sideloaded'").run(id);
+  });
+  tx();
+
+  return { uninstalled: true, convertedTasks: taskCount };
 }
 
 export function listPlugins(db: Database): Plugin[] {

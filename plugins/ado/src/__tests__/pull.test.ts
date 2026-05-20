@@ -64,7 +64,7 @@ describe('buildWiql', () => {
 describe('buildTaskInput', () => {
   const turndown = new TurndownService();
 
-  it('produces source=ado, title with #id - title, mirror fields populated', () => {
+  it('produces pluginId=ado, title with #id - title, mirror fields populated', () => {
     const config = makeConfig();
     const unmapped: { id: number; state: string }[] = [];
     const input = buildTaskInput(
@@ -79,7 +79,7 @@ describe('buildTaskInput', () => {
       }),
       unmapped,
     );
-    expect(input.source).toBe('ado');
+    expect(input.pluginId).toBe('ado');
     expect(input.externalId).toBe('42');
     expect(input.title).toBe('#42 - Build the widget');
     expect(input.status).toBe('in-progress');

@@ -175,7 +175,7 @@ export function TaskDetail() {
     if (!task) return;
     const body = newComment.trim();
     if (!body) return;
-    const syncable = task.source === 'ado' ? true : commentSyncable;
+    const syncable = task.pluginId === 'ado' ? true : commentSyncable;
     await window.api.comments.create({ taskId: task.id, body, syncable });
     setNewComment('');
     await loadComments();
@@ -323,7 +323,7 @@ export function TaskDetail() {
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
 
   const hasNotes = (task.notes ?? '').length > 0;
-  const isAdo = task.source === 'ado';
+  const isAdo = task.pluginId === 'ado';
   const refreshedAtLabel = task.externalRefreshedAt
     ? new Date(task.externalRefreshedAt).toLocaleString()
     : 'never';
@@ -741,7 +741,7 @@ export function TaskDetail() {
         <ConfirmDialog
           title="Unlink plugin"
           message={
-            task.source === 'ado' || task.source === 'plugin'
+            task.pluginId !== null
               ? `Unlink "${task.title}" from ${task.pluginId}? The task becomes a local task again (source reset to ad-hoc) and mirrored state will be cleared.`
               : `Remove plugin link from "${task.title}"? The task itself stays.`
           }

@@ -10,7 +10,7 @@
  *   4. On failure: leave `synced=false` and log; the next run retries.
  *
  * Skips comments whose task has no `external_id` (shouldn't happen for
- * source='ado' tasks, but defensive: a task that lost its mirror would
+ * plugin-mirrored tasks, but defensive: a task that lost its mirror would
  * otherwise loop forever).
  */
 import { marked } from 'marked';

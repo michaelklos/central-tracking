@@ -57,6 +57,13 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
     'SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM tasks'
   );
 
+  // markdownParser assigns a pluginId to numeric ticket lines (e.g. '#1234').
+  // If that plugin isn't installed the FK on tasks.plugin_id would reject the
+  // insert. Downgrade to a local ad-hoc task in that case.
+  const pluginExistsStmt = db.instance.prepare('SELECT 1 FROM plugins WHERE id = ?');
+  const pluginExists = (id: string | null): boolean =>
+    id !== null && pluginExistsStmt.get(id) !== undefined;
+
   const transaction = db.instance.transaction(() => {
     // Track titles created in this import run so multiple lines for the same
     // title don't produce duplicate tasks.
@@ -80,12 +87,14 @@ export function executeImport(db: Database, items: ImportPreviewItem[]): ImportR
           } else {
             taskId = uuidv4();
             const { next: sortOrder } = getMaxOrder.get() as { next: number };
+            const linkedPluginId = pluginExists(item.pluginId) ? item.pluginId : null;
+            const effectiveSource = linkedPluginId === null && item.source === 'plugin' ? 'ad-hoc' : item.source;
             insertTask.run(
               taskId,
               item.title,
-              item.source,
+              effectiveSource,
               item.externalId,
-              item.pluginId,
+              linkedPluginId,
               sortOrder,
               now,
               now

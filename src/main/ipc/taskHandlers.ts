@@ -159,6 +159,16 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
     values.push(...sources);
   }
 
+  if (params?.pluginId === null) {
+    clauses.push('plugin_id IS NULL');
+  } else if (params?.pluginId !== undefined) {
+    const pluginIds = Array.isArray(params.pluginId) ? params.pluginId : [params.pluginId];
+    if (pluginIds.length) {
+      clauses.push(`plugin_id IN (${pluginIds.map(() => '?').join(', ')})`);
+      values.push(...pluginIds);
+    }
+  }
+
   const categoryIds = toArray(params?.categoryId);
   if (categoryIds.length) {
     const placeholders = categoryIds.map(() => '?').join(', ');
@@ -397,13 +407,13 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
   }
 
   if (updates.status !== undefined) {
-    // ADO-source tasks: enforce FSM and mark state_dirty so the plugin pushes
-    // the new state on next sync. Plugin clears the flag via setExternalState
-    // after a successful push. Non-ADO tasks: no constraint.
+    // ADO-mirrored tasks: enforce FSM and mark state_dirty so the plugin
+    // pushes the new state on next sync. Plugin clears the flag via
+    // setExternalState after a successful push. Non-ADO tasks: no constraint.
     const current = db.instance
-      .prepare('SELECT source, status FROM tasks WHERE id = ?')
-      .get(id) as { source: string; status: string } | undefined;
-    if (current && current.source === 'ado' && current.status !== updates.status) {
+      .prepare('SELECT plugin_id, status FROM tasks WHERE id = ?')
+      .get(id) as { plugin_id: string | null; status: string } | undefined;
+    if (current && current.plugin_id === 'ado' && current.status !== updates.status) {
       if (!isAllowedAdoTransition(current.status as TaskStatus, updates.status as TaskStatus)) {
         throw new DomainError(
           'INVALID_ADO_TRANSITION',
@@ -580,16 +590,19 @@ export function deleteAllTasks(db: Database): { deletedCount: number } {
 }
 
 /**
- * Upsert a task by (source, external_id). Insert if not found, otherwise
- * update mirror fields. Title/notes/description are overwritten (ADO owns
- * them). Status is overwritten only when state_dirty=0; if state_dirty=1
+ * Upsert a task by (plugin_id, external_id). Insert if not found, otherwise
+ * update mirror fields. Title/notes/description are overwritten (the plugin
+ * owns them). Status is overwritten only when state_dirty=0; if state_dirty=1
  * a local push is pending and we must not clobber it.
  */
 export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput): Task {
+  if (!input.pluginId) {
+    throw new DomainError('VALIDATION_ERROR', 'upsertExternal: pluginId is required');
+  }
   const now = new Date().toISOString();
   const existing = db.instance
-    .prepare('SELECT id, state_dirty FROM tasks WHERE source = ? AND external_id = ?')
-    .get(input.source, input.externalId) as { id: string; state_dirty: number } | undefined;
+    .prepare('SELECT id, state_dirty FROM tasks WHERE plugin_id = ? AND external_id = ?')
+    .get(input.pluginId, input.externalId) as { id: string; state_dirty: number } | undefined;
 
   if (!existing) {
     const id = uuidv4();
@@ -603,16 +616,15 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
           sort_order, notes, external_url, external_state,
           external_completed_hours, external_refreshed_at, state_dirty,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, 'plugin', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       )
       .run(
         id,
         input.title,
         input.description ?? '',
         input.status ?? 'todo',
-        input.source,
         input.externalId,
-        input.pluginId ?? null,
+        input.pluginId,
         maxOrder.next,
         input.notes ?? '',
         input.externalUrl ?? null,
@@ -679,13 +691,12 @@ export function setExternalTaskState(
  * Manually link an existing task to a remote ticket served by `pluginId`.
  *
  * - `mode='link'` — store `plugin_id` and `external_id` only. `source` stays
- *   whatever it was (typically `manual`). Title/notes remain user-editable.
+ *   whatever it was (typically `ad-hoc`). Title/notes remain user-editable.
  *   The plugin can push time/comments using the external id but does not pull
  *   state into ct.
- * - `mode='mirror'` — additionally set `source='ado'` for the ado plugin (or
- *   the generic `plugin` source otherwise). The task becomes a full mirror:
- *   the renderer locks title/notes, the FSM applies, and the next pull will
- *   refresh state from the remote.
+ * - `mode='mirror'` — additionally set `source='plugin'`. The task becomes a
+ *   full mirror: the renderer locks title/notes, the FSM applies, and the
+ *   next pull will refresh state from the remote.
  *
  * Throws a DomainError if the plugin is missing/disabled or the externalId is
  * empty so the caller can surface a clear message.
@@ -713,9 +724,7 @@ export function linkTaskToPlugin(
   const sets: string[] = ['plugin_id = ?', 'external_id = ?'];
   const values: unknown[] = [input.pluginId, externalId];
   if (input.mode === 'mirror') {
-    const mirrorSource = input.pluginId === 'ado' ? 'ado' : 'plugin';
-    sets.push('source = ?');
-    values.push(mirrorSource);
+    sets.push("source = 'plugin'");
   }
   sets.push("updated_at = datetime('now')");
   values.push(resolvedId);
@@ -740,10 +749,9 @@ export function unlinkTaskFromPlugin(db: Database, taskId: string): Task {
   if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${taskId}`);
 
   const sets: string[] = ['plugin_id = NULL', 'external_id = NULL'];
-  // Full-mirror tasks have source flipped to 'ado' or 'plugin' on link; restore
-  // them to 'ad-hoc' and clear the mirrored columns so the task behaves
-  // like any locally-created task again.
-  if (current.source === 'ado' || current.source === 'plugin') {
+  // Full-mirror tasks (source='plugin') restore back to 'ad-hoc' and clear
+  // the mirrored columns so the task behaves like any locally-created task.
+  if (current.source === 'plugin') {
     sets.push(
       "source = 'ad-hoc'",
       'external_url = NULL',

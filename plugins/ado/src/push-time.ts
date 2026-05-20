@@ -154,7 +154,7 @@ export async function pushTime(
   config: AdoConfig,
 ): Promise<PushTimeResult> {
   const warnings: string[] = [];
-  const tasks = await ct.getTasks({ source: ['ado'], hasUnreportedTime: true });
+  const tasks = await ct.getTasks({ pluginId: 'ado', hasUnreportedTime: true });
 
   let tasksPushed = 0;
   let tasksSkippedZero = 0;

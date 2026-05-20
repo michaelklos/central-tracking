@@ -1,6 +1,6 @@
 // ─── Task ────────────────────────────────────────────────────────────────────
 
-export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin', 'ado'] as const;
+export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const;
 export type TaskSource = typeof TASK_SOURCES[number];
 
 export const TASK_STATUSES = ['todo', 'in-progress', 'done', 'blocked'] as const;
@@ -74,12 +74,12 @@ export interface BatchUpdateInput {
 
 /**
  * Input for `tasks:upsertExternal`. Used by plugins (e.g. ADO) to mirror
- * external work items into ct. Matched by `(source, externalId)`.
+ * external work items into ct. Matched by `(pluginId, externalId)`; `source`
+ * is always set to `'plugin'` on insert.
  */
 export interface UpsertExternalTaskInput {
-  source: TaskSource;
+  pluginId: string;
   externalId: string;
-  pluginId?: string | null;
   title: string;
   notes?: string;
   description?: string;
@@ -170,27 +170,6 @@ export interface PendingSyncComment extends Comment {
   taskSource: TaskSource;
 }
 
-/**
- * Shape of one entry in the ADO `state-map` plugin config. The renderer
- * mirrors this so it can drive the TaskDetail FSM dropdown without
- * importing plugin code (plugins are out-of-process / different build).
- *
- * MUST stay in sync with `plugins/ado/src/state-map.ts`. If the shape
- * changes there, change it here. The default values below match
- * `DEFAULT_STATE_MAP` in that file.
- */
-export interface AdoStateMapEntry {
-  ado: string;
-  altIn: string[];
-}
-export type AdoStateMap = Record<string, AdoStateMapEntry>;
-
-export const ADO_DEFAULT_STATE_MAP: AdoStateMap = {
-  todo: { ado: 'New', altIn: ['New', 'To Do', 'Proposed'] },
-  'in-progress': { ado: 'Active', altIn: ['Active', 'Committed', 'In Progress'] },
-  done: { ado: 'Closed', altIn: ['Closed', 'Resolved', 'Done', 'Completed'] },
-};
-
 // ─── Category / Label ────────────────────────────────────────────────────────
 
 export interface Category {
@@ -234,6 +213,8 @@ export interface TaskFilterParams {
   searchIn?: 'title' | 'all';
   status?: string | string[];
   source?: string | string[];
+  /** Filter by owning plugin (e.g. 'ado'). Null = local-only tasks. */
+  pluginId?: string | string[] | null;
   categoryId?: string | string[];
   /** Include only tasks that have at least one un-reported time entry. */
   hasUnreportedTime?: boolean;

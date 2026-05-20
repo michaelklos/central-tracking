@@ -7,19 +7,29 @@ import {
   getTaskById,
 } from '../taskHandlers';
 
-describe('Task external mirror (ADO plugin support)', () => {
+function installAdoPlugin(db: Database): void {
+  db.instance
+    .prepare(
+      `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+       VALUES ('ado', 'ADO', '1.0.0', 1, '{}', datetime('now'), 'sideloaded')`,
+    )
+    .run();
+}
+
+describe('Task external mirror (plugin support)', () => {
   let db: Database;
 
   beforeEach(() => {
     db = new Database(':memory:');
+    installAdoPlugin(db);
   });
   afterEach(() => {
     db.close();
   });
 
-  it('upsertExternalTask inserts a new ado task with mirror fields', () => {
+  it('upsertExternalTask inserts a new plugin-mirrored task with mirror fields', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '101',
       title: '#101 — Build widget',
       notes: 'Some notes',
@@ -28,7 +38,8 @@ describe('Task external mirror (ADO plugin support)', () => {
       externalState: 'New',
       externalCompletedHours: 0,
     });
-    expect(task.source).toBe('ado');
+    expect(task.source).toBe('plugin');
+    expect(task.pluginId).toBe('ado');
     expect(task.externalId).toBe('101');
     expect(task.title).toBe('#101 — Build widget');
     expect(task.notes).toBe('Some notes');
@@ -39,14 +50,14 @@ describe('Task external mirror (ADO plugin support)', () => {
     expect(task.externalRefreshedAt).toBeTruthy();
   });
 
-  it('upsertExternalTask is idempotent on (source, externalId)', () => {
+  it('upsertExternalTask is idempotent on (pluginId, externalId)', () => {
     const first = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '101',
       title: 'T1',
     });
     const second = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '101',
       title: 'T1 renamed',
       externalState: 'Active',
@@ -56,9 +67,23 @@ describe('Task external mirror (ADO plugin support)', () => {
     expect(second.externalState).toBe('Active');
   });
 
-  it('updateTask flips state_dirty=1 when ado-source status changes', () => {
+  it('same externalId under a different pluginId creates a second row', () => {
+    db.instance
+      .prepare(
+        `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+         VALUES ('jira', 'Jira', '1.0.0', 1, '{}', datetime('now'), 'sideloaded')`,
+      )
+      .run();
+    const a = upsertExternalTask(db, { pluginId: 'ado',  externalId: '101', title: 'A' });
+    const b = upsertExternalTask(db, { pluginId: 'jira', externalId: '101', title: 'B' });
+    expect(a.id).not.toBe(b.id);
+    expect(a.pluginId).toBe('ado');
+    expect(b.pluginId).toBe('jira');
+  });
+
+  it('updateTask flips state_dirty=1 when an ADO-mirrored task status changes', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '202',
       title: 'T',
       status: 'todo',
@@ -69,8 +94,6 @@ describe('Task external mirror (ADO plugin support)', () => {
   });
 
   it('updateTask does NOT flip state_dirty for ad-hoc tasks', () => {
-    // Create via raw upsertExternalTask won't work — ad-hoc has no externalId.
-    // Use direct insert path equivalent through the normal API surface.
     db.instance
       .prepare("INSERT INTO tasks (id, title, status, source) VALUES ('x', 'X', 'todo', 'ad-hoc')")
       .run();
@@ -80,7 +103,7 @@ describe('Task external mirror (ADO plugin support)', () => {
 
   it('setExternalTaskState clears state_dirty and stores new external state', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '303',
       title: 'T',
       status: 'todo',
@@ -98,12 +121,11 @@ describe('Task external mirror (ADO plugin support)', () => {
 
   it('updateTask rejects illegal ADO transitions with INVALID_ADO_TRANSITION', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '500',
       title: 'T',
       status: 'in-progress',
     });
-    // in-progress → todo is not in the allowed set.
     expect(() => updateTask(db, task.id, { status: 'todo' })).toThrow(
       /Illegal ADO transition: in-progress → todo/,
     );
@@ -112,7 +134,6 @@ describe('Task external mirror (ADO plugin support)', () => {
     } catch (err) {
       expect((err as { code: string }).code).toBe('INVALID_ADO_TRANSITION');
     }
-    // Ensure state was not mutated.
     const after = getTaskById(db, task.id);
     expect(after?.status).toBe('in-progress');
     expect(after?.stateDirty).toBe(false);
@@ -120,7 +141,7 @@ describe('Task external mirror (ADO plugin support)', () => {
 
   it('updateTask allows legal ADO transitions including done → in-progress (reopen)', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '501',
       title: 'T',
       status: 'done',
@@ -132,7 +153,7 @@ describe('Task external mirror (ADO plugin support)', () => {
 
   it('updateTask allows transitions to/from blocked (local-only, no ADO push)', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '502',
       title: 'T',
       status: 'in-progress',
@@ -147,24 +168,21 @@ describe('Task external mirror (ADO plugin support)', () => {
     db.instance
       .prepare("INSERT INTO tasks (id, title, status, source) VALUES ('y', 'Y', 'in-progress', 'ad-hoc')")
       .run();
-    // For ad-hoc, in-progress → todo is fine.
     const updated = updateTask(db, 'y', { status: 'todo' });
     expect(updated.status).toBe('todo');
   });
 
   it('upsertExternalTask preserves pending status when state_dirty=1', () => {
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '404',
       title: 'T',
       status: 'todo',
       externalState: 'New',
     });
-    // User flips status in ct (dirty)
     updateTask(db, task.id, { status: 'in-progress' });
-    // Plugin pulls again, ADO still says New — status must NOT be clobbered
     const refreshed = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '404',
       title: 'T',
       status: 'todo',
@@ -172,5 +190,16 @@ describe('Task external mirror (ADO plugin support)', () => {
     });
     expect(refreshed.status).toBe('in-progress');
     expect(refreshed.stateDirty).toBe(true);
+  });
+
+  it('upsertExternalTask requires pluginId', () => {
+    expect(() =>
+      upsertExternalTask(db, {
+        // @ts-expect-error intentionally missing pluginId
+        pluginId: undefined,
+        externalId: '999',
+        title: 'T',
+      }),
+    ).toThrow(/pluginId is required/);
   });
 });

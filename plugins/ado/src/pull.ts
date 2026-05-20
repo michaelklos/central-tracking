@@ -87,7 +87,6 @@ function buildTaskInput(
   }
 
   return {
-    source: 'ado',
     pluginId: 'ado',
     externalId: id,
     title: `#${id} - ${title}`,
@@ -176,8 +175,8 @@ export async function refresh(
   const warnings: string[] = [];
   const existing = await ct.getTaskById(ctTaskId);
   if (!existing) throw new Error(`ct task ${ctTaskId} not found`);
-  if (existing.source !== 'ado' || !existing.externalId) {
-    throw new Error(`ct task ${ctTaskId} is not an ado-source task`);
+  if (existing.pluginId !== 'ado' || !existing.externalId) {
+    throw new Error(`ct task ${ctTaskId} is not an ado-mirrored task`);
   }
   const workItemId = Number(existing.externalId);
   if (!Number.isFinite(workItemId)) {

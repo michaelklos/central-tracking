@@ -1,7 +1,7 @@
 /**
  * Push ct status changes → ADO `System.State`.
  *
- * Per task with `source='ado' AND state_dirty=1`:
+ * Per task with `plugin_id='ado' AND state_dirty=1`:
  *   1. FSM-validate the transition (defense in depth — backend also rejects).
  *      A ct status of `blocked` has no ADO mapping: log + skip. The task
  *      stays `state_dirty=1` so the next status change that DOES map will
@@ -152,7 +152,7 @@ export async function pushState(
   config: AdoConfig,
 ): Promise<PushStateResult> {
   const warnings: string[] = [];
-  const tasks = await ct.getTasks({ source: ['ado'], stateDirty: true });
+  const tasks = await ct.getTasks({ pluginId: 'ado', stateDirty: true });
 
   let pushed = 0;
   let skippedBlocked = 0;

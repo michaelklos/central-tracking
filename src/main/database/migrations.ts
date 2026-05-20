@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: readonly string[] = [
   // Migration 001: Initial schema
   `
   CREATE TABLE IF NOT EXISTS tasks (
@@ -122,17 +122,82 @@ const MIGRATIONS: string[] = [
   ALTER TABLE plugins ADD COLUMN source TEXT NOT NULL DEFAULT 'sideloaded';
   INSERT OR IGNORE INTO schema_version (version) VALUES (8);
   `,
+  // Migration 009: Decouple TaskSource from ADO; key external tasks by
+  // plugin_id. SQLite needs a table recreation to add a FK to an existing
+  // column. Backfill source='ado' rows to source='plugin', plugin_id='ado'
+  // (only when the plugins.ado row exists; else plugin_id stays NULL so
+  // the FK constraint holds). Replace idx_tasks_source_external with
+  // idx_tasks_plugin_external. Tighten source to the closed enum via CHECK.
+  `
+  PRAGMA foreign_keys = OFF;
+
+  CREATE TABLE tasks_new (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'todo',
+    source TEXT NOT NULL DEFAULT 'ad-hoc'
+      CHECK (source IN ('ad-hoc', 'email', 'meeting-prep', 'plugin')),
+    external_id TEXT,
+    plugin_id TEXT REFERENCES plugins(id) ON DELETE RESTRICT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    deleted_at TEXT DEFAULT NULL,
+    external_url TEXT,
+    external_state TEXT,
+    external_completed_hours REAL,
+    external_refreshed_at TEXT,
+    state_dirty INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  INSERT INTO tasks_new (
+    id, title, description, status, source, external_id, plugin_id, sort_order,
+    notes, deleted_at, external_url, external_state, external_completed_hours,
+    external_refreshed_at, state_dirty, created_at, updated_at
+  )
+  SELECT
+    id, title, description, status,
+    CASE WHEN source = 'ado' THEN 'plugin' ELSE source END,
+    external_id,
+    CASE
+      WHEN source = 'ado' AND EXISTS (SELECT 1 FROM plugins WHERE id = 'ado')
+        THEN 'ado'
+      WHEN source = 'ado'
+        THEN NULL
+      ELSE plugin_id
+    END,
+    sort_order, notes, deleted_at, external_url, external_state,
+    external_completed_hours, external_refreshed_at, state_dirty,
+    created_at, updated_at
+  FROM tasks;
+
+  DROP TABLE tasks;
+  ALTER TABLE tasks_new RENAME TO tasks;
+
+  CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+  CREATE INDEX IF NOT EXISTS idx_tasks_status_sort ON tasks(status, sort_order ASC, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
+  CREATE UNIQUE INDEX idx_tasks_plugin_external
+    ON tasks(plugin_id, external_id) WHERE external_id IS NOT NULL;
+
+  PRAGMA foreign_keys = ON;
+
+  INSERT OR IGNORE INTO schema_version (version) VALUES (9);
+  `,
 ];
 
-export function runMigrations(db: BetterSqlite3.Database): void {
+export function runMigrations(db: BetterSqlite3.Database, upTo?: number): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)');
 
   const row = db.prepare('SELECT MAX(version) as version FROM schema_version').get() as
     | { version: number | null }
     | undefined;
   const currentVersion = row?.version ?? 0;
+  const target = upTo ?? MIGRATIONS.length;
 
-  for (let i = currentVersion; i < MIGRATIONS.length; i++) {
+  for (let i = currentVersion; i < Math.min(target, MIGRATIONS.length); i++) {
     db.exec(MIGRATIONS[i]);
   }
 }

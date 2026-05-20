@@ -9,14 +9,24 @@ import {
 } from '../commentHandlers';
 import { upsertExternalTask, createTask } from '../taskHandlers';
 
-describe('Comment external mirror (ADO plugin support)', () => {
+function installPlugin(db: Database, id: string): void {
+  db.instance
+    .prepare(
+      `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+       VALUES (?, ?, '1.0.0', 1, '{}', datetime('now'), 'sideloaded')`,
+    )
+    .run(id, id);
+}
+
+describe('Comment external mirror (plugin support)', () => {
   let db: Database;
   let taskId: string;
 
   beforeEach(() => {
     db = new Database(':memory:');
+    installPlugin(db, 'ado');
     const task = upsertExternalTask(db, {
-      source: 'ado',
+      pluginId: 'ado',
       externalId: '500',
       title: 'T',
     });
@@ -56,9 +66,7 @@ describe('Comment external mirror (ADO plugin support)', () => {
 
   it('getPendingSyncComments returns syncable+unsynced comments joined with task source', () => {
     const pending = createComment(db, { taskId, body: 'queue me', syncable: true });
-    // Not syncable: must be excluded.
     createComment(db, { taskId, body: 'private', syncable: false });
-    // Already synced: must be excluded.
     const synced = createComment(db, { taskId, body: 'already up', syncable: true });
     updateComment(db, synced.id, { synced: true, externalId: 'ext-1' });
 
@@ -66,19 +74,26 @@ describe('Comment external mirror (ADO plugin support)', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe(pending.id);
     expect(result[0].taskExternalId).toBe('500');
-    expect(result[0].taskSource).toBe('ado');
+    expect(result[0].taskSource).toBe('plugin');
   });
 
-  it('getPendingSyncComments filters by task source (other sources ignored)', () => {
-    const otherTask = createTask(db, { title: 'AdHoc', source: 'ad-hoc' });
-    createComment(db, { taskId: otherTask.id, body: 'ad-hoc cmt', syncable: true });
+  it('getPendingSyncComments filters by owning plugin (other plugins ignored)', () => {
+    installPlugin(db, 'jira');
+    const jiraTask = upsertExternalTask(db, { pluginId: 'jira', externalId: '900', title: 'J' });
+    createComment(db, { taskId: jiraTask.id, body: 'jira cmt', syncable: true });
     const adoComment = createComment(db, { taskId, body: 'ado cmt', syncable: true });
 
     const adoResult = getPendingSyncComments(db, 'ado');
     expect(adoResult.map((c) => c.id)).toEqual([adoComment.id]);
 
-    const adHocResult = getPendingSyncComments(db, 'ad-hoc');
-    expect(adHocResult).toHaveLength(1);
-    expect(adHocResult[0].taskSource).toBe('ad-hoc');
+    const jiraResult = getPendingSyncComments(db, 'jira');
+    expect(jiraResult).toHaveLength(1);
+  });
+
+  it('getPendingSyncComments ignores local ad-hoc tasks', () => {
+    const local = createTask(db, { title: 'Local', source: 'ad-hoc' });
+    createComment(db, { taskId: local.id, body: 'ad-hoc cmt', syncable: true });
+    const adoResult = getPendingSyncComments(db, 'ado');
+    expect(adoResult).toHaveLength(0);
   });
 });

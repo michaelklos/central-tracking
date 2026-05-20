@@ -1,11 +1,6 @@
 import type { AdoConfig } from './config';
-import type { CtTaskStatus } from './types';
-
-const DEFAULT_STATE_MAP: NonNullable<AdoConfig['stateMap']> = {
-  todo: { ado: 'New', altIn: ['New', 'To Do', 'Proposed'] },
-  'in-progress': { ado: 'Active', altIn: ['Active', 'Committed', 'In Progress'] },
-  done: { ado: 'Closed', altIn: ['Closed', 'Resolved', 'Done', 'Completed'] },
-};
+import type { AdoStateMap, CtTaskStatus } from './types';
+import { ADO_DEFAULT_STATE_MAP } from './types';
 
 const CT_STATUSES: readonly CtTaskStatus[] = ['todo', 'in-progress', 'done', 'blocked'];
 
@@ -13,8 +8,8 @@ function isCtStatus(s: string): s is CtTaskStatus {
   return (CT_STATUSES as readonly string[]).includes(s);
 }
 
-export function effectiveStateMap(config: AdoConfig): NonNullable<AdoConfig['stateMap']> {
-  return config.stateMap ?? DEFAULT_STATE_MAP;
+export function effectiveStateMap(config: AdoConfig): AdoStateMap {
+  return config.stateMap ?? ADO_DEFAULT_STATE_MAP;
 }
 
 /**

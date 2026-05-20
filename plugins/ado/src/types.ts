@@ -1,93 +1,39 @@
 /**
- * Plugin-local shapes for ct HTTP API payloads. Kept minimal and decoupled
- * from `src/shared/types.ts` so the plugin compiles standalone. Add fields
- * here as new Stages require them.
+ * ADO-specific types. Plugin payload shapes for ct (CtTask, CtComment, …)
+ * live in `@central-tracking/plugin-client/types` and are re-exported below
+ * for convenience.
  */
 
-export type CtTaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
-
-export interface CtTask {
-  id: string;
-  title: string;
-  status: CtTaskStatus;
-  source: string;
-  externalId: string | null;
-  externalUrl: string | null;
-  externalState: string | null;
-  externalCompletedHours: number | null;
-  externalRefreshedAt: string | null;
-  stateDirty: boolean;
-  notes: string;
-  unreportedTimeSeconds: number;
-  hasUnreportedTime: boolean;
-}
-
-export interface CtComment {
-  id: string;
-  taskId: string;
-  body: string;
-  syncable: boolean;
-  synced: boolean;
-  externalId: string | null;
-}
+export type {
+  CtTask,
+  CtTaskStatus,
+  CtComment,
+  CtPendingSyncComment,
+  CtTimeEntry,
+  UpsertExternalTaskInput,
+  UpsertExternalCommentInput,
+  PluginConfigEntry,
+  PluginConfigSchemaEntry,
+} from '@central-tracking/plugin-client';
 
 /**
- * Comment returned by `comments/getPendingSync`. The handler joins to `tasks`
- * so the plugin can address ADO without a second lookup per comment.
+ * Shape of one entry in the ADO `state-map` plugin config. Lives with the
+ * plugin (not in the host's shared types) so adding a second plugin's state
+ * map doesn't pull ADO-specific types into the host's surface.
+ *
+ * MUST stay in sync with the `stateMap` field on `AdoConfig`.
  */
-export interface CtPendingSyncComment extends CtComment {
-  taskExternalId: string | null;
-  taskSource: string;
+export interface AdoStateMapEntry {
+  ado: string;
+  altIn: string[];
 }
+export type AdoStateMap = Record<string, AdoStateMapEntry>;
 
-export interface CtTimeEntry {
-  id: string;
-  taskId: string;
-  startTime: string;
-  endTime: string | null;
-  durationSeconds: number | null;
-  note: string;
-  reportedAt: string | null;
-  createdAt: string;
-}
-
-export interface UpsertExternalTaskInput {
-  source: string;
-  externalId: string;
-  pluginId?: string | null;
-  title: string;
-  notes?: string;
-  description?: string;
-  status?: CtTaskStatus;
-  externalUrl?: string | null;
-  externalState?: string | null;
-  externalCompletedHours?: number | null;
-  externalRefreshedAt?: string | null;
-}
-
-export interface UpsertExternalCommentInput {
-  taskId: string;
-  externalId: string;
-  body: string;
-}
-
-export interface PluginConfigEntry {
-  pluginId: string;
-  key: string;
-  /** Cleartext when the caller passed reveal:true; masked sentinel otherwise. */
-  value: string;
-  secret: boolean;
-  stored: 'encrypted' | 'plaintext';
-}
-
-export interface PluginConfigSchemaEntry {
-  key: string;
-  required: boolean;
-  secret: boolean;
-  description?: string;
-  status: 'unset' | 'set' | 'encrypted' | 'plaintext-secret';
-  envVarName: string | null;
-}
+export const ADO_DEFAULT_STATE_MAP: AdoStateMap = {
+  todo: { ado: 'New', altIn: ['New', 'To Do', 'Proposed'] },
+  'in-progress': { ado: 'Active', altIn: ['Active', 'Committed', 'In Progress'] },
+  done: { ado: 'Closed', altIn: ['Closed', 'Resolved', 'Done', 'Completed'] },
+};
 
 // ─── ADO API response shapes ──────────────────────────────────────────────
 

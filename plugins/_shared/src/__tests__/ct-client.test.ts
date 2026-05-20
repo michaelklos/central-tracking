@@ -8,6 +8,32 @@ describe('envVarNameFor', () => {
   });
 });
 
+describe('CtClient constructor', () => {
+  beforeEach(() => {
+    process.env.CT_SERVER_URL = 'http://127.0.0.1:9999';
+    process.env.CT_TOKEN = 'test';
+  });
+
+  it('requires a pluginId', () => {
+    expect(() => new CtClient('')).toThrow(/pluginId is required/);
+  });
+
+  it('records the pluginId for downstream calls', () => {
+    const c = new CtClient('jira');
+    expect(c.pluginId).toBe('jira');
+  });
+
+  it('rejects missing CT_SERVER_URL', () => {
+    delete process.env.CT_SERVER_URL;
+    expect(() => new CtClient('ado')).toThrow(/CT_SERVER_URL/);
+  });
+
+  it('rejects missing CT_TOKEN', () => {
+    delete process.env.CT_TOKEN;
+    expect(() => new CtClient('ado')).toThrow(/CT_TOKEN/);
+  });
+});
+
 describe('CtClient.listPluginConfig env override', () => {
   let client: CtClient;
   let callSpy: ReturnType<typeof vi.spyOn>;
@@ -15,11 +41,13 @@ describe('CtClient.listPluginConfig env override', () => {
   beforeEach(() => {
     process.env.CT_SERVER_URL = 'http://127.0.0.1:9999';
     process.env.CT_TOKEN = 'test';
-    delete process.env.CT_PLUGIN_ADO_PAT;
-    delete process.env.CT_PLUGIN_ADO_ORGANIZATION;
+    delete process.env.CT_PLUGIN_JIRA_PAT;
+    delete process.env.CT_PLUGIN_JIRA_ORGANIZATION;
 
-    client = new CtClient('ado');
-    // Stub the underlying HTTP call. Routes are exhaustively listed per test.
+    // Use a non-ADO pluginId so this test exercises the shared client with a
+    // different plugin and proves the env-shadowing is parameterised on
+    // pluginId, not hardcoded.
+    client = new CtClient('jira');
     callSpy = vi.spyOn(client as unknown as { call: (route: string, args: unknown[]) => Promise<unknown> }, 'call');
   });
 
@@ -30,10 +58,10 @@ describe('CtClient.listPluginConfig env override', () => {
   it('returns DB value when env var is not set (secret key)', async () => {
     mockResponses({
       'plugins/listConfig': [
-        { pluginId: 'ado', key: 'pat', value: 'from-db', secret: true, stored: 'encrypted' },
+        { pluginId: 'jira', key: 'pat', value: 'from-db', secret: true, stored: 'encrypted' },
       ],
       'plugins/schema': [
-        { key: 'pat', required: true, secret: true, status: 'encrypted', envVarName: 'CT_PLUGIN_ADO_PAT' },
+        { key: 'pat', required: true, secret: true, status: 'encrypted', envVarName: 'CT_PLUGIN_JIRA_PAT' },
       ],
     });
     const entries = await client.listPluginConfig();
@@ -41,13 +69,13 @@ describe('CtClient.listPluginConfig env override', () => {
   });
 
   it('env var overrides DB value for declared-secret keys', async () => {
-    process.env.CT_PLUGIN_ADO_PAT = 'from-env';
+    process.env.CT_PLUGIN_JIRA_PAT = 'from-env';
     mockResponses({
       'plugins/listConfig': [
-        { pluginId: 'ado', key: 'pat', value: 'from-db', secret: true, stored: 'encrypted' },
+        { pluginId: 'jira', key: 'pat', value: 'from-db', secret: true, stored: 'encrypted' },
       ],
       'plugins/schema': [
-        { key: 'pat', required: true, secret: true, status: 'encrypted', envVarName: 'CT_PLUGIN_ADO_PAT' },
+        { key: 'pat', required: true, secret: true, status: 'encrypted', envVarName: 'CT_PLUGIN_JIRA_PAT' },
       ],
     });
     const entries = await client.listPluginConfig();
@@ -55,10 +83,10 @@ describe('CtClient.listPluginConfig env override', () => {
   });
 
   it('env var does NOT override non-secret keys', async () => {
-    process.env.CT_PLUGIN_ADO_ORGANIZATION = 'env-org';
+    process.env.CT_PLUGIN_JIRA_ORGANIZATION = 'env-org';
     mockResponses({
       'plugins/listConfig': [
-        { pluginId: 'ado', key: 'organization', value: 'db-org', secret: false, stored: 'plaintext' },
+        { pluginId: 'jira', key: 'organization', value: 'db-org', secret: false, stored: 'plaintext' },
       ],
       'plugins/schema': [
         { key: 'organization', required: true, secret: false, status: 'set', envVarName: null },
@@ -69,11 +97,11 @@ describe('CtClient.listPluginConfig env override', () => {
   });
 
   it('synthesises an entry from env when the secret is not in the DB', async () => {
-    process.env.CT_PLUGIN_ADO_PAT = 'env-only';
+    process.env.CT_PLUGIN_JIRA_PAT = 'env-only';
     mockResponses({
-      'plugins/listConfig': [], // empty DB
+      'plugins/listConfig': [],
       'plugins/schema': [
-        { key: 'pat', required: true, secret: true, status: 'unset', envVarName: 'CT_PLUGIN_ADO_PAT' },
+        { key: 'pat', required: true, secret: true, status: 'unset', envVarName: 'CT_PLUGIN_JIRA_PAT' },
       ],
     });
     const entries = await client.listPluginConfig();
@@ -83,10 +111,10 @@ describe('CtClient.listPluginConfig env override', () => {
     expect(pat?.secret).toBe(true);
   });
 
-  it('passes reveal:true to listConfig so HTTP returns cleartext', async () => {
+  it('passes the constructor pluginId (not a default) to listConfig', async () => {
     mockResponses({ 'plugins/listConfig': [], 'plugins/schema': [] });
     await client.listPluginConfig();
-    const listArgs = callSpy.mock.calls.find((c) => c[0] === 'plugins/listConfig')?.[1] as unknown[];
-    expect(listArgs).toEqual(['ado', { reveal: true }]);
+    const listArgs = callSpy.mock.calls.find((c: unknown[]) => c[0] === 'plugins/listConfig')?.[1] as unknown[];
+    expect(listArgs).toEqual(['jira', { reveal: true }]);
   });
 });

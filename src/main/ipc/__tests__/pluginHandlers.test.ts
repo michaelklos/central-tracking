@@ -128,10 +128,20 @@ describe('pluginHandlers', () => {
       expect(getPlugin(db, 'p')?.version).toBe('0.2.0');
     });
 
-    it('uninstall removes plugin and its config', () => {
+    it('uninstall preflight reports the task count without deleting', () => {
       installPlugin(db, { id: 'p', name: 'P', version: '1' });
       setPluginConfig(db, 'p', 'api-key', 'secret');
-      uninstallPlugin(db, 'p');
+      const result = uninstallPlugin(db, 'p');
+      expect(result).toEqual({ requiresConfirmation: true, taskCount: 0 });
+      expect(getPlugin(db, 'p')).not.toBeNull();
+      expect(listPluginConfig(db, 'p')).toHaveLength(1);
+    });
+
+    it('uninstall with convertTasksToAdHoc removes plugin and its config', () => {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      setPluginConfig(db, 'p', 'api-key', 'secret');
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 0 });
       expect(getPlugin(db, 'p')).toBeNull();
       expect(listPluginConfig(db, 'p')).toEqual([]);
     });
@@ -200,14 +210,104 @@ describe('pluginHandlers', () => {
       registerBundledPlugin(db, { id: 'b', name: 'B', version: '1' });
       expect(() => uninstallPlugin(db, 'b')).toThrow(DomainError);
       expect(() => uninstallPlugin(db, 'b')).toThrow(/BUNDLED_PLUGIN_LOCKED|Bundled plugins/);
-      // Row still present.
+      // Bundled refusal still applies when convertTasksToAdHoc=true.
+      expect(() => uninstallPlugin(db, 'b', { convertTasksToAdHoc: true })).toThrow(
+        /BUNDLED_PLUGIN_LOCKED|Bundled plugins/,
+      );
       expect(getPlugin(db, 'b')).not.toBeNull();
     });
 
     it('still allows uninstall on sideloaded plugins', () => {
       installPlugin(db, { id: 's', name: 'S', version: '1' });
-      uninstallPlugin(db, 's');
+      uninstallPlugin(db, 's', { convertTasksToAdHoc: true });
       expect(getPlugin(db, 's')).toBeNull();
+    });
+  });
+
+  describe('uninstall with referencing tasks', () => {
+    function seed(): void {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      const inst = db.instance;
+      inst.prepare(
+        `INSERT INTO tasks (id, title, source, plugin_id, external_id, external_url, external_state, external_completed_hours, external_refreshed_at, state_dirty)
+         VALUES ('t1', 'T1', 'plugin', 'p', '101', 'https://x/1', 'Active', 2.5, datetime('now'), 1),
+                ('t2', 'T2', 'plugin', 'p', '102', 'https://x/2', 'New',    null, datetime('now'), 0),
+                ('t3', 'T3', 'plugin', 'p', '103', null,          null,    null, null,            0)`,
+      ).run();
+      inst.prepare(
+        `INSERT INTO comments (id, task_id, body, syncable, synced, external_id)
+         VALUES ('c1', 't1', 'mirrored',   0, 1, '999'),
+                ('c2', 't1', 'local-only', 1, 0, null)`,
+      ).run();
+      inst.prepare(
+        "INSERT INTO time_entries (id, task_id, start_time, end_time) VALUES ('e1', 't1', datetime('now'), datetime('now'))",
+      ).run();
+    }
+
+    it('preflight returns the count without mutating', () => {
+      seed();
+      const result = uninstallPlugin(db, 'p');
+      expect(result).toEqual({ requiresConfirmation: true, taskCount: 3 });
+      expect(getPlugin(db, 'p')).not.toBeNull();
+      const rows = db.instance.prepare("SELECT COUNT(*) as n FROM tasks WHERE plugin_id = 'p'").get() as { n: number };
+      expect(rows.n).toBe(3);
+    });
+
+    it('convert transactionally clears external fields and deletes the plugin row', () => {
+      seed();
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 3 });
+      expect(getPlugin(db, 'p')).toBeNull();
+
+      const rows = db.instance
+        .prepare('SELECT id, source, plugin_id, external_id, external_url, external_state, external_completed_hours, external_refreshed_at, state_dirty FROM tasks ORDER BY id')
+        .all() as Array<{
+          id: string;
+          source: string;
+          plugin_id: string | null;
+          external_id: string | null;
+          external_url: string | null;
+          external_state: string | null;
+          external_completed_hours: number | null;
+          external_refreshed_at: string | null;
+          state_dirty: number;
+        }>;
+      for (const r of rows) {
+        expect(r.source).toBe('ad-hoc');
+        expect(r.plugin_id).toBeNull();
+        expect(r.external_id).toBeNull();
+        expect(r.external_url).toBeNull();
+        expect(r.external_state).toBeNull();
+        expect(r.external_completed_hours).toBeNull();
+        expect(r.external_refreshed_at).toBeNull();
+        expect(r.state_dirty).toBe(0);
+      }
+    });
+
+    it('convert clears comments.external_id on tasks owned by the plugin', () => {
+      seed();
+      uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      const comments = db.instance
+        .prepare('SELECT id, external_id FROM comments ORDER BY id')
+        .all() as Array<{ id: string; external_id: string | null }>;
+      expect(comments).toEqual([
+        { id: 'c1', external_id: null },
+        { id: 'c2', external_id: null },
+      ]);
+    });
+
+    it('convert leaves time entries attached to the converted tasks', () => {
+      seed();
+      uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      const n = (db.instance.prepare("SELECT COUNT(*) as n FROM time_entries WHERE task_id = 't1'").get() as { n: number }).n;
+      expect(n).toBe(1);
+    });
+
+    it('FK on plugin_id is RESTRICT — raw plugin delete fails if a task refs it', () => {
+      seed();
+      expect(() => db.instance.prepare("DELETE FROM plugins WHERE id = 'p'").run()).toThrow(
+        /FOREIGN KEY/i,
+      );
     });
   });
 
