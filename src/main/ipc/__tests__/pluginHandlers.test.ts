@@ -12,7 +12,7 @@ import {
   installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
   getPluginConfig, setPluginConfig, listPluginConfig, deletePluginConfig,
   getWebhookSubscribers, validatePluginManifest,
-  getPluginConfigSchema,
+  getPluginConfigSchema, registerBundledPlugin,
 } from '../pluginHandlers';
 import { DomainError } from '../../errors';
 
@@ -134,6 +134,80 @@ describe('pluginHandlers', () => {
       uninstallPlugin(db, 'p');
       expect(getPlugin(db, 'p')).toBeNull();
       expect(listPluginConfig(db, 'p')).toEqual([]);
+    });
+
+    it('install tags rows source=sideloaded', () => {
+      const p = installPlugin(db, { id: 's', name: 'S', version: '1' });
+      expect(p.source).toBe('sideloaded');
+    });
+
+    it('accepts manifest with env field', () => {
+      const m = validatePluginManifest({
+        id: 'e', name: 'E', version: '1',
+        env: { ELECTRON_RUN_AS_NODE: '1', FOO: 'bar' },
+      });
+      expect(m.env?.ELECTRON_RUN_AS_NODE).toBe('1');
+    });
+
+    it('rejects non-string env values', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'e', name: 'E', version: '1', env: { K: 1 } }),
+      ).toThrow(/env/);
+    });
+
+    it('accepts entrypointArgv array', () => {
+      const m = validatePluginManifest({
+        id: 'a', name: 'A', version: '1',
+        entrypointArgv: ['/abs/electron', '/abs/script.js'],
+      });
+      expect(m.entrypointArgv).toEqual(['/abs/electron', '/abs/script.js']);
+    });
+
+    it('rejects empty entrypointArgv', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'a', name: 'A', version: '1', entrypointArgv: [] }),
+      ).toThrow(/entrypointArgv/);
+    });
+  });
+
+  describe('registerBundledPlugin', () => {
+    it('inserts disabled + source=bundled on fresh install', () => {
+      const p = registerBundledPlugin(db, { id: 'b', name: 'B', version: '1.0.0' });
+      expect(p.enabled).toBe(false);
+      expect(p.source).toBe('bundled');
+    });
+
+    it('is a no-op when the version matches', () => {
+      registerBundledPlugin(db, { id: 'b', name: 'B', version: '1.0.0' });
+      setPluginEnabled(db, 'b', true);
+      registerBundledPlugin(db, { id: 'b', name: 'B', version: '1.0.0' });
+      // Enabled preserved, no UPDATE fired.
+      expect(getPlugin(db, 'b')?.enabled).toBe(true);
+    });
+
+    it('UPDATEs manifest on version bump but preserves enabled + source', () => {
+      registerBundledPlugin(db, { id: 'b', name: 'B', version: '1.0.0' });
+      setPluginEnabled(db, 'b', true);
+      registerBundledPlugin(db, { id: 'b', name: 'B-renamed', version: '1.1.0' });
+      const after = getPlugin(db, 'b');
+      expect(after?.version).toBe('1.1.0');
+      expect(after?.name).toBe('B-renamed');
+      expect(after?.enabled).toBe(true);
+      expect(after?.source).toBe('bundled');
+    });
+
+    it('blocks uninstall on bundled plugins', () => {
+      registerBundledPlugin(db, { id: 'b', name: 'B', version: '1' });
+      expect(() => uninstallPlugin(db, 'b')).toThrow(DomainError);
+      expect(() => uninstallPlugin(db, 'b')).toThrow(/BUNDLED_PLUGIN_LOCKED|Bundled plugins/);
+      // Row still present.
+      expect(getPlugin(db, 'b')).not.toBeNull();
+    });
+
+    it('still allows uninstall on sideloaded plugins', () => {
+      installPlugin(db, { id: 's', name: 'S', version: '1' });
+      uninstallPlugin(db, 's');
+      expect(getPlugin(db, 's')).toBeNull();
     });
   });
 

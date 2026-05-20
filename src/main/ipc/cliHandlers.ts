@@ -1,11 +1,22 @@
 import { app, dialog } from 'electron';
 import type { IpcMain, BrowserWindow } from 'electron';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const PREFERRED_SYMLINK = '/usr/local/bin/ct';
-const FALLBACK_SYMLINK = path.join(os.homedir(), '.local', 'bin', 'ct');
+// POSIX (mac + linux): symlink in /usr/local/bin (preferred) or ~/.local/bin
+// (fallback) → wrapper shell script in userData. macOS install dialog has
+// always set this up; the darwin gate is lifted now that the same flow works
+// on linux.
+const POSIX_PREFERRED = '/usr/local/bin/ct';
+const posixFallback = () => path.join(os.homedir(), '.local', 'bin', 'ct');
+
+// Windows: per-user .cmd shim. PATH update goes through PowerShell so the
+// change broadcasts (WM_SETTINGCHANGE) and new shells pick it up without a
+// logoff.
+const winBinDir = () => path.join(os.homedir(), 'AppData', 'Local', 'central-tracking', 'bin');
+const winShim   = () => path.join(winBinDir(), 'ct.cmd');
 
 function getWrapperPath(): string {
   return path.join(app.getPath('userData'), 'ct-wrapper.sh');
@@ -19,9 +30,8 @@ function getCliScriptPath(): string {
   return path.join(__dirname, '..', '..', 'cli', 'cli', 'main.js');
 }
 
-// Single-quote a string for /bin/sh by replacing every `'` with `'\''` and
-// wrapping the result in single quotes. Inside single quotes the shell does
-// no interpolation, so `$`, `"`, backslashes, etc. survive verbatim.
+// ─── POSIX (mac + linux) ──────────────────────────────────────────────────
+
 function shellSingleQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
@@ -34,27 +44,10 @@ function buildWrapperScript(): string {
 
 function getSymlinkPath(): string {
   try {
-    fs.accessSync(path.dirname(PREFERRED_SYMLINK), fs.constants.W_OK);
-    return PREFERRED_SYMLINK;
+    fs.accessSync(path.dirname(POSIX_PREFERRED), fs.constants.W_OK);
+    return POSIX_PREFERRED;
   } catch {
-    return FALLBACK_SYMLINK;
-  }
-}
-
-export function isCliInstalled(): boolean {
-  return [PREFERRED_SYMLINK, FALLBACK_SYMLINK].some((p) => {
-    try { fs.accessSync(p); return true; } catch { return false; }
-  });
-}
-
-// Regenerate wrapper with current paths — call on each launch to stay current after updates
-export function refreshCliWrapper(): void {
-  if (process.platform !== 'darwin') return;
-  if (!isCliInstalled()) return;
-  try {
-    fs.writeFileSync(getWrapperPath(), buildWrapperScript(), { mode: 0o755 });
-  } catch {
-    // Non-fatal; stale wrapper still works if the app path hasn't changed
+    return posixFallback();
   }
 }
 
@@ -69,7 +62,7 @@ function placeSymlink(symlinkPath: string, wrapperPath: string): void {
   fs.symlinkSync(wrapperPath, symlinkPath);
 }
 
-export function installCli(): { ok: boolean; error?: string } {
+function installCliPosix(): { ok: boolean; error?: string } {
   try {
     const wrapperPath = getWrapperPath();
     fs.writeFileSync(wrapperPath, buildWrapperScript(), { mode: 0o755 });
@@ -80,9 +73,9 @@ export function installCli(): { ok: boolean; error?: string } {
   }
 }
 
-export function uninstallCli(): { ok: boolean; error?: string } {
+function uninstallCliPosix(): { ok: boolean; error?: string } {
   try {
-    for (const p of [PREFERRED_SYMLINK, FALLBACK_SYMLINK]) {
+    for (const p of [POSIX_PREFERRED, posixFallback()]) {
       try { fs.unlinkSync(p); } catch (e: unknown) {
         if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
       }
@@ -95,8 +88,113 @@ export function uninstallCli(): { ok: boolean; error?: string } {
   }
 }
 
+// ─── Windows ──────────────────────────────────────────────────────────────
+
+function buildWinShim(): string {
+  // CRLF line endings — cmd.exe is picky. Quote both paths since
+  // process.execPath frequently contains spaces.
+  const lines = [
+    '@echo off',
+    'set ELECTRON_RUN_AS_NODE=1',
+    `"${process.execPath}" "${getCliScriptPath()}" %*`,
+    '',
+  ];
+  return lines.join('\r\n');
+}
+
+function runPowerShell(script: string): string {
+  return execFileSync('powershell.exe', ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+function getUserPath(): string {
+  return runPowerShell("[Environment]::GetEnvironmentVariable('PATH','User')");
+}
+
+function setUserPath(newValue: string): void {
+  // PowerShell single-quote literal — escape embedded single-quotes by
+  // doubling. SetEnvironmentVariable broadcasts WM_SETTINGCHANGE so new
+  // shells see the update.
+  const literal = `'${newValue.replace(/'/g, "''")}'`;
+  runPowerShell(`[Environment]::SetEnvironmentVariable('PATH', ${literal}, 'User')`);
+}
+
+function ensureWinBinOnUserPath(): void {
+  const current = getUserPath();
+  const entries = current.split(';').filter(Boolean);
+  if (entries.some((e) => e.toLowerCase() === winBinDir().toLowerCase())) return;
+  setUserPath([...entries, winBinDir()].join(';'));
+}
+
+function installCliWin(): { ok: boolean; error?: string } {
+  try {
+    if (!fs.existsSync(winBinDir())) fs.mkdirSync(winBinDir(), { recursive: true });
+    fs.writeFileSync(winShim(), buildWinShim());
+    ensureWinBinOnUserPath();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function uninstallCliWin(): { ok: boolean; error?: string } {
+  try {
+    if (fs.existsSync(winShim())) fs.unlinkSync(winShim());
+    // PATH entry left in place — harmless once the dir is empty. User can
+    // clean manually if desired. Reinstall is idempotent thanks to the
+    // dedup check in ensureWinBinOnUserPath.
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────
+
+export function isCliInstalled(): boolean {
+  if (process.platform === 'win32') return fs.existsSync(winShim());
+  return [POSIX_PREFERRED, posixFallback()].some((p) => {
+    try { fs.accessSync(p); return true; } catch { return false; }
+  });
+}
+
+// Regenerate wrapper with current paths on each launch so the app keeps
+// working if its install location changed between updates.
+export function refreshCliWrapper(): void {
+  if (!isCliInstalled()) return;
+  try {
+    if (process.platform === 'win32') {
+      fs.writeFileSync(winShim(), buildWinShim());
+    } else {
+      fs.writeFileSync(getWrapperPath(), buildWrapperScript(), { mode: 0o755 });
+    }
+  } catch {
+    // Non-fatal; stale wrapper still works if the app path hasn't changed.
+  }
+}
+
+export function installCli(): { ok: boolean; error?: string } {
+  return process.platform === 'win32' ? installCliWin() : installCliPosix();
+}
+
+export function uninstallCli(): { ok: boolean; error?: string } {
+  return process.platform === 'win32' ? uninstallCliWin() : uninstallCliPosix();
+}
+
+function installDialogDetail(): string {
+  const head = 'This lets you control Central Tracking from your terminal. You can change this later in Settings.\n\n';
+  switch (process.platform) {
+    case 'win32':
+      return head + 'Open a new PowerShell or cmd.exe window to use `ct` after installing. Existing shells need to be restarted to see the updated PATH.';
+    case 'linux':
+      return head + 'If `~/.local/bin` is not on your PATH, add it to your shell rc and reopen your terminal.';
+    default:
+      return head + 'Open a new terminal window to use `ct` after installing.';
+  }
+}
+
 export async function maybePromptCliInstall(win: BrowserWindow): Promise<void> {
-  if (process.platform !== 'darwin') return;
   if (isCliInstalled()) return;
 
   const flagPath = path.join(app.getPath('userData'), 'ct-cli-prompted');
@@ -107,7 +205,7 @@ export async function maybePromptCliInstall(win: BrowserWindow): Promise<void> {
     type: 'question',
     title: 'Install CLI Tool',
     message: 'Install the `ct` command-line tool?',
-    detail: 'This lets you control Central Tracking from your terminal. You can change this later in Settings.\n\nOpen a new terminal window to use `ct` after installing.',
+    detail: installDialogDetail(),
     buttons: ['Install', 'Not Now'],
     defaultId: 0,
     cancelId: 1,

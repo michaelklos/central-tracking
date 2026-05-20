@@ -115,6 +115,13 @@ const MIGRATIONS: string[] = [
     ON comments(external_id) WHERE external_id IS NOT NULL;
   INSERT OR IGNORE INTO schema_version (version) VALUES (7);
   `,
+  // Migration 008: Distinguish bundled (ships in app) from sideloaded
+  // (`ct plugin install`) plugins. Default 'sideloaded' so existing rows
+  // backfill safely; bundled registrar sets 'bundled' explicitly on insert.
+  `
+  ALTER TABLE plugins ADD COLUMN source TEXT NOT NULL DEFAULT 'sideloaded';
+  INSERT OR IGNORE INTO schema_version (version) VALUES (8);
+  `,
 ];
 
 export function runMigrations(db: BetterSqlite3.Database): void {

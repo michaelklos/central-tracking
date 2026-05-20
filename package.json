@@ -1,6 +1,6 @@
 {
   "name": "central-tracking",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Extensible task and time tracking application with plugin architecture for external source integration",
   "main": "dist/main/main.js",
   "workspaces": [
@@ -39,6 +39,10 @@
     "productName": "Central Tracking",
     "files": [
       "dist/**/*",
+      "plugins/*/plugin.json",
+      "plugins/*/package.json",
+      "plugins/*/dist/**/*",
+      "plugins/*/node_modules/**/*",
       "package.json"
     ],
     "asarUnpack": [
@@ -46,7 +50,10 @@
       "**/node_modules/bindings/**/*",
       "**/node_modules/file-uri-to-path/**/*",
       "**/node_modules/koffi/**/*",
-      "dist/cli/cli/**/*"
+      "dist/cli/cli/**/*",
+      "plugins/*/plugin.json",
+      "plugins/*/dist/**/*",
+      "plugins/*/node_modules/**/*"
     ],
     "directories": {
       "output": "release",

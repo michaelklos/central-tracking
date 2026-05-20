@@ -348,6 +348,12 @@ export interface PluginManifest {
   version: string;
   /** Command to run (e.g. "node sync.js" or "./bin/my-plugin"). Used by `ct plugin run`. */
   entrypoint?: string;
+  /**
+   * Pre-tokenized argv. When set, takes precedence over `entrypoint`. Used
+   * by the bundled-plugin registrar so paths with spaces (e.g. macOS
+   * `/Applications/Central Tracking.app/...`) survive without shell quoting.
+   */
+  entrypointArgv?: string[];
   /** Event names this plugin subscribes to (e.g. "task.created"). '*' matches all. */
   events?: string[];
   /** Loopback webhook URL that receives POSTed events. */
@@ -358,6 +364,13 @@ export interface PluginManifest {
    * encryption hints, no required-key validation, no schema listing).
    */
   configSchema?: Record<string, PluginConfigKeySpec>;
+  /**
+   * Extra env vars merged into the child process when `ct plugin run` spawns
+   * the entrypoint. The bundled-plugin registrar uses this to inject
+   * `ELECTRON_RUN_AS_NODE=1` so the entrypoint runs under Electron-as-Node
+   * without requiring a system `node` install.
+   */
+  env?: Record<string, string>;
 }
 
 export interface Plugin {
@@ -367,6 +380,8 @@ export interface Plugin {
   enabled: boolean;
   manifest: PluginManifest;
   installedAt: string;
+  /** 'bundled' = ships in the app, blocked from uninstall. 'sideloaded' = installed via `ct plugin install`. */
+  source: 'bundled' | 'sideloaded';
 }
 
 export interface PluginConfigEntry {

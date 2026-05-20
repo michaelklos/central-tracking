@@ -40,6 +40,17 @@
   margin-left: auto;
 }
 
+.plugins-settings__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle, #e5e7eb);
+  color: var(--color-text-secondary);
+  margin-left: 6px;
+}
+
 .plugins-settings__error {
   margin: 4px 0 0;
   font-size: 11px;

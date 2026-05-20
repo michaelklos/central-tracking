@@ -277,7 +277,9 @@ export function registerPluginCommands(yargs: Argv): Argv {
           runCommand(argv, async ({ client, server }) => {
             const plugin = await client.plugins.get(argv.id as string);
             if (!plugin) fail(`Plugin not found: ${argv.id}`);
-            if (!plugin.manifest.entrypoint) fail(`Plugin ${plugin.id} has no entrypoint`);
+            if (!plugin.manifest.entrypoint && !plugin.manifest.entrypointArgv) {
+              fail(`Plugin ${plugin.id} has no entrypoint`);
+            }
 
             // Required-key gating: refuse to spawn if a declared-required key
             // is unset AND no env override is present. Saves the plugin from
@@ -298,12 +300,18 @@ export function registerPluginCommands(yargs: Argv): Argv {
               );
             }
 
-            const [cmd, ...args] = plugin.manifest.entrypoint.split(/\s+/);
+            // Prefer pre-tokenized argv (bundled plugins use this so paths
+            // with spaces survive). Fall back to splitting the string form
+            // for sideloaded plugins authored by hand.
+            const tokens = plugin.manifest.entrypointArgv
+              ?? plugin.manifest.entrypoint!.split(/\s+/).filter(Boolean);
+            const [cmd, ...args] = tokens;
             const forwarded = (argv.pluginArgs as string[]) ?? [];
             const child = spawn(cmd, [...args, ...forwarded], {
               stdio: 'inherit',
               env: {
                 ...process.env,
+                ...(plugin.manifest.env ?? {}),
                 CT_PLUGIN_ID: plugin.id,
                 CT_SERVER_URL: `http://127.0.0.1:${server.port}`,
                 CT_TOKEN: server.token,

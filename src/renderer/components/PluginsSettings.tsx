@@ -1,6 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { Plugin } from '../../shared/types';
+import { HelpPopover } from './HelpPopover';
 import './PluginsSettings.css';
+
+function AdoHelp() {
+  return (
+    <>
+      <p>The ADO plugin runs from the <code>ct</code> CLI. Open a terminal and:</p>
+      <p><strong>1. Configure (one-time):</strong></p>
+      <pre>{`ct plugin schema ado
+ct plugin config set ado organization <org-slug>
+ct plugin config set ado project      <project-name>
+echo "$ADO_PAT" | ct plugin config set ado pat --secret-from-stdin`}</pre>
+      <p>PAT scope: <code>Work Items: Read &amp; write</code> (or just <code>Read</code> for pull-only).</p>
+      <p><strong>2. Sync:</strong></p>
+      <pre>{`ct plugin run ado sync           # push-state → push-time → push-comments → pull
+ct plugin run ado pull           # mirror current sprint into ct
+ct plugin run ado push-time      # push unreported time → CompletedWork
+ct plugin run ado push-state     # push status changes
+ct plugin run ado push-comments  # push syncable comments`}</pre>
+      <p>App must be running. UI for config + run is planned for a later release.</p>
+    </>
+  );
+}
 
 interface PluginRowState {
   pending: boolean;
@@ -89,8 +111,21 @@ export function PluginsSettings() {
                   onChange={() => toggle(p)}
                 />
                 <span className="plugins-settings__name">{p.name}</span>
+                {p.source === 'bundled' && (
+                  <span
+                    className="plugins-settings__badge"
+                    title="Ships with the app — disable instead of uninstall."
+                  >
+                    bundled
+                  </span>
+                )}
                 <span className="plugins-settings__version">v{p.version}</span>
               </label>
+              {p.id === 'ado' && (
+                <HelpPopover title="ADO Plugin">
+                  <AdoHelp />
+                </HelpPopover>
+              )}
             </div>
             <div className="plugins-settings__subrow">
               <label title="When off, hide unreported badges/batch actions and skip auto-mark-as-reported on push">

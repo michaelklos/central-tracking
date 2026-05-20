@@ -10,6 +10,7 @@ import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
 import { registerPluginHandlers } from './ipc/pluginHandlers';
+import { registerBundledPlugins } from './bundledPlugins';
 import { startDisplayKeepalive, stopDisplayKeepalive } from './displayKeepalive';
 import { startHttpServer, type HttpServerInstance } from './server/httpServer';
 import { initLogFile, log } from './logger';
@@ -88,6 +89,11 @@ app.whenReady().then(() => {
 
   const dbPath = path.join(userDataPath, 'central-tracking.db');
   database = new Database(dbPath);
+
+  // Auto-register any plugins shipped inside the app bundle. No-op in dev
+  // (app.isPackaged=false). Idempotent across launches — version bumps
+  // trigger UPDATE without disturbing the user's enabled flag.
+  registerBundledPlugins(database);
 
   registerTaskHandlers(ipcMain, database);
   registerTimeEntryHandlers(ipcMain, database);

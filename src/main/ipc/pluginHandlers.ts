@@ -16,6 +16,7 @@ interface PluginRow {
   enabled: number;
   manifest: string;
   installed_at: string;
+  source: string;
 }
 
 function rowToPlugin(row: PluginRow): Plugin {
@@ -32,6 +33,7 @@ function rowToPlugin(row: PluginRow): Plugin {
     enabled: row.enabled === 1,
     manifest,
     installedAt: row.installed_at,
+    source: row.source === 'bundled' ? 'bundled' : 'sideloaded',
   };
 }
 
@@ -57,6 +59,14 @@ export function validatePluginManifest(input: unknown): PluginManifest {
   if (m.entrypoint !== undefined && typeof m.entrypoint !== 'string') {
     throw new Error('Plugin manifest "entrypoint" must be a string');
   }
+  if (m.entrypointArgv !== undefined) {
+    if (!Array.isArray(m.entrypointArgv) || m.entrypointArgv.length === 0) {
+      throw new Error('Plugin manifest "entrypointArgv" must be a non-empty array');
+    }
+    if (m.entrypointArgv.some((t) => typeof t !== 'string')) {
+      throw new Error('Plugin manifest "entrypointArgv" must be an array of strings');
+    }
+  }
   if (m.events !== undefined) {
     if (!Array.isArray(m.events) || m.events.some((e) => typeof e !== 'string')) {
       throw new Error('Plugin manifest "events" must be an array of strings');
@@ -81,6 +91,16 @@ export function validatePluginManifest(input: unknown): PluginManifest {
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error(`Plugin webhook URL must use http(s) (got "${parsed.protocol}")`);
+    }
+  }
+  if (m.env !== undefined) {
+    if (!m.env || typeof m.env !== 'object' || Array.isArray(m.env)) {
+      throw new Error('Plugin manifest "env" must be an object');
+    }
+    for (const [k, v] of Object.entries(m.env as Record<string, unknown>)) {
+      if (typeof v !== 'string') {
+        throw new Error(`Plugin manifest env["${k}"] must be a string`);
+      }
     }
   }
   if (m.configSchema !== undefined) {
@@ -115,18 +135,62 @@ export function installPlugin(db: Database, manifestInput: unknown): Plugin {
 
   const existing = db.instance.prepare('SELECT id FROM plugins WHERE id = ?').get(manifest.id) as { id: string } | undefined;
   if (existing) {
+    // Leave source untouched on update — sideloaded stays sideloaded, bundled stays bundled.
     db.instance
       .prepare('UPDATE plugins SET name = ?, version = ?, manifest = ? WHERE id = ?')
       .run(manifest.name, manifest.version, JSON.stringify(manifest), manifest.id);
   } else {
     db.instance
-      .prepare('INSERT INTO plugins (id, name, version, enabled, manifest, installed_at) VALUES (?, ?, ?, 1, ?, ?)')
+      .prepare(
+        `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+         VALUES (?, ?, ?, 1, ?, ?, 'sideloaded')`,
+      )
       .run(manifest.id, manifest.name, manifest.version, JSON.stringify(manifest), now);
   }
   return getPlugin(db, manifest.id) as Plugin;
 }
 
+/**
+ * Auto-register a plugin shipped inside the app bundle. Differs from
+ * `installPlugin`:
+ *   - INSERT defaults to `enabled = 0` (available-but-disabled).
+ *   - `source = 'bundled'` is set so `uninstallPlugin` will refuse.
+ *   - UPDATE only fires on version change, never touches `enabled` or
+ *     `source` (preserves the user's enable/disable choice across upgrades).
+ * Same-version reruns are intentional no-ops.
+ */
+export function registerBundledPlugin(db: Database, manifestInput: unknown): Plugin {
+  const manifest = validatePluginManifest(manifestInput);
+  const now = new Date().toISOString();
+  const existing = db.instance
+    .prepare('SELECT version FROM plugins WHERE id = ?')
+    .get(manifest.id) as { version: string } | undefined;
+
+  if (!existing) {
+    db.instance
+      .prepare(
+        `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+         VALUES (?, ?, ?, 0, ?, ?, 'bundled')`,
+      )
+      .run(manifest.id, manifest.name, manifest.version, JSON.stringify(manifest), now);
+  } else if (existing.version !== manifest.version) {
+    db.instance
+      .prepare('UPDATE plugins SET name = ?, version = ?, manifest = ? WHERE id = ?')
+      .run(manifest.name, manifest.version, JSON.stringify(manifest), manifest.id);
+  }
+  return getPlugin(db, manifest.id) as Plugin;
+}
+
 export function uninstallPlugin(db: Database, id: string): void {
+  const row = db.instance.prepare('SELECT source FROM plugins WHERE id = ?').get(id) as
+    | { source: string }
+    | undefined;
+  if (row?.source === 'bundled') {
+    throw new DomainError(
+      'BUNDLED_PLUGIN_LOCKED',
+      `Bundled plugins can't be uninstalled. Disable instead with \`ct plugin disable ${id}\`.`,
+    );
+  }
   db.instance.prepare('DELETE FROM plugin_config WHERE plugin_id = ?').run(id);
   db.instance.prepare('DELETE FROM plugins WHERE id = ?').run(id);
 }
