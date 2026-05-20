@@ -48,11 +48,12 @@ plugins) or add itself to the enum + ship a migration.
 **Implementation.**
 
 1. Add migration 008 that:
-   - Adds `tasks.plugin_id TEXT NULL REFERENCES plugins(id)` (no
-     ON DELETE — we want the FK violation if someone uninstalls a
-     plugin that owns tasks; uninstall already refuses to remove
-     bundled plugins, and sideloaded uninstall should grow a
-     `tasks-owned` check).
+   - Adds
+     `tasks.plugin_id TEXT NULL REFERENCES plugins(id) ON DELETE RESTRICT`.
+     RESTRICT is the safety net — uninstall must go through the
+     explicit handler in step 6 below; if anything tries to delete a
+     plugin row with referencing tasks the FK fires and we know we
+     have a bug. (FK enforcement is already on; see `database.ts`.)
    - Backfills `plugin_id = 'ado'` for every row where `source = 'ado'`.
    - Drops the old `idx_tasks_source_external` unique index.
    - Creates `idx_tasks_plugin_external` as
@@ -79,6 +80,34 @@ plugins) or add itself to the enum + ship a migration.
    `grep -rn "'ado'" src/renderer`). Replace with checks on
    `task.pluginId !== null` for "is plugin-owned" decisions, and on
    `task.pluginId === '<id>'` for plugin-specific affordances.
+6. Update `uninstallPlugin` in `src/main/ipc/pluginHandlers.ts` to
+   handle the new FK. Behavior agreed with product:
+   - The IPC handler signature becomes
+     `uninstallPlugin(db, id, { convertTasksToAdHoc: boolean })`.
+   - When called without `convertTasksToAdHoc: true`, the handler
+     first returns a preflight result
+     `{ requiresConfirmation: true, taskCount: N }` instead of
+     deleting. The caller (CLI / renderer) shows the count and the
+     warning that the conversion is irreversible.
+   - When called with `convertTasksToAdHoc: true`, the handler runs
+     in a single transaction:
+     1. `UPDATE tasks SET plugin_id = NULL, source = 'ad-hoc',
+        external_id = NULL, external_url = NULL, external_state = NULL,
+        external_completed_hours = NULL, external_refreshed_at = NULL,
+        state_dirty = 0 WHERE plugin_id = ?`
+     2. `DELETE FROM plugins WHERE id = ? AND source = 'sideloaded'`
+        (bundled-plugin refusal still applies — keep the existing
+        check.)
+   - Time entries on those tasks stay attached (the task is the same
+     row, just rebranded). Comments stay too; their `external_id`
+     should be cleared in the same transaction so they don't try
+     to push to a now-disconnected plugin if the user reinstalls it.
+   - Renderer: add a confirm dialog in the plugin-settings UI that
+     calls the preflight first, surfaces the count, then calls again
+     with `convertTasksToAdHoc: true` on confirm.
+   - CLI: `ct plugin uninstall <id>` prompts interactively in TTY
+     mode; in `--json` mode requires `--force` to skip the prompt
+     (mirrors `ct task delete`'s `--force` pattern).
 
 **Tests.**
 
@@ -88,6 +117,20 @@ plugins) or add itself to the enum + ship a migration.
 - `tasks:upsertExternal` test: same external_id under different
   pluginIds creates two rows.
 - Update existing ADO integration tests to pass `pluginId`.
+- Uninstall preflight test: install plugin, create 3 tasks via
+  `upsertExternal`, call `uninstallPlugin(db, id, {})` →
+  expect `{ requiresConfirmation: true, taskCount: 3 }` and zero
+  rows changed.
+- Uninstall convert test: same setup, call with
+  `{ convertTasksToAdHoc: true }`. Assert: plugin row deleted, the
+  3 tasks now have `plugin_id=NULL`, `source='ad-hoc'`, all
+  `external_*` fields cleared, comments' `external_id` cleared,
+  time entries on those tasks unchanged.
+- Uninstall bundled refusal test: existing bundled-plugin behavior
+  still throws even when `convertTasksToAdHoc: true`.
+- FK safety-net test: attempt a raw `DELETE FROM plugins WHERE
+  id='ado'` while a task references it → expect
+  SQLITE_CONSTRAINT_FOREIGNKEY (proves RESTRICT is wired).
 
 **Migration notes.** This is breaking for the on-disk schema. Anyone
 with an ADO-tracked db will get rows migrated to `source='plugin',
@@ -414,6 +457,28 @@ Newest entry at the top. Each entry should answer:
 
 Update the **Status** table at the top of this file in the same edit
 so the at-a-glance view stays accurate.
+
+### 2026-05-20 (2) — Open questions resolved
+
+- **Done:** Both open questions answered by product. Plan updated:
+  - Item 1: uninstall **does not** gate on associated tasks. New
+    `convertTasksToAdHoc` flag added to `uninstallPlugin`; preflight
+    returns task count, confirm runs a transaction that clears
+    `external_*` fields and flips `source='ad-hoc'`. FK is
+    `ON DELETE RESTRICT` purely as a safety net — the explicit
+    handler is the supported path. CLI gets `--force` for
+    non-interactive use. (See item 1 step 6 and new test cases.)
+  - Item 3: `plugins/_shared/` confirmed. Stays in the main repo as
+    "code plugins build against; not owned by main app or any single
+    plugin." No monorepo move needed.
+- **In flight:** none.
+- **Next:** start P0 item 1 implementation — migration 008 +
+  `pluginId` column + updated `upsertExternal` + uninstall handler
+  with the new flag. Recommend a single feature branch off
+  `claude/review-codebase-recommendations-mMBQ8` (or `main` once
+  this plan merges). Items 2 and 3 can begin once item 1's schema
+  change is in PR review.
+- **Blockers / open questions:** none.
 
 ### 2026-05-20 — Plan created
 
