@@ -3,6 +3,7 @@ import type { Database } from '../database/database';
 import type {
   Plugin,
   PluginManifest,
+  PluginCapabilitiesEntry,
   PluginConfigEntry,
   PluginConfigSchemaEntry,
 } from '../../shared/types';
@@ -101,6 +102,11 @@ export function validatePluginManifest(input: unknown): PluginManifest {
       if (typeof v !== 'string') {
         throw new Error(`Plugin manifest env["${k}"] must be a string`);
       }
+    }
+  }
+  if (m.capabilities !== undefined) {
+    if (!m.capabilities || typeof m.capabilities !== 'object' || Array.isArray(m.capabilities)) {
+      throw new Error('Plugin manifest "capabilities" must be a plain object');
     }
   }
   if (m.configSchema !== undefined) {
@@ -292,7 +298,49 @@ export function getPlugin(db: Database, id: string): Plugin | null {
   return row ? rowToPlugin(row) : null;
 }
 
+/**
+ * Returns the manifest-declared required keys that have no value persisted.
+ * Used by setPluginEnabled and the CLI's `plugin run` gate to refuse to
+ * activate a plugin whose webhooks would silently no-op.
+ */
+export function getMissingRequiredKeys(db: Database, pluginId: string): string[] {
+  return getPluginConfigSchema(db, pluginId)
+    .filter((s) => s.required && s.status === 'unset')
+    .map((s) => s.key);
+}
+
+/**
+ * One-shot snapshot of `{ id, enabled, capabilities }` for every installed
+ * plugin. Drives renderer feature gates that need the whole map (e.g. the
+ * `tracksReported` filter on the task list). Capabilities are the manifest's
+ * `capabilities` map verbatim; consumers cast to the shape they expect.
+ */
+export function getPluginCapabilities(db: Database): PluginCapabilitiesEntry[] {
+  return listPlugins(db).map((p) => ({
+    id: p.id,
+    enabled: p.enabled,
+    capabilities: p.manifest.capabilities ?? {},
+  }));
+}
+
 export function setPluginEnabled(db: Database, id: string, enabled: boolean): Plugin {
+  // Disabling is always allowed — a disabled plugin can't do harm even with
+  // missing config. Enabling, on the other hand, would arm webhook delivery
+  // (and any future auto-run) against a plugin whose required config is
+  // unset, which silently no-ops. Refuse with a domain code the renderer
+  // can catch and surface as "open the config panel".
+  if (enabled) {
+    const plugin = getPlugin(db, id);
+    if (!plugin) throw new Error(`Plugin not found: ${id}`);
+    const missing = getMissingRequiredKeys(db, id);
+    if (missing.length) {
+      throw new DomainError(
+        'INCOMPLETE_CONFIG',
+        `Plugin "${id}" can't be enabled: missing required config key(s): ${missing.join(', ')}. ` +
+          `Set via: ct plugin config set ${id} <key> <value>`,
+      );
+    }
+  }
   const res = db.instance.prepare('UPDATE plugins SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id);
   if (res.changes === 0) throw new Error(`Plugin not found: ${id}`);
   return getPlugin(db, id) as Plugin;
@@ -498,6 +546,7 @@ export function getWebhookSubscribers(db: Database): WebhookSubscriber[] {
 
 export function registerPluginHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('plugins:list', () => listPlugins(db));
+  ipcMain.handle('plugins:getCapabilities', () => getPluginCapabilities(db));
   ipcMain.handle('plugins:setEnabled', (_event, id: string, enabled: boolean) => setPluginEnabled(db, id, enabled));
 
   // Renderer-bound config reads are ALWAYS masked. There's no opts/reveal

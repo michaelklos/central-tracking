@@ -20,7 +20,7 @@ implementation steps, test plan, and migration notes where applicable.
 | Priority | Items | State | Owner | Branch |
 |---|---|---|---|---|
 | **P0** | 1, 2, 3 (bundled) | **Implemented — in review** | claude | `claude/p0-plugin-extensibility` |
-| P1 | 4, 5, 6 | Queued — start after P0 merges | — | — |
+| **P1** | 4, 5, 6 | **Implemented — in review (stacked on P0)** | claude | `claude/p1-plugin-extensibility` |
 | P2 | 7, 8, 9 | Deferred until plugin #2 has a working POC | — | — |
 
 **Note on migration number:** the schema in `migrations.ts` already had
@@ -462,6 +462,58 @@ Newest entry at the top. Each entry should answer:
 
 Update the **Status** table at the top of this file in the same edit
 so the at-a-glance view stays accurate.
+
+### 2026-05-20 (4) — P1 bundle implemented (stacked on P0)
+
+- **Done:** Items 4, 5, 6 landed on `claude/p1-plugin-extensibility`
+  off `claude/p0-plugin-extensibility`. 690 tests pass (681 going
+  into this branch + 9 new: 3 setEnabled gate + 5 capabilities IPC
+  + 4 hook integration; existing webhooks tests also pick up the
+  envelope-version assertion).
+  - **Item 5 — Webhook envelope version.** `WebhookEvent` gains a
+    required `version: '1'` field (new exported constant
+    `WEBHOOK_ENVELOPE_VERSION`). Dispatch site in `httpServer.ts`
+    sets it on every outgoing envelope. `docs/plugins.md` webhook
+    section now documents the field and the "additive vs
+    breaking" bump rule. Plan called for an ADO receiver update,
+    but ADO doesn't actually run a long-lived webhook receiver
+    (it's a one-shot CLI process), so no plugin-side change is
+    needed.
+  - **Item 6 — Gate setEnabled on required config.** New
+    `getMissingRequiredKeys(db, pluginId)` helper. `setPluginEnabled`
+    throws `DomainError('INCOMPLETE_CONFIG', …)` when called with
+    `enabled = true` and any required key is still unset; disabling
+    is always allowed (no gate). The error message lists the
+    missing keys and points at `ct plugin config set <id> <key>`.
+    The renderer's existing toggle handler already surfaces the
+    message via its error toast (`PluginsSettings.toggle`), so no
+    renderer change was required.
+  - **Item 4 — Capabilities endpoint.** `PluginManifest` extended
+    with optional `capabilities?: Record<string, unknown>`.
+    `validatePluginManifest` enforces "plain object only" (no
+    arrays, no nested schema validation — the surface stays
+    open so plugins can evolve their own flags). New
+    `getPluginCapabilities(db)` handler returns
+    `[{ id, enabled, capabilities }]`. Wired into IPC
+    (`plugins:getCapabilities`), HTTP (`plugins/getCapabilities`,
+    `mutates: false`, no event), the preload bridge, the CLI
+    client, and the renderer hook. `usePluginCapabilities` no
+    longer fans out one `getConfig` per plugin for the
+    `tracks-reported` default: it reads the manifest default from
+    `capabilities.tracksReported`, then applies the user-set
+    config-key override on top (precedence: config-key > manifest
+    capability > historical `true`). The ADO `plugin.json` now
+    declares `"capabilities": { "tracksReported": true }` so the
+    default is sourced from the manifest, not buried in the hook.
+    The mock at `src/test/mocks/api.ts` gained a
+    `getCapabilities` stub so existing tests keep working.
+- **In flight:** none.
+- **Next:** Code review on `claude/p1-plugin-extensibility`. After
+  P0 merges into the recommendations branch, this PR can be
+  re-targeted at the recommendations branch (or just merged in
+  sequence). P2 items 7, 8, 9 stay deferred until plugin #2 has a
+  working POC.
+- **Blockers / open questions:** none.
 
 ### 2026-05-20 (3) — P0 bundle implemented
 

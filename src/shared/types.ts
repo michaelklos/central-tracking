@@ -352,6 +352,31 @@ export interface PluginManifest {
    * without requiring a system `node` install.
    */
   env?: Record<string, string>;
+  /**
+   * Default capabilities surfaced by `plugins:getCapabilities`. Shape is
+   * intentionally untyped (`Record<string, unknown>`) so plugins can evolve
+   * their own flags without bumping a shared types contract — the renderer
+   * casts to the shape it expects per consumer.
+   *
+   * Conventional keys (defined by callers, not enforced here):
+   * - `tracksReported: boolean` — when false, the renderer hides
+   *   unreported badges/batch actions for tasks owned by this plugin.
+   *
+   * Capabilities are defaults: a user-set config key with the same name
+   * still overrides at the plugin/runtime level (e.g. `tracks-reported`
+   * remains a settable config key for ADO).
+   */
+  capabilities?: Record<string, unknown>;
+}
+
+/**
+ * Row returned by `plugins:getCapabilities`. The `capabilities` field is the
+ * manifest-declared map verbatim; consumers cast it to the shape they expect.
+ */
+export interface PluginCapabilitiesEntry {
+  id: string;
+  enabled: boolean;
+  capabilities: Record<string, unknown>;
 }
 
 export interface Plugin {
@@ -400,7 +425,18 @@ export interface PluginConfigSchemaEntry {
 export const PLUGIN_SECRET_MASK_ENCRYPTED = '[encrypted]';
 export const PLUGIN_SECRET_MASK_PLAINTEXT = '[plaintext-secret]';
 
+/**
+ * Envelope version. Bump on breaking change (field rename, field removed,
+ * semantics changed). Additive changes — new optional fields, new event
+ * names — do NOT bump the version: plugins should tolerate unknown fields.
+ * Plugins that see a version they don't recognise should log + accept;
+ * never hard-fail on a newer envelope.
+ */
+export type WebhookEnvelopeVersion = '1';
+export const WEBHOOK_ENVELOPE_VERSION: WebhookEnvelopeVersion = '1';
+
 export interface WebhookEvent {
+  version: WebhookEnvelopeVersion;
   event: string;        // e.g. "task.created"
   route: string;        // e.g. "tasks/create"
   data: unknown;        // handler return value
@@ -504,6 +540,12 @@ export interface CentralTrackingAPI {
   plugins: {
     /** List installed plugins (enabled and disabled). */
     list(): Promise<Plugin[]>;
+    /**
+     * One-shot listing of `{ id, enabled, capabilities }` for every installed
+     * plugin. Renderer feature gates that previously fanned out N `getConfig`
+     * calls (one per plugin) should read from here instead.
+     */
+    getCapabilities(): Promise<PluginCapabilitiesEntry[]>;
     /** Toggle a plugin's enabled flag. Returns the updated plugin row. */
     setEnabled(id: string, enabled: boolean): Promise<Plugin>;
     /**

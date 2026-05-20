@@ -33,6 +33,7 @@ import { parseImportContent, executeImport } from '../import/importExecutor';
 
 import {
   installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
+  getPluginCapabilities,
   getPluginConfig, setPluginConfig, deletePluginConfig, listPluginConfig,
   getPluginConfigSchema, maskListEntries, maskSecretValue,
   type SetPluginConfigOptions,
@@ -118,6 +119,7 @@ export const apiManifest: readonly ApiRoute[] = [
 
   // Plugins — both CLI and renderer surfaces. Webhook dispatch reads from the plugins table.
   { route: 'plugins/list',         ipcChannel: 'plugins:list',         mutates: false, handler: (db) => listPlugins(db) },
+  { route: 'plugins/getCapabilities', ipcChannel: 'plugins:getCapabilities', mutates: false, handler: (db) => getPluginCapabilities(db) },
   { route: 'plugins/get',          ipcChannel: null,                   mutates: false, handler: (db, id) => getPlugin(db, id as string) },
   { route: 'plugins/install',      ipcChannel: null,                   mutates: true,  event: 'plugin.installed',     handler: (db, manifest) => installPlugin(db, manifest) },
   { route: 'plugins/uninstall',    ipcChannel: null,                   mutates: true,  event: 'plugin.uninstalled',   handler: (db, id, opts) => uninstallPlugin(db, id as string, (opts as { convertTasksToAdHoc?: boolean } | undefined) ?? {}) },

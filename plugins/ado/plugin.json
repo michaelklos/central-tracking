@@ -3,6 +3,9 @@
   "name": "Azure DevOps Sync",
   "version": "0.1.0",
   "entrypoint": "node dist/index.js",
+  "capabilities": {
+    "tracksReported": true
+  },
   "configSchema": {
     "pat":                       { "required": true,  "secret": true,  "description": "Azure DevOps personal access token (scope: Work Items Read & Write)" },
     "organization":              { "required": true,  "secret": false, "description": "ADO organization slug (e.g. 'contoso')" },

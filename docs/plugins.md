@@ -121,7 +121,20 @@ ct plugin run ado
 
 ## Webhook payloads
 
-JSON shape: `{ event, route, data, timestamp }`
+JSON shape: `{ version, event, route, data, timestamp }`
+
+| Field | Type | Notes |
+|---|---|---|
+| `version` | `"1"` | Envelope version. Bumps on breaking change. Plugins MUST tolerate unknown versions (log + accept) rather than hard-fail. |
+| `event` | string | e.g. `task.created`, `timeEntry.stopped`, `comment.updated`. Source of truth: `event` field on the route in `src/main/server/apiManifest.ts`. |
+| `route` | string | The HTTP route that produced the event, e.g. `tasks/create`. |
+| `data` | unknown | The handler return value. Shape varies by event; consult the route's handler. |
+| `timestamp` | ISO string | When the envelope was built. |
+
+Envelope versioning rules:
+
+- Additive change (new optional field on `data`, new event name, new top-level optional field): no bump. Receivers must tolerate unknown fields.
+- Breaking change (field renamed, semantics changed, required field removed): bump `version` and treat older versions as a compatibility layer.
 
 Headers:
 - `X-CT-Signature: sha256=<hex>` — HMAC of the body using the session token

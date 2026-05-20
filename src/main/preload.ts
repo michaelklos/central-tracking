@@ -120,6 +120,7 @@ const api = {
   // there is no reveal opt by design. CLI/plugins go via HTTP and can opt in.
   plugins: {
     list: () => ipcRenderer.invoke('plugins:list'),
+    getCapabilities: () => ipcRenderer.invoke('plugins:getCapabilities'),
     setEnabled: (id: string, enabled: boolean) =>
       ipcRenderer.invoke('plugins:setEnabled', id, enabled),
     getConfig: (id: string, key: string): Promise<string | null> =>

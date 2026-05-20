@@ -139,6 +139,7 @@ describe('dispatchEvent', () => {
       });
 
       await dispatchEvent(db, 'session-token', {
+        version: '1',
         event: 'task.created',
         route: 'tasks/create',
         data: { id: 't1' },
@@ -149,6 +150,7 @@ describe('dispatchEvent', () => {
       expect(srvB.received).toHaveLength(0);
 
       const payload = JSON.parse(srvA.received[0].body);
+      expect(payload.version).toBe('1');
       expect(payload.event).toBe('task.created');
       expect(payload.data.id).toBe('t1');
       expect(srvA.received[0].headers['x-ct-signature']).toBe(
@@ -174,7 +176,7 @@ describe('dispatchEvent', () => {
     await dispatchEvent(
       db,
       'token',
-      { event: 'task.created', route: 'tasks/create', data: {}, timestamp: '2026-04-17T00:00:00.000Z' },
+      { version: '1', event: 'task.created', route: 'tasks/create', data: {}, timestamp: '2026-04-17T00:00:00.000Z' },
       (m) => logs.push(m),
     );
     expect(logs.length).toBe(1);

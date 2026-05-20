@@ -23,6 +23,7 @@ import type {
   ImportError,
   Plugin,
   PluginManifest,
+  PluginCapabilitiesEntry,
   PluginConfigEntry,
   PluginConfigSchemaEntry,
   UpsertExternalTaskInput,
@@ -100,6 +101,7 @@ export interface ApiClient {
   };
   plugins: {
     list(): Promise<Plugin[]>;
+    getCapabilities(): Promise<PluginCapabilitiesEntry[]>;
     get(id: string): Promise<Plugin | null>;
     install(manifest: PluginManifest): Promise<Plugin>;
     uninstall(
@@ -199,6 +201,7 @@ export function createApiClient(request: RawRequest): ApiClient {
     },
     plugins: {
       list: () => request<Plugin[]>('plugins/list'),
+      getCapabilities: () => request<PluginCapabilitiesEntry[]>('plugins/getCapabilities'),
       get: (id) => request<Plugin | null>('plugins/get', [id]),
       install: (manifest) => request<Plugin>('plugins/install', [manifest]),
       uninstall: (id, opts) =>

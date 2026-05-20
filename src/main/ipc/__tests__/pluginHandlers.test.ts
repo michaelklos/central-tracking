@@ -10,6 +10,7 @@ vi.mock('electron', () => electronMockFactory());
 
 import {
   installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
+  getPluginCapabilities,
   getPluginConfig, setPluginConfig, listPluginConfig, deletePluginConfig,
   getWebhookSubscribers, validatePluginManifest,
   getPluginConfigSchema, registerBundledPlugin,
@@ -177,6 +178,26 @@ describe('pluginHandlers', () => {
       expect(() =>
         validatePluginManifest({ id: 'a', name: 'A', version: '1', entrypointArgv: [] }),
       ).toThrow(/entrypointArgv/);
+    });
+
+    it('accepts a plain-object capabilities map', () => {
+      const m = validatePluginManifest({
+        id: 'c', name: 'C', version: '1',
+        capabilities: { tracksReported: true, foo: 'bar', nested: { ok: 1 } },
+      });
+      expect(m.capabilities?.tracksReported).toBe(true);
+    });
+
+    it('rejects capabilities that is not an object', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: 'nope' }),
+      ).toThrow(/capabilities/);
+    });
+
+    it('rejects capabilities that is an array', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: [1, 2] }),
+      ).toThrow(/capabilities/);
     });
   });
 
@@ -366,6 +387,33 @@ describe('pluginHandlers', () => {
     });
   });
 
+  describe('getPluginCapabilities', () => {
+    it('returns id/enabled/capabilities for every installed plugin', () => {
+      installPlugin(db, {
+        id: 'a',
+        name: 'A',
+        version: '1',
+        capabilities: { tracksReported: false, customFlag: 'on' },
+      });
+      installPlugin(db, { id: 'b', name: 'B', version: '1' });
+      setPluginEnabled(db, 'b', false);
+      const caps = getPluginCapabilities(db);
+      const byId = Object.fromEntries(caps.map((c) => [c.id, c]));
+      expect(byId.a).toEqual({
+        id: 'a',
+        enabled: true,
+        capabilities: { tracksReported: false, customFlag: 'on' },
+      });
+      expect(byId.b).toEqual({ id: 'b', enabled: false, capabilities: {} });
+    });
+
+    it('defaults to {} when the manifest declares no capabilities', () => {
+      installPlugin(db, { id: 'no-caps', name: 'NoCaps', version: '1' });
+      const caps = getPluginCapabilities(db);
+      expect(caps.find((c) => c.id === 'no-caps')?.capabilities).toEqual({});
+    });
+  });
+
   describe('setPluginEnabled', () => {
     it('toggles enabled state', () => {
       installPlugin(db, { id: 'p', name: 'P', version: '1' });
@@ -377,6 +425,67 @@ describe('pluginHandlers', () => {
 
     it('throws on unknown plugin', () => {
       expect(() => setPluginEnabled(db, 'nope', true)).toThrow(/not found/);
+    });
+
+    it('refuses to enable when required config keys are unset (INCOMPLETE_CONFIG)', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: {
+          pat: { required: true, secret: true, description: 'Token' },
+          host: { required: true, secret: false },
+          extra: { required: false, secret: false },
+        },
+      });
+      // Disable to start; that path must NEVER throw.
+      setPluginEnabled(db, 'gated', false);
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+
+      let captured: unknown;
+      try {
+        setPluginEnabled(db, 'gated', true);
+      } catch (err) {
+        captured = err;
+      }
+      expect(captured).toBeInstanceOf(DomainError);
+      expect((captured as DomainError).code).toBe('INCOMPLETE_CONFIG');
+      // Error message lists every missing required key.
+      expect((captured as DomainError).message).toMatch(/pat/);
+      expect((captured as DomainError).message).toMatch(/host/);
+      // And points the user at the fix.
+      expect((captured as DomainError).message).toMatch(/ct plugin config set gated/);
+
+      // Row stayed disabled.
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+    });
+
+    it('disabling never gates on config (even if required keys are missing)', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: { pat: { required: true, secret: true } },
+      });
+      // Default after install: enabled=1 + no config. Disabling must succeed.
+      expect(() => setPluginEnabled(db, 'gated', false)).not.toThrow();
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+    });
+
+    it('enabling succeeds once every required key has a value', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: {
+          host: { required: true, secret: false },
+        },
+      });
+      setPluginEnabled(db, 'gated', false);
+      expect(() => setPluginEnabled(db, 'gated', true)).toThrow(/INCOMPLETE_CONFIG|host/);
+      setPluginConfig(db, 'gated', 'host', 'example.com');
+      expect(() => setPluginEnabled(db, 'gated', true)).not.toThrow();
+      expect(getPlugin(db, 'gated')?.enabled).toBe(true);
     });
   });
 
