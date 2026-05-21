@@ -3,6 +3,7 @@ import type { Database } from '../database/database';
 import type {
   Plugin,
   PluginManifest,
+  PluginCapabilitiesEntry,
   PluginConfigEntry,
   PluginConfigSchemaEntry,
 } from '../../shared/types';
@@ -103,6 +104,21 @@ export function validatePluginManifest(input: unknown): PluginManifest {
       }
     }
   }
+  if (m.capabilities !== undefined) {
+    if (
+      !m.capabilities ||
+      typeof m.capabilities !== 'object' ||
+      Array.isArray(m.capabilities) ||
+      // Reject Date / Map / Set / class instances etc. Manifests come from
+      // `plugin.json` (JSON.parse output is always plain), so this guards
+      // the in-process registerBundledPlugin path against handing weird
+      // shapes to consumers.
+      (Object.getPrototypeOf(m.capabilities) !== Object.prototype &&
+        Object.getPrototypeOf(m.capabilities) !== null)
+    ) {
+      throw new Error('Plugin manifest "capabilities" must be a plain object');
+    }
+  }
   if (m.configSchema !== undefined) {
     if (!m.configSchema || typeof m.configSchema !== 'object' || Array.isArray(m.configSchema)) {
       throw new Error('Plugin manifest "configSchema" must be an object');
@@ -181,7 +197,39 @@ export function registerBundledPlugin(db: Database, manifestInput: unknown): Plu
   return getPlugin(db, manifest.id) as Plugin;
 }
 
-export function uninstallPlugin(db: Database, id: string): void {
+export interface UninstallPluginOptions {
+  /** Set true to convert referencing tasks to local ad-hoc tasks and delete
+   *  the plugin row in one transaction. Without it, the call is a preflight
+   *  that returns the task count so the caller can confirm. */
+  convertTasksToAdHoc?: boolean;
+}
+
+export type UninstallPluginResult =
+  | { uninstalled: true; convertedTasks: number }
+  | { requiresConfirmation: true; taskCount: number };
+
+/**
+ * Two-phase uninstall.
+ *
+ * Preflight (default — no `convertTasksToAdHoc`): counts tasks referencing the
+ * plugin and returns `{ requiresConfirmation: true, taskCount }` without
+ * touching any rows. The caller (CLI / renderer) surfaces the count and the
+ * warning that conversion is irreversible.
+ *
+ * Convert (`convertTasksToAdHoc: true`): runs a single transaction that
+ *   1) clears the external_* columns and resets `source='ad-hoc'`,
+ *      `plugin_id=NULL`, `state_dirty=0` on every referencing task,
+ *   2) clears `external_id` on those tasks' comments so a future reinstall
+ *      doesn't try to push pre-existing local comments to a re-bound remote,
+ *   3) deletes the plugin's config rows and the plugin row itself.
+ *
+ * Bundled plugins are refused in both phases — they're disabled, not removed.
+ */
+export function uninstallPlugin(
+  db: Database,
+  id: string,
+  opts: UninstallPluginOptions = {},
+): UninstallPluginResult {
   const row = db.instance.prepare('SELECT source FROM plugins WHERE id = ?').get(id) as
     | { source: string }
     | undefined;
@@ -191,8 +239,61 @@ export function uninstallPlugin(db: Database, id: string): void {
       `Bundled plugins can't be uninstalled. Disable instead with \`ct plugin disable ${id}\`.`,
     );
   }
-  db.instance.prepare('DELETE FROM plugin_config WHERE plugin_id = ?').run(id);
-  db.instance.prepare('DELETE FROM plugins WHERE id = ?').run(id);
+
+  const taskCountRow = db.instance
+    .prepare('SELECT COUNT(*) as n FROM tasks WHERE plugin_id = ?')
+    .get(id) as { n: number };
+  const taskCount = taskCountRow.n;
+
+  if (!opts.convertTasksToAdHoc) {
+    return { requiresConfirmation: true, taskCount };
+  }
+
+  const tx = db.instance.transaction(() => {
+    db.instance
+      .prepare(
+        `UPDATE comments SET external_id = NULL, updated_at = datetime('now')
+         WHERE task_id IN (SELECT id FROM tasks WHERE plugin_id = ?)
+           AND external_id IS NOT NULL`,
+      )
+      .run(id);
+    // Full-mirror tasks (source='plugin'): reset source to 'ad-hoc' since
+    // the plugin owned title/notes/status. Link-only tasks keep their
+    // original source (e.g. 'email', 'meeting-prep', 'ad-hoc') — the
+    // plugin link was incidental, not identity-defining.
+    db.instance
+      .prepare(
+        `UPDATE tasks SET
+           source = 'ad-hoc',
+           updated_at = datetime('now')
+         WHERE plugin_id = ? AND source = 'plugin'`,
+      )
+      .run(id);
+    // Clear plugin_id + all mirror fields on every referencing task,
+    // regardless of mode. external_url/state/completed/refreshed are
+    // only ever populated on mirrors so this is a no-op for link-only,
+    // but the explicit clear keeps the post-uninstall state consistent
+    // even if a future feature populated them via the link surface.
+    db.instance
+      .prepare(
+        `UPDATE tasks SET
+           plugin_id = NULL,
+           external_id = NULL,
+           external_url = NULL,
+           external_state = NULL,
+           external_completed_hours = NULL,
+           external_refreshed_at = NULL,
+           state_dirty = 0,
+           updated_at = datetime('now')
+         WHERE plugin_id = ?`,
+      )
+      .run(id);
+    db.instance.prepare('DELETE FROM plugin_config WHERE plugin_id = ?').run(id);
+    db.instance.prepare("DELETE FROM plugins WHERE id = ? AND source = 'sideloaded'").run(id);
+  });
+  tx();
+
+  return { uninstalled: true, convertedTasks: taskCount };
 }
 
 export function listPlugins(db: Database): Plugin[] {
@@ -207,7 +308,54 @@ export function getPlugin(db: Database, id: string): Plugin | null {
   return row ? rowToPlugin(row) : null;
 }
 
+/**
+ * Returns the manifest-declared required keys that have no value persisted.
+ * Used by setPluginEnabled to refuse enabling a plugin whose required
+ * config is incomplete (otherwise webhook delivery silently no-ops).
+ *
+ * `ct plugin run` has its own gate based on the same configSchema — kept
+ * separate so the run gate can fire even on a disabled plugin (CLI users
+ * may opt into one-shot runs without flipping enabled).
+ */
+export function getMissingRequiredKeys(db: Database, pluginId: string): string[] {
+  return getPluginConfigSchema(db, pluginId)
+    .filter((s) => s.required && s.status === 'unset')
+    .map((s) => s.key);
+}
+
+/**
+ * One-shot snapshot of `{ id, enabled, capabilities }` for every installed
+ * plugin. Drives renderer feature gates that need the whole map (e.g. the
+ * `tracksReported` filter on the task list). Capabilities are the manifest's
+ * `capabilities` map verbatim; consumers cast to the shape they expect.
+ */
+export function getPluginCapabilities(db: Database): PluginCapabilitiesEntry[] {
+  return listPlugins(db).map((p) => ({
+    id: p.id,
+    enabled: p.enabled,
+    capabilities: p.manifest.capabilities ?? {},
+  }));
+}
+
 export function setPluginEnabled(db: Database, id: string, enabled: boolean): Plugin {
+  // Disabling is always allowed — a disabled plugin can't do harm even with
+  // missing config. Enabling, on the other hand, would arm webhook delivery
+  // (and any future auto-run) against a plugin whose required config is
+  // unset, which silently no-ops. Refuse with a domain code the renderer
+  // can catch and surface as "open the config panel".
+  if (enabled) {
+    // Confirm the plugin exists before checking config — otherwise an unknown
+    // id would surface as "missing required config" instead of "not found".
+    if (!getPlugin(db, id)) throw new Error(`Plugin not found: ${id}`);
+    const missing = getMissingRequiredKeys(db, id);
+    if (missing.length) {
+      throw new DomainError(
+        'INCOMPLETE_CONFIG',
+        `Plugin "${id}" can't be enabled: missing required config key(s): ${missing.join(', ')}. ` +
+          `Set via: ct plugin config set ${id} <key> <value>`,
+      );
+    }
+  }
   const res = db.instance.prepare('UPDATE plugins SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id);
   if (res.changes === 0) throw new Error(`Plugin not found: ${id}`);
   return getPlugin(db, id) as Plugin;
@@ -413,6 +561,7 @@ export function getWebhookSubscribers(db: Database): WebhookSubscriber[] {
 
 export function registerPluginHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('plugins:list', () => listPlugins(db));
+  ipcMain.handle('plugins:getCapabilities', () => getPluginCapabilities(db));
   ipcMain.handle('plugins:setEnabled', (_event, id: string, enabled: boolean) => setPluginEnabled(db, id, enabled));
 
   // Renderer-bound config reads are ALWAYS masked. There's no opts/reveal

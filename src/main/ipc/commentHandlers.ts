@@ -91,12 +91,12 @@ export function deleteComment(db: Database, id: string): void {
  * the plugin gets the work-item id and source in one query and doesn't have
  * to fetch every task to figure out which comments to push.
  *
- * Filter is parameterized by task source (e.g. 'ado') so future plugins can
- * share the route.
+ * Filter is parameterized by owning plugin id (e.g. 'ado') so future plugins
+ * can share the route.
  */
 export function getPendingSyncComments(
   db: Database,
-  source: string,
+  pluginId: string,
 ): PendingSyncComment[] {
   const rows = db.instance
     .prepare(
@@ -105,10 +105,10 @@ export function getPendingSyncComments(
               t.source AS task_source, t.external_id AS task_external_id
        FROM comments c
        JOIN tasks t ON t.id = c.task_id
-       WHERE t.source = ? AND c.syncable = 1 AND c.synced = 0
+       WHERE t.plugin_id = ? AND c.syncable = 1 AND c.synced = 0
        ORDER BY c.created_at ASC`,
     )
-    .all(source) as Array<
+    .all(pluginId) as Array<
       CommentRow & { task_source: string; task_external_id: string | null }
     >;
   return rows.map((r) => ({
@@ -159,5 +159,5 @@ export function registerCommentHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('comments:update', (_event, id: string, updates: UpdateCommentInput) => updateComment(db, id, updates));
   ipcMain.handle('comments:delete', (_event, id: string) => deleteComment(db, id));
   ipcMain.handle('comments:upsertExternal', (_event, input: UpsertExternalCommentInput) => upsertExternalComment(db, input));
-  ipcMain.handle('comments:getPendingSync', (_event, source: string) => getPendingSyncComments(db, source));
+  ipcMain.handle('comments:getPendingSync', (_event, pluginId: string) => getPendingSyncComments(db, pluginId));
 }

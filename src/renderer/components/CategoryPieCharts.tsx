@@ -166,8 +166,16 @@ export function CategoryPieCharts({ categories }: Props) {
     });
   };
 
-  const renderTooltip = (props: { payload?: Array<{ payload: CategorySlice }> }) => {
-    const entry = props.payload?.[0]?.payload;
+  // Recharts callback signatures use the library's own loose props
+  // (`unknown`-like payload, optional everything). Accept the library shape
+  // and narrow inside; the structural assumptions are exercised by the
+  // CategoryPieCharts.test snapshot. Guard the top-level `props` first so a
+  // null/undefined/non-object call from the library doesn't throw.
+  const renderTooltip = (props: unknown) => {
+    if (!props || typeof props !== 'object') return null;
+    if (!('payload' in props)) return null;
+    const payload = (props as { payload?: Array<{ payload: CategorySlice }> }).payload;
+    const entry = payload?.[0]?.payload;
     if (!entry) return null;
     return (
       <div className="category-pie-charts__tooltip">
@@ -177,8 +185,10 @@ export function CategoryPieCharts({ categories }: Props) {
     );
   };
 
-  const renderLabel = (props: { name: string; percent: number; x: number; y: number }) => {
-    const { name, percent, x, y } = props;
+  const renderLabel = (props: unknown) => {
+    if (!props || typeof props !== 'object') return null;
+    const { name, percent, x, y } = props as { name?: string; percent?: number; x?: number; y?: number };
+    if (percent === undefined || name === undefined || x === undefined || y === undefined) return null;
     if (percent < 0.05) return null;
     return (
       <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize={11} fill="var(--color-text)">

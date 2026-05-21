@@ -3,7 +3,8 @@ import type { AdoClient } from '../ado-client';
 import type { CtClient } from '../ct-client';
 import type { AdoConfig } from '../config';
 import { sync, _internals } from '../sync';
-import type { CtTask, CtTimeEntry, PushedTaskBatch } from '../push-time';
+import type { CtTask, CtTimeEntry } from '../types';
+import type { PushedTaskBatch } from '../push-time';
 
 const { buildAutoCommentBody, formatHours } = _internals as unknown as {
   buildAutoCommentBody: (b: PushedTaskBatch, today?: string) => string;
@@ -21,6 +22,7 @@ function makeConfig(overrides: Partial<AdoConfig> = {}): AdoConfig {
     workItemTypes: ['Task'],
     pullClosed: false,
     autoCommentOnTimePush: false,
+    tracksReported: true,
     stateMap: null,
     ...overrides,
   };
@@ -31,7 +33,8 @@ function makeTask(id: string, externalId: string | null): CtTask {
     id,
     title: `#${externalId} - t`,
     status: 'in-progress',
-    source: 'ado',
+    source: 'plugin',
+    pluginId: 'ado',
     externalId,
     externalUrl: null,
     externalState: 'Active',

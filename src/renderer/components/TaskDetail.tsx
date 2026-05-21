@@ -175,7 +175,12 @@ export function TaskDetail() {
     if (!task) return;
     const body = newComment.trim();
     if (!body) return;
-    const syncable = task.source === 'ado' ? true : commentSyncable;
+    // Only force syncable on full-mirror ADO tasks. Link-only ADO tasks
+    // (pluginId='ado' but source != 'plugin') let the user toggle per
+    // comment via `commentSyncable`, matching the link-mode contract that
+    // pushes are opt-in.
+    const isAdoFullMirror = task.source === 'plugin' && task.pluginId === 'ado';
+    const syncable = isAdoFullMirror ? true : commentSyncable;
     await window.api.comments.create({ taskId: task.id, body, syncable });
     setNewComment('');
     await loadComments();
@@ -323,7 +328,11 @@ export function TaskDetail() {
   const totalDisplay = running ? task.totalTimeSeconds + elapsedSeconds : task.totalTimeSeconds;
 
   const hasNotes = (task.notes ?? '').length > 0;
-  const isAdo = task.source === 'ado';
+  // Read-only UX (title/notes lock, FSM dropdown) applies only to full
+  // mirrors. Link-only ADO tasks (pluginId='ado' but source != 'plugin')
+  // are still locally editable — the plugin link just lets the user push
+  // time/comments without ADO owning the row.
+  const isAdo = task.source === 'plugin' && task.pluginId === 'ado';
   const refreshedAtLabel = task.externalRefreshedAt
     ? new Date(task.externalRefreshedAt).toLocaleString()
     : 'never';
@@ -741,9 +750,11 @@ export function TaskDetail() {
         <ConfirmDialog
           title="Unlink plugin"
           message={
-            task.source === 'ado' || task.source === 'plugin'
+            task.source === 'plugin'
               ? `Unlink "${task.title}" from ${task.pluginId}? The task becomes a local task again (source reset to ad-hoc) and mirrored state will be cleared.`
-              : `Remove plugin link from "${task.title}"? The task itself stays.`
+              : task.pluginId !== null
+                ? `Remove the ${task.pluginId} link from "${task.title}"? The task stays as-is; only the link to the remote work item is cleared.`
+                : `Remove plugin link from "${task.title}"? The task itself stays.`
           }
           confirmLabel="Unlink"
           onConfirm={async () => {

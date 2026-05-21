@@ -10,6 +10,7 @@ vi.mock('electron', () => electronMockFactory());
 
 import {
   installPlugin, uninstallPlugin, listPlugins, getPlugin, setPluginEnabled,
+  getPluginCapabilities,
   getPluginConfig, setPluginConfig, listPluginConfig, deletePluginConfig,
   getWebhookSubscribers, validatePluginManifest,
   getPluginConfigSchema, registerBundledPlugin,
@@ -128,10 +129,20 @@ describe('pluginHandlers', () => {
       expect(getPlugin(db, 'p')?.version).toBe('0.2.0');
     });
 
-    it('uninstall removes plugin and its config', () => {
+    it('uninstall preflight reports the task count without deleting', () => {
       installPlugin(db, { id: 'p', name: 'P', version: '1' });
       setPluginConfig(db, 'p', 'api-key', 'secret');
-      uninstallPlugin(db, 'p');
+      const result = uninstallPlugin(db, 'p');
+      expect(result).toEqual({ requiresConfirmation: true, taskCount: 0 });
+      expect(getPlugin(db, 'p')).not.toBeNull();
+      expect(listPluginConfig(db, 'p')).toHaveLength(1);
+    });
+
+    it('uninstall with convertTasksToAdHoc removes plugin and its config', () => {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      setPluginConfig(db, 'p', 'api-key', 'secret');
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 0 });
       expect(getPlugin(db, 'p')).toBeNull();
       expect(listPluginConfig(db, 'p')).toEqual([]);
     });
@@ -168,6 +179,49 @@ describe('pluginHandlers', () => {
         validatePluginManifest({ id: 'a', name: 'A', version: '1', entrypointArgv: [] }),
       ).toThrow(/entrypointArgv/);
     });
+
+    it('accepts a plain-object capabilities map', () => {
+      const m = validatePluginManifest({
+        id: 'c', name: 'C', version: '1',
+        capabilities: { tracksReported: true, foo: 'bar', nested: { ok: 1 } },
+      });
+      expect(m.capabilities?.tracksReported).toBe(true);
+    });
+
+    it('rejects capabilities that is not an object', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: 'nope' }),
+      ).toThrow(/capabilities/);
+    });
+
+    it('rejects capabilities that is an array', () => {
+      expect(() =>
+        validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: [1, 2] }),
+      ).toThrow(/capabilities/);
+    });
+
+    it('rejects capabilities backed by a non-plain class instance', () => {
+      // Manifests parsed from plugin.json can't produce a Date — but
+      // registerBundledPlugin takes an in-process object and a careless
+      // caller could hand over a class instance. Defensive guard.
+      expect(() =>
+        validatePluginManifest({
+          id: 'c', name: 'C', version: '1', capabilities: new Date() as unknown as Record<string, unknown>,
+        }),
+      ).toThrow(/capabilities/);
+      expect(() =>
+        validatePluginManifest({
+          id: 'c', name: 'C', version: '1', capabilities: new Map() as unknown as Record<string, unknown>,
+        }),
+      ).toThrow(/capabilities/);
+    });
+
+    it('accepts a null-prototype object as capabilities', () => {
+      const caps = Object.create(null);
+      caps.tracksReported = true;
+      const m = validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: caps });
+      expect(m.capabilities?.tracksReported).toBe(true);
+    });
   });
 
   describe('registerBundledPlugin', () => {
@@ -200,14 +254,186 @@ describe('pluginHandlers', () => {
       registerBundledPlugin(db, { id: 'b', name: 'B', version: '1' });
       expect(() => uninstallPlugin(db, 'b')).toThrow(DomainError);
       expect(() => uninstallPlugin(db, 'b')).toThrow(/BUNDLED_PLUGIN_LOCKED|Bundled plugins/);
-      // Row still present.
+      // Bundled refusal still applies when convertTasksToAdHoc=true.
+      expect(() => uninstallPlugin(db, 'b', { convertTasksToAdHoc: true })).toThrow(
+        /BUNDLED_PLUGIN_LOCKED|Bundled plugins/,
+      );
       expect(getPlugin(db, 'b')).not.toBeNull();
     });
 
     it('still allows uninstall on sideloaded plugins', () => {
       installPlugin(db, { id: 's', name: 'S', version: '1' });
-      uninstallPlugin(db, 's');
+      uninstallPlugin(db, 's', { convertTasksToAdHoc: true });
       expect(getPlugin(db, 's')).toBeNull();
+    });
+  });
+
+  describe('uninstall with referencing tasks', () => {
+    function seed(): void {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      const inst = db.instance;
+      inst.prepare(
+        `INSERT INTO tasks (id, title, source, plugin_id, external_id, external_url, external_state, external_completed_hours, external_refreshed_at, state_dirty)
+         VALUES ('t1', 'T1', 'plugin', 'p', '101', 'https://x/1', 'Active', 2.5, datetime('now'), 1),
+                ('t2', 'T2', 'plugin', 'p', '102', 'https://x/2', 'New',    null, datetime('now'), 0),
+                ('t3', 'T3', 'plugin', 'p', '103', null,          null,    null, null,            0)`,
+      ).run();
+      inst.prepare(
+        `INSERT INTO comments (id, task_id, body, syncable, synced, external_id)
+         VALUES ('c1', 't1', 'mirrored',   0, 1, '999'),
+                ('c2', 't1', 'local-only', 1, 0, null)`,
+      ).run();
+      inst.prepare(
+        "INSERT INTO time_entries (id, task_id, start_time, end_time) VALUES ('e1', 't1', datetime('now'), datetime('now'))",
+      ).run();
+    }
+
+    it('preflight returns the count without mutating', () => {
+      seed();
+      const result = uninstallPlugin(db, 'p');
+      expect(result).toEqual({ requiresConfirmation: true, taskCount: 3 });
+      expect(getPlugin(db, 'p')).not.toBeNull();
+      const rows = db.instance.prepare("SELECT COUNT(*) as n FROM tasks WHERE plugin_id = 'p'").get() as { n: number };
+      expect(rows.n).toBe(3);
+    });
+
+    it('convert transactionally clears external fields and deletes the plugin row', () => {
+      seed();
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 3 });
+      expect(getPlugin(db, 'p')).toBeNull();
+
+      const rows = db.instance
+        .prepare('SELECT id, source, plugin_id, external_id, external_url, external_state, external_completed_hours, external_refreshed_at, state_dirty FROM tasks ORDER BY id')
+        .all() as Array<{
+          id: string;
+          source: string;
+          plugin_id: string | null;
+          external_id: string | null;
+          external_url: string | null;
+          external_state: string | null;
+          external_completed_hours: number | null;
+          external_refreshed_at: string | null;
+          state_dirty: number;
+        }>;
+      for (const r of rows) {
+        expect(r.source).toBe('ad-hoc');
+        expect(r.plugin_id).toBeNull();
+        expect(r.external_id).toBeNull();
+        expect(r.external_url).toBeNull();
+        expect(r.external_state).toBeNull();
+        expect(r.external_completed_hours).toBeNull();
+        expect(r.external_refreshed_at).toBeNull();
+        expect(r.state_dirty).toBe(0);
+      }
+    });
+
+    it('convert clears comments.external_id on tasks owned by the plugin', () => {
+      seed();
+      uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      const comments = db.instance
+        .prepare('SELECT id, external_id FROM comments ORDER BY id')
+        .all() as Array<{ id: string; external_id: string | null }>;
+      expect(comments).toEqual([
+        { id: 'c1', external_id: null },
+        { id: 'c2', external_id: null },
+      ]);
+    });
+
+    it('convert leaves time entries attached to the converted tasks', () => {
+      seed();
+      uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      const n = (db.instance.prepare("SELECT COUNT(*) as n FROM time_entries WHERE task_id = 't1'").get() as { n: number }).n;
+      expect(n).toBe(1);
+    });
+
+    it('FK on plugin_id is RESTRICT — raw plugin delete fails if a task refs it', () => {
+      seed();
+      expect(() => db.instance.prepare("DELETE FROM plugins WHERE id = 'p'").run()).toThrow(
+        /FOREIGN KEY/i,
+      );
+    });
+
+    it('preserves source on link-only tasks; only full-mirror rows reset to ad-hoc', () => {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      db.instance
+        .prepare(
+          `INSERT INTO tasks (id, title, source, plugin_id, external_id, external_url, external_state)
+           VALUES
+             -- Full mirror: plugin owns it; convert should reset source.
+             ('mirror', 'Mirror', 'plugin', 'p', '500', 'https://x/500', 'Active'),
+             -- Link-only with source='ad-hoc': plugin_id and external_id are
+             -- the only plugin-touched columns; source must survive.
+             ('link-adhoc', 'Link AdHoc', 'ad-hoc', 'p', '501', null, null),
+             -- Link-only with a non-default source: the convert MUST NOT
+             -- rewrite the user-chosen provenance ('email', 'meeting-prep'
+             -- etc.).
+             ('link-email', 'Link Email', 'email', 'p', '502', null, null),
+             ('link-meet',  'Link Meet',  'meeting-prep', 'p', '503', null, null)`,
+        )
+        .run();
+
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 4 });
+
+      const rows = db.instance
+        .prepare('SELECT id, source, plugin_id, external_id, external_url, external_state FROM tasks ORDER BY id')
+        .all() as Array<{
+          id: string;
+          source: string;
+          plugin_id: string | null;
+          external_id: string | null;
+          external_url: string | null;
+          external_state: string | null;
+        }>;
+      const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+
+      // Full mirror: source reset, all mirror fields cleared.
+      expect(byId.mirror.source).toBe('ad-hoc');
+      expect(byId.mirror.plugin_id).toBeNull();
+      expect(byId.mirror.external_id).toBeNull();
+      expect(byId.mirror.external_url).toBeNull();
+      expect(byId.mirror.external_state).toBeNull();
+
+      // Link-only: source preserved, link cleared.
+      expect(byId['link-adhoc'].source).toBe('ad-hoc');
+      expect(byId['link-adhoc'].plugin_id).toBeNull();
+      expect(byId['link-adhoc'].external_id).toBeNull();
+
+      expect(byId['link-email'].source).toBe('email');
+      expect(byId['link-email'].plugin_id).toBeNull();
+      expect(byId['link-email'].external_id).toBeNull();
+
+      expect(byId['link-meet'].source).toBe('meeting-prep');
+      expect(byId['link-meet'].plugin_id).toBeNull();
+      expect(byId['link-meet'].external_id).toBeNull();
+    });
+  });
+
+  describe('getPluginCapabilities', () => {
+    it('returns id/enabled/capabilities for every installed plugin', () => {
+      installPlugin(db, {
+        id: 'a',
+        name: 'A',
+        version: '1',
+        capabilities: { tracksReported: false, customFlag: 'on' },
+      });
+      installPlugin(db, { id: 'b', name: 'B', version: '1' });
+      setPluginEnabled(db, 'b', false);
+      const caps = getPluginCapabilities(db);
+      const byId = Object.fromEntries(caps.map((c) => [c.id, c]));
+      expect(byId.a).toEqual({
+        id: 'a',
+        enabled: true,
+        capabilities: { tracksReported: false, customFlag: 'on' },
+      });
+      expect(byId.b).toEqual({ id: 'b', enabled: false, capabilities: {} });
+    });
+
+    it('defaults to {} when the manifest declares no capabilities', () => {
+      installPlugin(db, { id: 'no-caps', name: 'NoCaps', version: '1' });
+      const caps = getPluginCapabilities(db);
+      expect(caps.find((c) => c.id === 'no-caps')?.capabilities).toEqual({});
     });
   });
 
@@ -222,6 +448,67 @@ describe('pluginHandlers', () => {
 
     it('throws on unknown plugin', () => {
       expect(() => setPluginEnabled(db, 'nope', true)).toThrow(/not found/);
+    });
+
+    it('refuses to enable when required config keys are unset (INCOMPLETE_CONFIG)', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: {
+          pat: { required: true, secret: true, description: 'Token' },
+          host: { required: true, secret: false },
+          extra: { required: false, secret: false },
+        },
+      });
+      // Disable to start; that path must NEVER throw.
+      setPluginEnabled(db, 'gated', false);
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+
+      let captured: unknown;
+      try {
+        setPluginEnabled(db, 'gated', true);
+      } catch (err) {
+        captured = err;
+      }
+      expect(captured).toBeInstanceOf(DomainError);
+      expect((captured as DomainError).code).toBe('INCOMPLETE_CONFIG');
+      // Error message lists every missing required key.
+      expect((captured as DomainError).message).toMatch(/pat/);
+      expect((captured as DomainError).message).toMatch(/host/);
+      // And points the user at the fix.
+      expect((captured as DomainError).message).toMatch(/ct plugin config set gated/);
+
+      // Row stayed disabled.
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+    });
+
+    it('disabling never gates on config (even if required keys are missing)', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: { pat: { required: true, secret: true } },
+      });
+      // Default after install: enabled=1 + no config. Disabling must succeed.
+      expect(() => setPluginEnabled(db, 'gated', false)).not.toThrow();
+      expect(getPlugin(db, 'gated')?.enabled).toBe(false);
+    });
+
+    it('enabling succeeds once every required key has a value', () => {
+      installPlugin(db, {
+        id: 'gated',
+        name: 'Gated',
+        version: '1',
+        configSchema: {
+          host: { required: true, secret: false },
+        },
+      });
+      setPluginEnabled(db, 'gated', false);
+      expect(() => setPluginEnabled(db, 'gated', true)).toThrow(/INCOMPLETE_CONFIG|host/);
+      setPluginConfig(db, 'gated', 'host', 'example.com');
+      expect(() => setPluginEnabled(db, 'gated', true)).not.toThrow();
+      expect(getPlugin(db, 'gated')?.enabled).toBe(true);
     });
   });
 

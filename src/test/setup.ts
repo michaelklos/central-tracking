@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { beforeEach } from 'vitest';
 import { createMockApi } from './mocks/api';
 
 // Provide a working localStorage stub for test environments that don't have one
@@ -26,5 +26,5 @@ if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'func
 
 // Set up window.api mock before each test
 beforeEach(() => {
-  (window as Record<string, unknown>).api = createMockApi();
+  (window as unknown as Record<string, unknown>).api = createMockApi();
 });

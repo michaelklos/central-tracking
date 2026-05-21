@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import BetterSqlite3 from 'better-sqlite3';
 import { runMigrations } from '../migrations';
 
-describe('Migration 007 - ADO plugin support', () => {
+// Migration 007 added external mirror columns and the (source, external_id)
+// unique index. Migration 009 replaced that index with idx_tasks_plugin_external
+// and dropped 'ado' from the source enum, so the tests below assert only the
+// columns/indexes that survive past 009.
+describe('Migration 007 - ADO plugin support (columns retained after 009)', () => {
   it('adds external mirror columns to tasks', () => {
     const db = new BetterSqlite3(':memory:');
     db.pragma('foreign_keys = ON');
@@ -53,31 +57,6 @@ describe('Migration 007 - ADO plugin support', () => {
     expect(row.external_completed_hours).toBeNull();
     expect(row.external_refreshed_at).toBeNull();
     expect(row.state_dirty).toBe(0);
-    db.close();
-  });
-
-  it('creates unique index on (source, external_id)', () => {
-    const db = new BetterSqlite3(':memory:');
-    db.pragma('foreign_keys = ON');
-    runMigrations(db);
-
-    const indexes = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tasks'")
-      .all() as { name: string }[];
-    expect(indexes.map((i) => i.name)).toContain('idx_tasks_source_external');
-
-    db.prepare(
-      "INSERT INTO tasks (id, title, source, external_id) VALUES ('a', 'A', 'ado', '123')",
-    ).run();
-    expect(() =>
-      db.prepare(
-        "INSERT INTO tasks (id, title, source, external_id) VALUES ('b', 'B', 'ado', '123')",
-      ).run(),
-    ).toThrow(/UNIQUE/);
-
-    // NULL external_id should not collide
-    db.prepare("INSERT INTO tasks (id, title, source) VALUES ('c', 'C', 'ado')").run();
-    db.prepare("INSERT INTO tasks (id, title, source) VALUES ('d', 'D', 'ado')").run();
     db.close();
   });
 

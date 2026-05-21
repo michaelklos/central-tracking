@@ -30,7 +30,8 @@ function makeTask(id: string, externalId: string | null, overrides: Partial<CtTa
     id,
     title: `#${externalId ?? '?'} - Task`,
     status: 'in-progress',
-    source: 'ado',
+    source: 'plugin',
+    pluginId: 'ado',
     externalId,
     externalUrl: null,
     externalState: 'Active',
@@ -359,7 +360,7 @@ describe('pushTime', () => {
     // Verify the filter is passed correctly to ct.getTasks.
     const m = makeMocks([], {}, {});
     await pushTime(castMocks(m).ado, castMocks(m).ct, makeConfig());
-    expect(m.ct.getTasks).toHaveBeenCalledWith({ source: ['ado'], hasUnreportedTime: true });
+    expect(m.ct.getTasks).toHaveBeenCalledWith({ pluginId: 'ado', hasUnreportedTime: true });
   });
 
   it('does not call markTaskReported if PATCH succeeds but mark throws — propagates', async () => {

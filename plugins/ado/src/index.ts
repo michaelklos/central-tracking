@@ -23,7 +23,7 @@ interface Clients {
 }
 
 async function bootstrap(): Promise<Clients> {
-  const ct = new CtClient();
+  const ct = new CtClient('ado');
   const config = await loadConfig(ct);
   const ado = new AdoClient({
     organization: config.organization,

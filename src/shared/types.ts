@@ -1,6 +1,6 @@
 // ─── Task ────────────────────────────────────────────────────────────────────
 
-export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin', 'ado'] as const;
+export const TASK_SOURCES = ['ad-hoc', 'email', 'meeting-prep', 'plugin'] as const;
 export type TaskSource = typeof TASK_SOURCES[number];
 
 export const TASK_STATUSES = ['todo', 'in-progress', 'done', 'blocked'] as const;
@@ -74,12 +74,12 @@ export interface BatchUpdateInput {
 
 /**
  * Input for `tasks:upsertExternal`. Used by plugins (e.g. ADO) to mirror
- * external work items into ct. Matched by `(source, externalId)`.
+ * external work items into ct. Matched by `(pluginId, externalId)`; `source`
+ * is always set to `'plugin'` on insert.
  */
 export interface UpsertExternalTaskInput {
-  source: TaskSource;
+  pluginId: string;
   externalId: string;
-  pluginId?: string | null;
   title: string;
   notes?: string;
   description?: string;
@@ -170,27 +170,6 @@ export interface PendingSyncComment extends Comment {
   taskSource: TaskSource;
 }
 
-/**
- * Shape of one entry in the ADO `state-map` plugin config. The renderer
- * mirrors this so it can drive the TaskDetail FSM dropdown without
- * importing plugin code (plugins are out-of-process / different build).
- *
- * MUST stay in sync with `plugins/ado/src/state-map.ts`. If the shape
- * changes there, change it here. The default values below match
- * `DEFAULT_STATE_MAP` in that file.
- */
-export interface AdoStateMapEntry {
-  ado: string;
-  altIn: string[];
-}
-export type AdoStateMap = Record<string, AdoStateMapEntry>;
-
-export const ADO_DEFAULT_STATE_MAP: AdoStateMap = {
-  todo: { ado: 'New', altIn: ['New', 'To Do', 'Proposed'] },
-  'in-progress': { ado: 'Active', altIn: ['Active', 'Committed', 'In Progress'] },
-  done: { ado: 'Closed', altIn: ['Closed', 'Resolved', 'Done', 'Completed'] },
-};
-
 // ─── Category / Label ────────────────────────────────────────────────────────
 
 export interface Category {
@@ -234,6 +213,8 @@ export interface TaskFilterParams {
   searchIn?: 'title' | 'all';
   status?: string | string[];
   source?: string | string[];
+  /** Filter by owning plugin (e.g. 'ado'). Null = local-only tasks. */
+  pluginId?: string | string[] | null;
   categoryId?: string | string[];
   /** Include only tasks that have at least one un-reported time entry. */
   hasUnreportedTime?: boolean;
@@ -371,6 +352,35 @@ export interface PluginManifest {
    * without requiring a system `node` install.
    */
   env?: Record<string, string>;
+  /**
+   * Default capabilities surfaced by `plugins:getCapabilities`. Shape is
+   * intentionally untyped (`Record<string, unknown>`) so plugins can evolve
+   * their own flags without bumping a shared types contract — the renderer
+   * casts to the shape it expects per consumer.
+   *
+   * Conventional keys (defined by callers, not enforced here):
+   * - `tracksReported: boolean` — when false, the renderer hides
+   *   unreported badges/batch actions for tasks owned by this plugin.
+   *
+   * Capabilities are defaults; a user-set plugin_config key overrides at
+   * the plugin/runtime level. The override key follows the kebab-case
+   * config-key convention (e.g. `tracks-reported`) while the capability
+   * uses camelCase (`tracksReported`) — they refer to the same flag with
+   * different naming conventions on each side of the bridge.
+   * `usePluginCapabilities` in the renderer is responsible for mapping
+   * one to the other.
+   */
+  capabilities?: Record<string, unknown>;
+}
+
+/**
+ * Row returned by `plugins:getCapabilities`. The `capabilities` field is the
+ * manifest-declared map verbatim; consumers cast it to the shape they expect.
+ */
+export interface PluginCapabilitiesEntry {
+  id: string;
+  enabled: boolean;
+  capabilities: Record<string, unknown>;
 }
 
 export interface Plugin {
@@ -419,7 +429,18 @@ export interface PluginConfigSchemaEntry {
 export const PLUGIN_SECRET_MASK_ENCRYPTED = '[encrypted]';
 export const PLUGIN_SECRET_MASK_PLAINTEXT = '[plaintext-secret]';
 
+/**
+ * Envelope version. Bump on breaking change (field rename, field removed,
+ * semantics changed). Additive changes — new optional fields, new event
+ * names — do NOT bump the version: plugins should tolerate unknown fields.
+ * Plugins that see a version they don't recognise should log + accept;
+ * never hard-fail on a newer envelope.
+ */
+export type WebhookEnvelopeVersion = '1';
+export const WEBHOOK_ENVELOPE_VERSION: WebhookEnvelopeVersion = '1';
+
 export interface WebhookEvent {
+  version: WebhookEnvelopeVersion;
   event: string;        // e.g. "task.created"
   route: string;        // e.g. "tasks/create"
   data: unknown;        // handler return value
@@ -523,6 +544,12 @@ export interface CentralTrackingAPI {
   plugins: {
     /** List installed plugins (enabled and disabled). */
     list(): Promise<Plugin[]>;
+    /**
+     * One-shot listing of `{ id, enabled, capabilities }` for every installed
+     * plugin. Renderer feature gates that previously fanned out N `getConfig`
+     * calls (one per plugin) should read from here instead.
+     */
+    getCapabilities(): Promise<PluginCapabilitiesEntry[]>;
     /** Toggle a plugin's enabled flag. Returns the updated plugin row. */
     setEnabled(id: string, enabled: boolean): Promise<Plugin>;
     /**

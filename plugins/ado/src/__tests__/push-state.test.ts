@@ -19,6 +19,7 @@ function makeConfig(overrides: Partial<AdoConfig> = {}): AdoConfig {
     workItemTypes: ['Task'],
     pullClosed: false,
     autoCommentOnTimePush: false,
+    tracksReported: true,
     stateMap: null,
     ...overrides,
   };
@@ -35,7 +36,8 @@ function makeTask(
     id,
     title: `#${externalId ?? '?'} - Task`,
     status,
-    source: 'ado',
+    source: 'plugin',
+    pluginId: 'ado',
     externalId,
     externalUrl: null,
     externalState,
@@ -221,7 +223,7 @@ describe('pushState', () => {
   it('passes the stateDirty filter to ct.getTasks', async () => {
     const m = makeMocks([], {});
     await pushState(cast(m).ado, cast(m).ct, makeConfig());
-    expect(m.ct.getTasks).toHaveBeenCalledWith({ source: ['ado'], stateDirty: true });
+    expect(m.ct.getTasks).toHaveBeenCalledWith({ pluginId: 'ado', stateDirty: true });
   });
 
   it('propagates setExternalTaskState failure after a successful PATCH', async () => {

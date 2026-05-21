@@ -43,6 +43,24 @@ function readManifestFile(filePath: string): PluginManifest {
   return manifest;
 }
 
+async function promptYesNo(question: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    process.stdout.write(question);
+    let buf = '';
+    const onData = (chunk: Buffer | string) => {
+      buf += chunk.toString();
+      const nl = buf.indexOf('\n');
+      if (nl === -1) return;
+      process.stdin.removeListener('data', onData);
+      process.stdin.pause();
+      const answer = buf.slice(0, nl).trim().toLowerCase();
+      resolve(answer === 'y' || answer === 'yes');
+    };
+    process.stdin.resume();
+    process.stdin.on('data', onData);
+  });
+}
+
 async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -145,12 +163,58 @@ export function registerPluginCommands(yargs: Argv): Argv {
       )
       .command(
         'uninstall <id>',
-        'Remove a plugin and its config',
-        (yy) => yy.positional('id', { type: 'string', demandOption: true }),
+        'Remove a plugin and convert its tasks to local ad-hoc',
+        (yy) =>
+          yy
+            .positional('id', { type: 'string', demandOption: true })
+            .option('force', {
+              type: 'boolean',
+              default: false,
+              describe: 'Skip the confirmation prompt (required in --json / non-TTY)',
+            }),
         (argv) =>
           runCommand(argv, async ({ client }) => {
-            await client.plugins.uninstall(argv.id as string);
-            say(`Uninstalled plugin ${argv.id}`);
+            const id = argv.id as string;
+            const preflight = await client.plugins.uninstall(id);
+            if (!('requiresConfirmation' in preflight)) {
+              // Shouldn't happen — preflight always returns the confirmation shape
+              // when convertTasksToAdHoc is absent. Defensive guard.
+              say(`Uninstalled plugin ${id}`);
+              return;
+            }
+            const { taskCount } = preflight;
+            const force = argv.force as boolean;
+            const isJson = (argv as { json?: boolean }).json === true;
+
+            if (taskCount > 0 && !force) {
+              if (isJson || !process.stdin.isTTY) {
+                fail(
+                  `Uninstall of "${id}" would convert ${taskCount} task(s) to local ad-hoc tasks. ` +
+                    `This clears their external_id/url/state and is irreversible. ` +
+                    `Re-run with --force to confirm.`,
+                );
+              }
+              const answer = await promptYesNo(
+                `Uninstall "${id}"? ${taskCount} task(s) will be converted to local ad-hoc tasks ` +
+                  `(external_id/url/state cleared). This is irreversible. Continue? [y/N] `,
+              );
+              if (!answer) {
+                say(`Aborted. Plugin "${id}" not uninstalled.`);
+                return;
+              }
+            }
+
+            const result = await client.plugins.uninstall(id, { convertTasksToAdHoc: true });
+            output(
+              argv,
+              result,
+              () => {
+                if ('uninstalled' in result) {
+                  return `Uninstalled plugin ${id} (converted ${result.convertedTasks} task(s) to ad-hoc)`;
+                }
+                return `Uninstalled plugin ${id}`;
+              },
+            );
           }),
       )
       .command('config', 'Get or set plugin configuration', (cc) =>

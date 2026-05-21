@@ -475,14 +475,14 @@ describe('Task IPC Handlers', () => {
       expect(linked.source).toBe('ad-hoc'); // unchanged
     });
 
-    it('mirror mode also flips source to the ado source key', async () => {
+    it('mirror mode flips source to the generic "plugin" key for any plugin', async () => {
       const t = await ipc.invoke('tasks:create', { title: 'Mirror target' });
       const linked = await ipc.invoke('tasks:link', t.id, { pluginId: 'ado', externalId: '99', mode: 'mirror' });
       expect(linked.pluginId).toBe('ado');
-      expect(linked.source).toBe('ado');
+      expect(linked.source).toBe('plugin');
     });
 
-    it('mirror mode for a non-ado plugin uses the generic "plugin" source', async () => {
+    it('mirror mode for a non-ado plugin also uses the "plugin" source', async () => {
       db.instance
         .prepare('INSERT INTO plugins (id, name, version, enabled, manifest, installed_at) VALUES (?, ?, ?, 1, ?, ?)')
         .run('jira', 'Jira', '0.0.1', JSON.stringify({ id: 'jira', name: 'Jira', version: '0.0.1' }), new Date().toISOString());

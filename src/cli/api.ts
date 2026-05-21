@@ -23,6 +23,7 @@ import type {
   ImportError,
   Plugin,
   PluginManifest,
+  PluginCapabilitiesEntry,
   PluginConfigEntry,
   PluginConfigSchemaEntry,
   UpsertExternalTaskInput,
@@ -100,9 +101,16 @@ export interface ApiClient {
   };
   plugins: {
     list(): Promise<Plugin[]>;
+    getCapabilities(): Promise<PluginCapabilitiesEntry[]>;
     get(id: string): Promise<Plugin | null>;
     install(manifest: PluginManifest): Promise<Plugin>;
-    uninstall(id: string): Promise<void>;
+    uninstall(
+      id: string,
+      opts?: { convertTasksToAdHoc?: boolean },
+    ): Promise<
+      | { uninstalled: true; convertedTasks: number }
+      | { requiresConfirmation: true; taskCount: number }
+    >;
     setEnabled(id: string, enabled: boolean): Promise<Plugin>;
     /** `opts.reveal=true` returns cleartext for secret keys; default masks. */
     getConfig(id: string, key: string, opts?: { reveal?: boolean }): Promise<string | null>;
@@ -193,9 +201,11 @@ export function createApiClient(request: RawRequest): ApiClient {
     },
     plugins: {
       list: () => request<Plugin[]>('plugins/list'),
+      getCapabilities: () => request<PluginCapabilitiesEntry[]>('plugins/getCapabilities'),
       get: (id) => request<Plugin | null>('plugins/get', [id]),
       install: (manifest) => request<Plugin>('plugins/install', [manifest]),
-      uninstall: (id) => request<void>('plugins/uninstall', [id]),
+      uninstall: (id, opts) =>
+        request('plugins/uninstall', [id, opts ?? {}]),
       setEnabled: (id, enabled) => request<Plugin>('plugins/setEnabled', [id, enabled]),
       getConfig: (id, key, opts) => request<string | null>('plugins/getConfig', [id, key, opts ?? {}]),
       listConfig: (id, opts) => request<PluginConfigEntry[]>('plugins/listConfig', [id, opts ?? {}]),

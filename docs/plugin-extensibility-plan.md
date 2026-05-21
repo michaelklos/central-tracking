@@ -1,0 +1,682 @@
+# Plugin Extensibility Implementation Plan
+
+Audit date: 2026-05-20. Targets the work to do *before* adding a second
+plugin (GitHub, Jira, Linear, …) so we don't multiply ADO-specific
+patterns by N.
+
+The items are grouped by priority. **P0** items should land before plugin
+#2 is started — they reshape data and API surface, and doing them after
+the fact means rewriting plugin #2. **P1** items can land any time but
+get cheaper if done before plugin #2 has shipped. **P2** items wait
+until we have two concrete plugins to compare for real duplication.
+
+Each item lists the problem with file:line citations, concrete
+implementation steps, test plan, and migration notes where applicable.
+
+---
+
+## Status
+
+| Priority | Items | State | Owner | Branch |
+|---|---|---|---|---|
+| **P0** | 1, 2, 3 (bundled) | **Implemented — in review** | claude | `claude/p0-plugin-extensibility` |
+| **P1** | 4, 5, 6 | **Implemented — in review (stacked on P0)** | claude | `claude/p1-plugin-extensibility` |
+| P2 | 7, 8, 9 | Deferred until plugin #2 has a working POC | — | — |
+
+**Note on migration number:** the schema in `migrations.ts` already had
+migration 008 (`plugins.source` column) when this plan was written. The
+plan's references to "migration 008" landed as **migration 009**. The
+substance is unchanged; only the index shifted.
+
+**Current focus:** P0 review. Single owner recommended — items share a
+migration (009) and ADO call-site updates; splitting them creates
+merge pain. See the Handoff log at the bottom for live progress.
+
+---
+
+## P0 — Land these together (one migration, one PR)
+
+Items 1, 2, and 3 all touch `src/shared/types.ts`, the task schema, or
+the ADO plugin's imports. Doing them piecemeal would mean either two
+migrations or a partially-typed plugin client. Bundle them.
+
+### 1. Decouple `TaskSource` from ADO; key external tasks by `pluginId`
+
+**Status:** Not started.
+
+**Problem.** `TASK_SOURCES` hardcodes `'ado'` at `src/shared/types.ts:3`,
+and the unique index keying external tasks is `(source, external_id)`
+(migration 007, `src/main/database/migrations.ts:112-113`). Every new
+plugin would have to either reuse `'plugin'` (collisions across
+plugins) or add itself to the enum + ship a migration.
+
+**Implementation.**
+
+1. Add migration 008 that:
+   - Adds
+     `tasks.plugin_id TEXT NULL REFERENCES plugins(id) ON DELETE RESTRICT`.
+     RESTRICT is the safety net — uninstall must go through the
+     explicit handler in step 6 below; if anything tries to delete a
+     plugin row with referencing tasks the FK fires and we know we
+     have a bug. (FK enforcement is already on; see `database.ts`.)
+   - Backfills `plugin_id = 'ado'` for every row where `source = 'ado'`.
+   - Drops the old `idx_tasks_source_external` unique index.
+   - Creates `idx_tasks_plugin_external` as
+     `UNIQUE (plugin_id, external_id) WHERE external_id IS NOT NULL`.
+   - Updates the CHECK constraint on `tasks.source` to drop `'ado'`
+     and keeps `('ad-hoc', 'email', 'meeting-prep', 'plugin')`.
+   - For every backfilled row, sets `source = 'plugin'`.
+2. Edit `src/shared/types.ts:3` — remove `'ado'` from `TASK_SOURCES`;
+   add `pluginId: string | null` to the `Task` interface (around
+   line 14, beside `source`).
+3. Edit `tasks:upsertExternal` in `src/main/ipc/taskHandlers.ts` to:
+   - accept `pluginId` (required for plugin-owned tasks) in the
+     `UpsertExternalTaskInput` shape.
+   - match on `(plugin_id, external_id)` instead of
+     `(source, external_id)`.
+   - always set `source = 'plugin'` when `pluginId` is non-null.
+4. Update the ADO plugin's call sites (`plugins/ado/src/sync.ts`,
+   `plugins/ado/src/pull.ts`) to pass `pluginId: 'ado'`. The
+   `CtClient.upsertExternalTask` signature in
+   `plugins/ado/src/ct-client.ts:144` picks up the new field
+   automatically via shared types.
+5. The renderer's task-list rendering currently special-cases
+   `task.source === 'ado'` in a few spots (find via
+   `grep -rn "'ado'" src/renderer`). Replace with checks on
+   `task.pluginId !== null` for "is plugin-owned" decisions, and on
+   `task.pluginId === '<id>'` for plugin-specific affordances.
+6. Update `uninstallPlugin` in `src/main/ipc/pluginHandlers.ts` to
+   handle the new FK. Behavior agreed with product:
+   - The IPC handler signature becomes
+     `uninstallPlugin(db, id, { convertTasksToAdHoc: boolean })`.
+   - When called without `convertTasksToAdHoc: true`, the handler
+     first returns a preflight result
+     `{ requiresConfirmation: true, taskCount: N }` instead of
+     deleting. The caller (CLI / renderer) shows the count and the
+     warning that the conversion is irreversible.
+   - When called with `convertTasksToAdHoc: true`, the handler runs
+     in a single transaction:
+     1. `UPDATE tasks SET plugin_id = NULL, source = 'ad-hoc',
+        external_id = NULL, external_url = NULL, external_state = NULL,
+        external_completed_hours = NULL, external_refreshed_at = NULL,
+        state_dirty = 0 WHERE plugin_id = ?`
+     2. `DELETE FROM plugins WHERE id = ? AND source = 'sideloaded'`
+        (bundled-plugin refusal still applies — keep the existing
+        check.)
+   - Time entries on those tasks stay attached (the task is the same
+     row, just rebranded). Comments stay too; their `external_id`
+     should be cleared in the same transaction so they don't try
+     to push to a now-disconnected plugin if the user reinstalls it.
+   - Renderer: add a confirm dialog in the plugin-settings UI that
+     calls the preflight first, surfaces the count, then calls again
+     with `convertTasksToAdHoc: true` on confirm.
+   - CLI: `ct plugin uninstall <id>` prompts interactively in TTY
+     mode; in `--json` mode requires `--force` to skip the prompt
+     (mirrors `ct task delete`'s `--force` pattern).
+
+**Tests.**
+
+- New migration test: insert ADO-style task pre-migration, run
+  migration 008, assert `plugin_id='ado'`, `source='plugin'`, and the
+  new unique index rejects a duplicate `(plugin_id, external_id)`.
+- `tasks:upsertExternal` test: same external_id under different
+  pluginIds creates two rows.
+- Update existing ADO integration tests to pass `pluginId`.
+- Uninstall preflight test: install plugin, create 3 tasks via
+  `upsertExternal`, call `uninstallPlugin(db, id, {})` →
+  expect `{ requiresConfirmation: true, taskCount: 3 }` and zero
+  rows changed.
+- Uninstall convert test: same setup, call with
+  `{ convertTasksToAdHoc: true }`. Assert: plugin row deleted, the
+  3 tasks now have `plugin_id=NULL`, `source='ad-hoc'`, all
+  `external_*` fields cleared, comments' `external_id` cleared,
+  time entries on those tasks unchanged.
+- Uninstall bundled refusal test: existing bundled-plugin behavior
+  still throws even when `convertTasksToAdHoc: true`.
+- FK safety-net test: attempt a raw `DELETE FROM plugins WHERE
+  id='ado'` while a task references it → expect
+  SQLITE_CONSTRAINT_FOREIGNKEY (proves RESTRICT is wired).
+
+**Migration notes.** This is breaking for the on-disk schema. Anyone
+with an ADO-tracked db will get rows migrated to `source='plugin',
+plugin_id='ado'`. Confirm no production users yet — if there are, this
+is still a one-shot migration; we just have to make sure 008 is
+idempotent (use `WHERE source = 'ado'` guards).
+
+**Effort:** M (~1 day with tests).
+
+---
+
+### 2. Move ADO-specific types out of `src/shared/types.ts`
+
+**Status:** Not started.
+
+**Problem.** `AdoStateMapEntry`, `AdoStateMap`, and
+`ADO_DEFAULT_STATE_MAP` live in `src/shared/types.ts:182-191`. The
+renderer imports them directly to render state-map config UI. A
+GitHub plugin would either copy the pattern in `shared/types.ts` (file
+grows linearly with plugin count) or reuse the wrong types.
+
+**Implementation.**
+
+1. Move the three symbols from `src/shared/types.ts:182-191` to
+   `plugins/ado/src/types.ts` (where the rest of ADO types already
+   live).
+2. Find existing importers — `grep -rn "AdoStateMap\|ADO_DEFAULT_STATE_MAP" src`.
+3. For the renderer, the right answer isn't to import from
+   `plugins/ado/src/types.ts` (the renderer must not depend on plugin
+   sources). Instead, the renderer should read the state-map shape
+   from the per-plugin capabilities endpoint (item 4) and treat it
+   as `Record<string, { external: string; alternates: string[] }>`
+   — same shape but plugin-agnostic.
+4. The `adoFsm.ts` helper at `src/renderer/utils/adoFsm.ts` should
+   either move into the plugin's renderer-side bundle (future work)
+   or — for now — keep its own local copy of the type, since the
+   FSM itself is genuinely ADO-specific logic. Mark it with a
+   comment noting that it will be relocated when plugins ship
+   their own renderer bundles.
+
+**Tests.** No behavioural change. Type checking + lint covers it.
+
+**Effort:** S (couple hours, mostly chasing imports).
+
+---
+
+### 3. Extract `@central-tracking/plugin-client` (or local equivalent)
+
+**Status:** Not started.
+
+**Problem.** `plugins/ado/src/ct-client.ts` (189 LOC) and
+`plugins/ado/src/config.ts` (67 LOC) contain the HTTP wrapper, env-var
+shadowing of secrets, env-merge for config (`listPluginConfig` at
+`ct-client.ts:88-118`), and required-key gating. A second plugin would
+copy ~250 LOC verbatim. The env-shadowing logic is the non-trivial
+part and is easy to get subtly wrong (see CLAUDE.md footgun #1 — same
+class of bug).
+
+**Implementation.**
+
+1. Create `plugins/_shared/` with:
+   - `package.json` — `name: "@central-tracking/plugin-client"`,
+     `private: true`, `main: "dist/index.js"`,
+     `types: "dist/index.d.ts"`.
+   - `tsconfig.json` — compiles to its own `dist/`.
+   - `src/index.ts` — barrel re-export.
+   - `src/ct-client.ts` — copy of the ADO version, with the
+     constructor taking `pluginId` as a required param (today it
+     defaults to `'ado'` at `plugins/ado/src/ct-client.ts:54`).
+   - `src/load-config.ts` — generic version of
+     `plugins/ado/src/config.ts`:
+     ```ts
+     export async function loadConfig<T>(
+       client: CtClient,
+       requiredKeys: readonly string[],
+       parse: (map: Record<string, string>) => T,
+     ): Promise<T>;
+     ```
+   - `src/types.ts` — re-export `CtTask`, `CtComment`,
+     `CtTimeEntry`, `UpsertExternalTaskInput`, etc. from
+     `../../../src/shared/types.ts`. Plugins import from
+     `@central-tracking/plugin-client/types`, never from
+     `central-tracking/src/shared/types.ts`.
+2. Each plugin's `tsconfig.json` gets a path alias:
+   ```json
+   "paths": {
+     "@central-tracking/plugin-client": ["../_shared/src"]
+   }
+   ```
+3. Each plugin's `package.json` gets the local file dep
+   (`"file:../_shared"`) so production bundling works.
+4. Migrate `plugins/ado/` to use the shared package:
+   - Delete `plugins/ado/src/ct-client.ts`.
+   - Rewrite `plugins/ado/src/config.ts` to call `loadConfig` from
+     the shared package, passing ADO-specific defaults and parsing.
+   - `plugins/ado/src/types.ts` re-exports from the shared types
+     module + adds ADO-specific local types.
+
+**Tests.**
+
+- Move the existing `ct-client.test.ts` unit tests into
+  `plugins/_shared/src/__tests__/`.
+- Add an integration test that constructs a `CtClient` with a custom
+  `pluginId` and exercises `listPluginConfig` env shadowing.
+- Existing ADO integration tests should keep passing without changes
+  beyond import path updates.
+
+**Migration notes.** Don't publish to npm yet — local file dep is
+fine. If we ever ship plugins as standalone packages we'll graduate
+this to a real published package then.
+
+**Effort:** M (~1 day). Most of the work is mechanical (move +
+parameterize); the integration test for the env-shadowing path is
+the real value.
+
+---
+
+## P1 — Independent; land any time
+
+### 4. Generic plugin capabilities endpoint
+
+**Problem.** `src/renderer/hooks/usePluginCapabilities.ts:12,28` reads
+a single hardcoded config key (`tracks-reported`) per plugin. The
+moment we add a second capability flag this becomes an N-key fan-out
+with no contract.
+
+**Implementation.**
+
+1. Extend `PluginManifest` (`src/shared/types.ts:345`) with optional
+   `capabilities?: Record<string, unknown>`.
+2. Add a manifest-validation rule in
+   `validatePluginManifest` (`src/main/ipc/pluginHandlers.ts:106-128`):
+   `capabilities` must be a plain JSON object if present (no
+   functions, no nested validation — let plugins evolve their own
+   shapes).
+3. Add `plugins:getCapabilities` IPC handler in
+   `src/main/ipc/pluginHandlers.ts`:
+   ```ts
+   ipcMain.handle('plugins:getCapabilities', (_e) => {
+     return listPlugins(db).map(p => ({
+       id: p.id,
+       enabled: p.enabled,
+       capabilities: p.manifest.capabilities ?? {},
+     }));
+   });
+   ```
+4. Add the route to `src/main/server/apiManifest.ts` with
+   `mutates: false`, no event. (HTTP exposure lets plugins read
+   each other's capabilities if needed.)
+5. Add the typed method to `CentralTrackingAPI` in
+   `src/shared/types.ts:431` (the preload bridge) and to the CLI
+   client at `src/cli/api.ts`.
+6. Rewrite `usePluginCapabilities` to call the new endpoint instead
+   of fanning out N `getConfig` calls. The hook now returns
+   `Record<string, { enabled: boolean; capabilities: unknown }>`.
+   Callers cast to the shape they expect.
+7. Move the existing `tracks-reported` semantics into the ADO
+   manifest under `capabilities.tracksReported: true` (still
+   user-overridable via the config key — capabilities are the
+   default, config keys are the override).
+
+**Tests.**
+
+- Parity test (`apiManifest.parity.test.ts`) catches missing
+  manifest entry automatically.
+- New `usePluginCapabilities.test.tsx` — mock the IPC return,
+  assert the hook surfaces capabilities correctly. Verify it
+  refreshes on `data-changed`.
+- Renderer regression: tasks owned by a plugin whose manifest
+  doesn't declare `tracksReported` should default to `true`
+  (matches the historical config-key default at
+  `usePluginCapabilities.ts:31`).
+
+**Effort:** S (~half day).
+
+---
+
+### 5. Version the webhook envelope
+
+**Problem.** `WebhookEvent` (`src/shared/types.ts:422-427`) has no
+`version` field. Adding a payload field later means plugins either
+tolerate-unknown or break, and the host can't detect a
+version-mismatched plugin.
+
+**Implementation.**
+
+1. Add `version: '1'` to the `WebhookEvent` interface in
+   `src/shared/types.ts:422`.
+2. Set the field at the dispatch site in
+   `src/main/server/httpServer.ts` (wherever the `WebhookEvent`
+   literal is built before calling `dispatchEvent`). One-line
+   change.
+3. Update `plugins/ado/src/index.ts` (the webhook receiver) to
+   read `event.version` and log a warning if it sees an unknown
+   version. No hard failure — plugins should tolerate forward
+   compatibility for additive changes.
+4. Document the field as bump-on-breaking-change in
+   `docs/plugins.md` under the webhook section.
+
+**Tests.**
+
+- Update `webhooks.test.ts` snapshot/assertion to include
+  `version: '1'`.
+
+**Migration notes.** No DB or wire-format break for `'1'` consumers
+since this is additive. The ADO plugin already accepts whatever shape
+we send it; the test is the only thing that pins the shape.
+
+**Effort:** S (~30 min).
+
+---
+
+### 6. Gate `plugins:setEnabled` on required config
+
+**Problem.** `setPluginEnabled` (`src/main/ipc/pluginHandlers.ts:210`,
+registered at line 416) doesn't consult `configSchema`. The UI can
+toggle a plugin on whose webhooks then silently no-op until config
+is set. Compare with `ct plugin run`, which already gates.
+
+**Implementation.**
+
+1. Add a helper in `src/main/ipc/pluginHandlers.ts`:
+   ```ts
+   export function getMissingRequiredKeys(
+     db: Database, pluginId: string,
+   ): string[] {
+     return getPluginConfigSchema(db, pluginId)
+       .filter(s => s.required && s.status === 'unset')
+       .map(s => s.key);
+   }
+   ```
+2. Modify `setPluginEnabled` to call it when `enabled === true`,
+   and throw `new DomainError('INCOMPLETE_CONFIG', \`...keys: ${missing.join(', ')}\`)`.
+3. In the renderer's plugin-toggle handler, catch the
+   `INCOMPLETE_CONFIG` code and surface it as a toast pointing the
+   user to the config UI for that plugin.
+
+**Tests.**
+
+- New IPC test: install a plugin with `configSchema` having a
+  required key; call `setPluginEnabled(id, true)` → expect throw
+  with code `INCOMPLETE_CONFIG`.
+- Setting `enabled = false` is always allowed (no gate).
+- Setting `enabled = true` after the required key is set succeeds.
+
+**Effort:** S (~1 hour including tests).
+
+---
+
+## P2 — Defer until plugin #2 is in flight
+
+### 7. Typed `PluginConfigKeySpec`
+
+**Problem.** Today every config value is a string; each plugin parses
+its own types inline (`Number(map['round-minutes'])` at
+`plugins/ado/src/config.ts:55`, `JSON.parse(map['state-map'])` at line
+44). A typed schema (`type: 'string'|'number'|'boolean'|'json'`,
+optional `enum`/`pattern`/`default`) would let the CLI validate on
+`set` and the renderer render appropriate inputs.
+
+**Why defer.** Until plugin #2 ships and we see whether its config has
+the same shape (likely yes) or something we haven't anticipated, we'd
+be guessing at the schema. Land items 1–6 first, then revisit.
+
+---
+
+### 8. Move `WebhookSubscriber` to the right layer
+
+**Problem.** `src/main/server/webhooks.ts:5` imports `WebhookSubscriber`
+from `src/main/ipc/pluginHandlers.ts`. The IPC handler module is a
+back-channel dependency of the server module.
+
+**Implementation.** Move the type to `src/shared/types.ts` (it's a
+pure data shape) or to `src/main/server/types.ts` (if we want a
+server-local types module). One-line import change at the top of
+`webhooks.ts`.
+
+**Why low priority.** It's a cosmetic / import-cycle-risk fix, not a
+correctness one. Roll it in with the next time someone touches
+`webhooks.ts`.
+
+---
+
+### 9. Don't extract a "plugin utils" package yet
+
+The audit suggested factoring out retry/backoff/rate-limit helpers
+proactively. ADO doesn't yet use these heavily — the only retry-like
+pattern is axios's built-in timeout handling. Pre-factoring before
+seeing what plugin #2 actually needs would create the wrong
+abstraction. Revisit after plugin #2 lands and we have real
+duplication to compare.
+
+---
+
+## Sequencing
+
+Recommended order (also the implementation order if a single dev does
+the work):
+
+1. **P0 bundle:** items 1 + 2 + 3 in one PR. The migration is the
+   gating piece; doing types-move and client-extract in the same PR
+   means only one round of "update all the ADO call sites."
+2. **Item 5** (webhook version). 30-minute change, ship anytime.
+3. **Item 6** (gate setEnabled). 1-hour change with tests.
+4. **Item 4** (capabilities endpoint). Half-day; lands the renderer
+   pattern that future plugins lean on.
+5. P2 items: revisit after plugin #2 has a working POC.
+
+After all of this, a new plugin should be ~50 LOC of glue + its
+sync-specific logic, with no edits to `src/shared/types.ts`, no
+migrations, and no copy-pasted client code.
+
+---
+
+## Handoff log
+
+Newest entry at the top. Each entry should answer:
+- **Done:** what landed (commit hashes, PR numbers).
+- **In flight:** what's mid-implementation, where the cursor is, any
+  WIP commits.
+- **Next:** what the next session should pick up first.
+- **Blockers / open questions:** anything that needs a human decision
+  before proceeding.
+
+Update the **Status** table at the top of this file in the same edit
+so the at-a-glance view stays accurate.
+
+### 2026-05-20 (5) — tsc cleanup (stacked on P1)
+
+- **Done:** `claude/p3-tsc-cleanup` off `claude/p1-plugin-extensibility`.
+  Brings root `tsc --noEmit` from 390 errors to **0** without
+  touching production behaviour. 690 tests still pass.
+  - `src/test/mocks/electron.ts:invoke` is now generic
+    (`invoke<T = any>(channel, …args): Promise<T>`); the 359
+    `TS18046 'cat' is of type 'unknown'` errors across IPC handler
+    tests collapse to zero without per-call type arguments.
+  - `Task`/`TimeEntry`/`TimeEntryWithTask` test fixtures filled
+    in for fields added in migrations 004/006/007:
+    `unreportedTimeSeconds`, `hasUnreportedTime`, `deletedAt`,
+    `externalUrl`/`externalState`/`externalCompletedHours`/
+    `externalRefreshedAt`, `stateDirty`, `reportedAt`. Hits
+    `TaskDetail.{lifecycle,notes,validation}.test.tsx`,
+    `TaskList.groups.test.tsx`, `TimeEntryEditor.test.tsx`,
+    `TimelineView.test.tsx`, `timeline.test.ts`,
+    `timeValidation.test.ts`. `mockTaskContext.{tasks,activeTasks,
+    doneTasks}` typed as `Task[]` so re-assignment doesn't infer
+    `never[]`.
+  - ADO test fixtures: `makeConfig` in `sync.test.ts` /
+    `push-state.test.ts` / `pull.test.ts` / `state-map.test.ts`
+    now sets `tracksReported: true` (added to `AdoConfig` in P1).
+    `sync.test.ts` imports `CtTask`/`CtTimeEntry` from
+    `../types` (the re-export source), not from `../push-time`
+    where they're only locally imported.
+  - `formatters.test.ts`: status/source typed `as const` so the
+    fixture matches `TaskRow`'s narrowed enums.
+  - `import.ts` 'format' subcommand: builder is `{}`, handler
+    wrapped in a block so it returns `void` (yargs overload
+    rejected `boolean` return from `process.stdout.write`).
+  - `CategoryPieCharts.tsx`: `renderTooltip` / `renderLabel`
+    accept the recharts `unknown`-like callback signature and
+    narrow inside (the shape was already implicitly trusted by
+    the snapshot test).
+  - `TimeEntryScrollSentinel.tsx` / `useIntersectionObserver`:
+    return `RefObject<HTMLDivElement>` (not
+    `RefObject<HTMLDivElement | null>`) so the ref props
+    satisfies React 18.3's `LegacyRef<HTMLDivElement>`.
+  - `src/test/setup.ts`: import `beforeEach` from `vitest`,
+    cast `window` via `unknown` first.
+  - `ct-client.test.ts:89`: explicit `(c: unknown[])` on the
+    `.find` callback so noImplicitAny stops flagging it.
+- **In flight:** none.
+- **Next:** Review on `claude/p3-tsc-cleanup`. After P0 → P1 → P3
+  merge in sequence, `tsc --noEmit` at root can be wired into
+  CI without burying real errors under the pre-existing
+  baseline.
+- **Blockers / open questions:** none.
+
+### 2026-05-20 (4) — P1 bundle implemented (stacked on P0)
+
+- **Done:** Items 4, 5, 6 landed on `claude/p1-plugin-extensibility`
+  off `claude/p0-plugin-extensibility`. 690 tests pass (681 going
+  into this branch + 9 new: 3 setEnabled gate + 5 capabilities IPC
+  + 4 hook integration; existing webhooks tests also pick up the
+  envelope-version assertion).
+  - **Item 5 — Webhook envelope version.** `WebhookEvent` gains a
+    required `version: '1'` field (new exported constant
+    `WEBHOOK_ENVELOPE_VERSION`). Dispatch site in `httpServer.ts`
+    sets it on every outgoing envelope. `docs/plugins.md` webhook
+    section now documents the field and the "additive vs
+    breaking" bump rule. Plan called for an ADO receiver update,
+    but ADO doesn't actually run a long-lived webhook receiver
+    (it's a one-shot CLI process), so no plugin-side change is
+    needed.
+  - **Item 6 — Gate setEnabled on required config.** New
+    `getMissingRequiredKeys(db, pluginId)` helper. `setPluginEnabled`
+    throws `DomainError('INCOMPLETE_CONFIG', …)` when called with
+    `enabled = true` and any required key is still unset; disabling
+    is always allowed (no gate). The error message lists the
+    missing keys and points at `ct plugin config set <id> <key>`.
+    The renderer's existing toggle handler already surfaces the
+    message via its error toast (`PluginsSettings.toggle`), so no
+    renderer change was required.
+  - **Item 4 — Capabilities endpoint.** `PluginManifest` extended
+    with optional `capabilities?: Record<string, unknown>`.
+    `validatePluginManifest` enforces "plain object only" (no
+    arrays, no nested schema validation — the surface stays
+    open so plugins can evolve their own flags). New
+    `getPluginCapabilities(db)` handler returns
+    `[{ id, enabled, capabilities }]`. Wired into IPC
+    (`plugins:getCapabilities`), HTTP (`plugins/getCapabilities`,
+    `mutates: false`, no event), the preload bridge, the CLI
+    client, and the renderer hook. `usePluginCapabilities` no
+    longer fans out one `getConfig` per plugin for the
+    `tracks-reported` default: it reads the manifest default from
+    `capabilities.tracksReported`, then applies the user-set
+    config-key override on top (precedence: config-key > manifest
+    capability > historical `true`). The ADO `plugin.json` now
+    declares `"capabilities": { "tracksReported": true }` so the
+    default is sourced from the manifest, not buried in the hook.
+    The mock at `src/test/mocks/api.ts` gained a
+    `getCapabilities` stub so existing tests keep working.
+- **In flight:** none.
+- **Next:** Code review on `claude/p1-plugin-extensibility`. After
+  P0 merges into the recommendations branch, this PR can be
+  re-targeted at the recommendations branch (or just merged in
+  sequence). P2 items 7, 8, 9 stay deferred until plugin #2 has a
+  working POC.
+- **Blockers / open questions:** none.
+
+### 2026-05-20 (3) — P0 bundle implemented
+
+- **Done:** All three P0 items landed on branch
+  `claude/p0-plugin-extensibility` (off
+  `claude/review-codebase-recommendations-mMBQ8`). 678 tests pass (665
+  existing + 13 new in the shared package).
+  - **Item 1** — Migration **009** (not 008; 008 was already taken by
+    `plugins.source`) recreates `tasks` with the FK
+    `plugin_id REFERENCES plugins(id) ON DELETE RESTRICT`, a CHECK
+    constraint scoping `source` to `('ad-hoc','email','meeting-prep','plugin')`,
+    and the new `UNIQUE (plugin_id, external_id) WHERE external_id IS NOT NULL`
+    index. Backfill: `source='ado'` rows become `source='plugin',
+    plugin_id='ado'` when the ADO plugin row exists; orphans (legacy
+    `source='ado'` with no `plugins.ado` row) get `plugin_id=NULL`.
+    `runMigrations` gained an optional `upTo` argument so tests can run
+    migrations up to v8 and validate the v9 transition.
+    - `UpsertExternalTaskInput.pluginId` is now required; matching is
+      on `(plugin_id, external_id)`; `source='plugin'` is forced on
+      insert. ADO push-time/push-state filter via
+      `getTasks({ pluginId: 'ado', … })` instead of the old
+      `source: ['ado']`; `getPendingSyncComments` filters by
+      `t.plugin_id`. `linkTaskToPlugin` always sets `source='plugin'`
+      on mirror (the `pluginId === 'ado'` special case is gone).
+      `updateTask` FSM check moved from `source==='ado'` to
+      `plugin_id==='ado'`.
+    - `uninstallPlugin(db, id, { convertTasksToAdHoc })` is the new
+      shape. Preflight returns `{ requiresConfirmation: true, taskCount }`;
+      the convert phase runs one transaction that clears
+      `external_*`/`plugin_id`/`state_dirty`, resets `source='ad-hoc'`,
+      clears `comments.external_id` on owned tasks, and deletes the
+      plugin row (sideloaded only). CLI: `ct plugin uninstall <id>`
+      prompts in TTY; `--force` skips the prompt and is required in
+      `--json` mode. Renderer confirm dialog deferred to a follow-up
+      (the renderer's plugins-settings UI doesn't yet expose an
+      uninstall button at all; CLI is the supported path today).
+    - Importer downgrade: `importExecutor` now nulls out
+      `pluginId`/falls back to `source='ad-hoc'` when the markdown
+      parser tagged a numeric ticket as `pluginId='ado'`/`'jira'` but
+      the plugin row isn't installed, so the new FK doesn't block
+      imports in fresh DBs.
+  - **Item 2** — `AdoStateMapEntry`/`AdoStateMap`/`ADO_DEFAULT_STATE_MAP`
+    moved from `src/shared/types.ts` to `plugins/ado/src/types.ts`.
+    `plugins/ado/src/state-map.ts` and `config.ts` now use the named
+    types instead of the inline structural one. The renderer doesn't
+    import these (it never did); when it needs a plugin state map it
+    will go through the per-plugin capabilities endpoint (P1).
+  - **Item 3** — New workspace `plugins/_shared` (`@central-tracking/plugin-client`)
+    holds the `CtClient`, `loadConfig`, and shared payload types.
+    Composite TS project with declaration output; ADO's tsconfig has
+    `references: [{ path: '../_shared' }]` and a path alias to
+    `../_shared/dist`. `plugins/ado/src/{ct-client.ts,types.ts}` are
+    now thin re-export shims. `CtClient`'s constructor takes
+    `pluginId` as a required first arg (the previous `CT_PLUGIN_ID`
+    env fallback is gone — explicit beats implicit). `loadConfig` is
+    generic: `(client, requiredKeys, parse)` factors the
+    required-key gate so each plugin keeps only the parse step. Tests
+    added at `plugins/_shared/src/__tests__/{ct-client,load-config}.test.ts`
+    cover env-shadowing and missing-key gating against a non-ADO
+    pluginId (`jira`) to prove the surface is plugin-agnostic.
+- **In flight:** none.
+- **Next:** Code review on `claude/p0-plugin-extensibility`; merge.
+  P1 items 4/5/6 are independent and can pick up afterwards in any
+  order.
+- **Blockers / open questions:**
+  - The renderer's plugin-settings UI doesn't have an uninstall
+    button today. The new `uninstallPlugin` preflight + convert shape
+    is fully wired in the IPC, HTTP API, and CLI; adding the renderer
+    dialog is purely additive UI work and can land any time after
+    this PR.
+  - Existing root-level `npx tsc --noEmit` reports 390 errors — same
+    count as before this branch (all in renderer test setup and
+    third-party recharts/test scaffolding). No new errors introduced.
+
+### 2026-05-20 (2) — Open questions resolved
+
+- **Done:** Both open questions answered by product. Plan updated:
+  - Item 1: uninstall **does not** gate on associated tasks. New
+    `convertTasksToAdHoc` flag added to `uninstallPlugin`; preflight
+    returns task count, confirm runs a transaction that clears
+    `external_*` fields and flips `source='ad-hoc'`. FK is
+    `ON DELETE RESTRICT` purely as a safety net — the explicit
+    handler is the supported path. CLI gets `--force` for
+    non-interactive use. (See item 1 step 6 and new test cases.)
+  - Item 3: `plugins/_shared/` confirmed. Stays in the main repo as
+    "code plugins build against; not owned by main app or any single
+    plugin." No monorepo move needed.
+- **In flight:** none.
+- **Next:** start P0 item 1 implementation — migration 008 +
+  `pluginId` column + updated `upsertExternal` + uninstall handler
+  with the new flag. Recommend a single feature branch off
+  `claude/review-codebase-recommendations-mMBQ8` (or `main` once
+  this plan merges). Items 2 and 3 can begin once item 1's schema
+  change is in PR review.
+- **Blockers / open questions:** none.
+
+### 2026-05-20 — Plan created
+
+- **Done:** Audit + ranked recommendations. Plan committed
+  (`ecf11ec`) and pushed to
+  `claude/review-codebase-recommendations-mMBQ8`. P0/P1/P2 grouping
+  agreed. Status table + handoff log structure added.
+- **In flight:** none.
+- **Next:** start P0 item 1 (migration 008 + `pluginId` column + 
+  `(plugin_id, external_id)` unique index). Item 1 is the gating
+  schema change; items 2 and 3 can begin once 1 is at PR-ready state.
+- **Blockers / open questions:**
+  - Item 1 step 1: should sideloaded-plugin uninstall grow a
+    `tasks-owned` refusal, or just succeed and orphan the task rows?
+    Current uninstall (`uninstallPlugin` in `pluginHandlers.ts`)
+    refuses bundled plugins only. The migration introduces an FK
+    that would otherwise fail loudly on uninstall — easier to make
+    that an explicit check.
+  - Item 3: confirm `plugins/_shared/` (local file dep) is the right
+    landing place vs `packages/plugin-client/` if we ever want a
+    monorepo layout. Not blocking — can move later.

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { AdoConfig } from '../config';
-import { _internals } from '../pull';
-import type { AdoWorkItem } from '../types';
+import { _internals, refresh } from '../pull';
+import type { AdoWorkItem, CtTask } from '../types';
+import type { AdoClient } from '../ado-client';
+import type { CtClient } from '../ct-client';
 import TurndownService from 'turndown';
 
 const { buildWiql, buildTaskInput } = _internals;
@@ -17,6 +19,7 @@ function makeConfig(overrides: Partial<AdoConfig> = {}): AdoConfig {
     workItemTypes: ['User Story', 'Bug', 'Task'],
     pullClosed: false,
     autoCommentOnTimePush: false,
+    tracksReported: true,
     stateMap: null,
     ...overrides,
   };
@@ -64,7 +67,7 @@ describe('buildWiql', () => {
 describe('buildTaskInput', () => {
   const turndown = new TurndownService();
 
-  it('produces source=ado, title with #id - title, mirror fields populated', () => {
+  it('produces pluginId=ado, title with #id - title, mirror fields populated', () => {
     const config = makeConfig();
     const unmapped: { id: number; state: string }[] = [];
     const input = buildTaskInput(
@@ -79,7 +82,7 @@ describe('buildTaskInput', () => {
       }),
       unmapped,
     );
-    expect(input.source).toBe('ado');
+    expect(input.pluginId).toBe('ado');
     expect(input.externalId).toBe('42');
     expect(input.title).toBe('#42 - Build the widget');
     expect(input.status).toBe('in-progress');
@@ -114,5 +117,70 @@ describe('buildTaskInput', () => {
     const config = makeConfig();
     const input = buildTaskInput(config, turndown, makeWorkItem({ id: 2 }), []);
     expect(input.notes).toBe('');
+  });
+});
+
+describe('refresh — full-mirror gate', () => {
+  function makeCtTask(overrides: Partial<CtTask> = {}): CtTask {
+    return {
+      id: 'ct-1',
+      title: '#100 - Sample',
+      status: 'todo',
+      source: 'plugin',
+      pluginId: 'ado',
+      externalId: '100',
+      externalUrl: null,
+      externalState: 'New',
+      externalCompletedHours: 0,
+      externalRefreshedAt: null,
+      stateDirty: false,
+      notes: '',
+      unreportedTimeSeconds: 0,
+      hasUnreportedTime: false,
+      ...overrides,
+    };
+  }
+
+  function makeCt(task: CtTask | null): CtClient {
+    return {
+      getTaskById: vi.fn().mockResolvedValue(task),
+      // The fail-fast tests below never reach these; stub just enough so the
+      // type system is happy.
+      upsertExternalTask: vi.fn(),
+      upsertExternalComment: vi.fn(),
+    } as unknown as CtClient;
+  }
+
+  const adoStub = {
+    getWorkItem: vi.fn(),
+    getWorkItemComments: vi.fn(),
+  } as unknown as AdoClient;
+
+  it('rejects link-only ADO tasks (pluginId=ado, source != plugin)', async () => {
+    const ct = makeCt(makeCtTask({ source: 'ad-hoc' }));
+    await expect(refresh(adoStub, ct, makeConfig(), 'ct-1')).rejects.toThrow(
+      /not an ado full-mirror task.*source=ad-hoc/,
+    );
+  });
+
+  it('rejects tasks owned by a different plugin', async () => {
+    const ct = makeCt(makeCtTask({ pluginId: 'jira', source: 'plugin' }));
+    await expect(refresh(adoStub, ct, makeConfig(), 'ct-1')).rejects.toThrow(
+      /pluginId=jira/,
+    );
+  });
+
+  it('rejects tasks with no externalId', async () => {
+    const ct = makeCt(makeCtTask({ externalId: null }));
+    await expect(refresh(adoStub, ct, makeConfig(), 'ct-1')).rejects.toThrow(
+      /not an ado full-mirror task/,
+    );
+  });
+
+  it('throws when the ct task does not exist', async () => {
+    const ct = makeCt(null);
+    await expect(refresh(adoStub, ct, makeConfig(), 'missing')).rejects.toThrow(
+      /not found/,
+    );
   });
 });

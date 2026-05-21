@@ -5,6 +5,7 @@ import { generateToken, writeServerFile, removeServerFile, isValidToken, isValid
 import { buildRouteMap } from './apiManifest';
 import { dispatchEvent } from './webhooks';
 import { DomainError } from '../errors';
+import { WEBHOOK_ENVELOPE_VERSION } from '../../shared/types';
 
 export { apiManifest, buildRouteMap } from './apiManifest';
 export type { ApiRoute } from './apiManifest';
@@ -115,7 +116,13 @@ export async function startHttpServer(
           void dispatchEvent(
             db,
             token,
-            { event: route.event, route: route.route, data: result, timestamp: new Date().toISOString() },
+            {
+              version: WEBHOOK_ENVELOPE_VERSION,
+              event: route.event,
+              route: route.route,
+              data: result,
+              timestamp: new Date().toISOString(),
+            },
             (msg) => process.stderr.write(`${msg}\n`),
           );
         }

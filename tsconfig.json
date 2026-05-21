@@ -17,7 +17,8 @@
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@main/*": ["src/main/*"],
-      "@renderer/*": ["src/renderer/*"]
+      "@renderer/*": ["src/renderer/*"],
+      "@central-tracking/plugin-client": ["plugins/_shared/src"]
     }
   },
   "exclude": ["node_modules", "dist"]

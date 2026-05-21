@@ -111,14 +111,59 @@ describe('ct plugin enable / disable / uninstall', () => {
     expect(calls).toEqual([{ endpoint: 'plugins/setEnabled', args: ['ado', false] }]);
   });
 
-  it('uninstall posts plugins/uninstall', async () => {
+  it('uninstall with no tasks posts preflight then converts', async () => {
+    const responses: Record<string, unknown> = {};
+    let pluginsUninstallCallIdx = 0;
+    responses['plugins/uninstall'] = () => {
+      const idx = pluginsUninstallCallIdx++;
+      if (idx === 0) return { requiresConfirmation: true, taskCount: 0 };
+      return { uninstalled: true, convertedTasks: 0 };
+    };
     const { calls, stdout } = await runCli(
       registerPluginCommands,
       ['plugin', 'uninstall', 'ado'],
-      { responses: { 'plugins/uninstall': undefined } },
+      { responses },
     );
-    expect(calls).toEqual([{ endpoint: 'plugins/uninstall', args: ['ado'] }]);
+    expect(calls).toEqual([
+      { endpoint: 'plugins/uninstall', args: ['ado', {}] },
+      { endpoint: 'plugins/uninstall', args: ['ado', { convertTasksToAdHoc: true }] },
+    ]);
     expect(stdout).toContain('Uninstalled plugin ado');
+  });
+
+  it('uninstall with referencing tasks aborts in --json without --force', async () => {
+    const responses: Record<string, unknown> = {
+      'plugins/uninstall': () => ({ requiresConfirmation: true, taskCount: 5 }),
+    };
+    const { calls, stderr, exitCode } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'uninstall', 'ado', '--json'],
+      { responses },
+    );
+    expect(calls).toEqual([{ endpoint: 'plugins/uninstall', args: ['ado', {}] }]);
+    expect(stderr).toMatch(/5 task\(s\)/);
+    expect(stderr).toMatch(/--force/);
+    expect(exitCode).toBe(1);
+  });
+
+  it('uninstall --force skips the prompt and converts referencing tasks', async () => {
+    const responses: Record<string, unknown> = {};
+    let pluginsUninstallCallIdx = 0;
+    responses['plugins/uninstall'] = () => {
+      const idx = pluginsUninstallCallIdx++;
+      if (idx === 0) return { requiresConfirmation: true, taskCount: 3 };
+      return { uninstalled: true, convertedTasks: 3 };
+    };
+    const { calls, stdout } = await runCli(
+      registerPluginCommands,
+      ['plugin', 'uninstall', 'ado', '--force'],
+      { responses },
+    );
+    expect(calls).toEqual([
+      { endpoint: 'plugins/uninstall', args: ['ado', {}] },
+      { endpoint: 'plugins/uninstall', args: ['ado', { convertTasksToAdHoc: true }] },
+    ]);
+    expect(stdout).toMatch(/converted 3 task/);
   });
 });
 

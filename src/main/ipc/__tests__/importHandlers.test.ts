@@ -36,6 +36,21 @@ describe('Import IPC Handlers', () => {
     taskIpc = createMockIpcMain();
     registerImportHandlers(ipc as never, db);
     registerTaskHandlers(taskIpc as never, db);
+    // The markdownParser tags numeric tickets as plugin_id='ado' and TK-* as
+    // 'jira'. Install both so the FK on tasks.plugin_id is satisfied; without
+    // the plugins row, the importer transparently downgrades to ad-hoc.
+    db.instance
+      .prepare(
+        `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+         VALUES (?, ?, '1.0.0', 1, '{}', datetime('now'), 'sideloaded')`,
+      )
+      .run('ado', 'ADO');
+    db.instance
+      .prepare(
+        `INSERT INTO plugins (id, name, version, enabled, manifest, installed_at, source)
+         VALUES (?, ?, '1.0.0', 1, '{}', datetime('now'), 'sideloaded')`,
+      )
+      .run('jira', 'Jira');
   });
 
   afterEach(() => {

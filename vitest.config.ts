@@ -7,6 +7,7 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, 'src/shared'),
       '@main': path.resolve(__dirname, 'src/main'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
+      '@central-tracking/plugin-client': path.resolve(__dirname, 'plugins/_shared/src'),
     },
   },
   define: {
