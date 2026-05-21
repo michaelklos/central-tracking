@@ -241,11 +241,27 @@ export function uninstallPlugin(
            AND external_id IS NOT NULL`,
       )
       .run(id);
+    // Full-mirror tasks (source='plugin'): reset source to 'ad-hoc' since
+    // the plugin owned title/notes/status. Link-only tasks keep their
+    // original source (e.g. 'email', 'meeting-prep', 'ad-hoc') — the
+    // plugin link was incidental, not identity-defining.
+    db.instance
+      .prepare(
+        `UPDATE tasks SET
+           source = 'ad-hoc',
+           updated_at = datetime('now')
+         WHERE plugin_id = ? AND source = 'plugin'`,
+      )
+      .run(id);
+    // Clear plugin_id + all mirror fields on every referencing task,
+    // regardless of mode. external_url/state/completed/refreshed are
+    // only ever populated on mirrors so this is a no-op for link-only,
+    // but the explicit clear keeps the post-uninstall state consistent
+    // even if a future feature populated them via the link surface.
     db.instance
       .prepare(
         `UPDATE tasks SET
            plugin_id = NULL,
-           source = 'ad-hoc',
            external_id = NULL,
            external_url = NULL,
            external_state = NULL,

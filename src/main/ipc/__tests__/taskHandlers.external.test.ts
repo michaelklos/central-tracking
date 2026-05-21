@@ -172,6 +172,24 @@ describe('Task external mirror (plugin support)', () => {
     expect(updated.status).toBe('todo');
   });
 
+  it('updateTask does NOT enforce FSM on link-only ADO tasks (source != plugin)', () => {
+    // Link-only: user linked an existing ad-hoc task to an ADO work item for
+    // time/comment push convenience, but source stays 'ad-hoc' so the task
+    // remains user-owned. FSM gating + state_dirty must be skipped.
+    db.instance
+      .prepare(
+        `INSERT INTO tasks (id, title, status, source, plugin_id, external_id)
+         VALUES ('link', 'Linked', 'in-progress', 'ad-hoc', 'ado', '1234')`,
+      )
+      .run();
+    // in-progress → todo is illegal for full mirrors but must be allowed here.
+    const updated = updateTask(db, 'link', { status: 'todo' });
+    expect(updated.status).toBe('todo');
+    expect(updated.stateDirty).toBe(false);
+    // Source survives the status edit too.
+    expect(updated.source).toBe('ad-hoc');
+  });
+
   it('upsertExternalTask preserves pending status when state_dirty=1', () => {
     const task = upsertExternalTask(db, {
       pluginId: 'ado',

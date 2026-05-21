@@ -407,13 +407,23 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
   }
 
   if (updates.status !== undefined) {
-    // ADO-mirrored tasks: enforce FSM and mark state_dirty so the plugin
-    // pushes the new state on next sync. Plugin clears the flag via
-    // setExternalState after a successful push. Non-ADO tasks: no constraint.
+    // ADO full-mirror tasks (source='plugin' AND plugin_id='ado'): enforce
+    // FSM and mark state_dirty so push-state syncs the new state. Plugin
+    // clears the flag via setExternalState after a successful push.
+    //
+    // Link-only ADO tasks (plugin_id='ado' but source != 'plugin', e.g.
+    // 'ad-hoc' or 'email') are NOT FSM-gated and NOT marked state_dirty.
+    // The user added a link for time/comment push convenience; status is
+    // still local-only and free to move in any direction.
     const current = db.instance
-      .prepare('SELECT plugin_id, status FROM tasks WHERE id = ?')
-      .get(id) as { plugin_id: string | null; status: string } | undefined;
-    if (current && current.plugin_id === 'ado' && current.status !== updates.status) {
+      .prepare('SELECT plugin_id, source, status FROM tasks WHERE id = ?')
+      .get(id) as { plugin_id: string | null; source: string; status: string } | undefined;
+    if (
+      current &&
+      current.plugin_id === 'ado' &&
+      current.source === 'plugin' &&
+      current.status !== updates.status
+    ) {
       if (!isAllowedAdoTransition(current.status as TaskStatus, updates.status as TaskStatus)) {
         throw new DomainError(
           'INVALID_ADO_TRANSITION',

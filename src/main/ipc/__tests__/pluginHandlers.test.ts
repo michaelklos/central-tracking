@@ -309,6 +309,61 @@ describe('pluginHandlers', () => {
         /FOREIGN KEY/i,
       );
     });
+
+    it('preserves source on link-only tasks; only full-mirror rows reset to ad-hoc', () => {
+      installPlugin(db, { id: 'p', name: 'P', version: '1' });
+      db.instance
+        .prepare(
+          `INSERT INTO tasks (id, title, source, plugin_id, external_id, external_url, external_state)
+           VALUES
+             -- Full mirror: plugin owns it; convert should reset source.
+             ('mirror', 'Mirror', 'plugin', 'p', '500', 'https://x/500', 'Active'),
+             -- Link-only with source='ad-hoc': plugin_id and external_id are
+             -- the only plugin-touched columns; source must survive.
+             ('link-adhoc', 'Link AdHoc', 'ad-hoc', 'p', '501', null, null),
+             -- Link-only with a non-default source: the convert MUST NOT
+             -- rewrite the user-chosen provenance ('email', 'meeting-prep'
+             -- etc.).
+             ('link-email', 'Link Email', 'email', 'p', '502', null, null),
+             ('link-meet',  'Link Meet',  'meeting-prep', 'p', '503', null, null)`,
+        )
+        .run();
+
+      const result = uninstallPlugin(db, 'p', { convertTasksToAdHoc: true });
+      expect(result).toEqual({ uninstalled: true, convertedTasks: 4 });
+
+      const rows = db.instance
+        .prepare('SELECT id, source, plugin_id, external_id, external_url, external_state FROM tasks ORDER BY id')
+        .all() as Array<{
+          id: string;
+          source: string;
+          plugin_id: string | null;
+          external_id: string | null;
+          external_url: string | null;
+          external_state: string | null;
+        }>;
+      const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+
+      // Full mirror: source reset, all mirror fields cleared.
+      expect(byId.mirror.source).toBe('ad-hoc');
+      expect(byId.mirror.plugin_id).toBeNull();
+      expect(byId.mirror.external_id).toBeNull();
+      expect(byId.mirror.external_url).toBeNull();
+      expect(byId.mirror.external_state).toBeNull();
+
+      // Link-only: source preserved, link cleared.
+      expect(byId['link-adhoc'].source).toBe('ad-hoc');
+      expect(byId['link-adhoc'].plugin_id).toBeNull();
+      expect(byId['link-adhoc'].external_id).toBeNull();
+
+      expect(byId['link-email'].source).toBe('email');
+      expect(byId['link-email'].plugin_id).toBeNull();
+      expect(byId['link-email'].external_id).toBeNull();
+
+      expect(byId['link-meet'].source).toBe('meeting-prep');
+      expect(byId['link-meet'].plugin_id).toBeNull();
+      expect(byId['link-meet'].external_id).toBeNull();
+    });
   });
 
   describe('setPluginEnabled', () => {

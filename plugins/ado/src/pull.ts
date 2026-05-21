@@ -175,8 +175,16 @@ export async function refresh(
   const warnings: string[] = [];
   const existing = await ct.getTaskById(ctTaskId);
   if (!existing) throw new Error(`ct task ${ctTaskId} not found`);
-  if (existing.pluginId !== 'ado' || !existing.externalId) {
-    throw new Error(`ct task ${ctTaskId} is not an ado-mirrored task`);
+  // refresh overwrites title/notes/status from ADO. That's only safe on
+  // full mirrors (source='plugin') — link-only tasks are user-owned and
+  // would lose local edits. Reject link-only with a clear message so the
+  // caller knows to use `ct task update` or upgrade the link to a mirror.
+  if (existing.pluginId !== 'ado' || existing.source !== 'plugin' || !existing.externalId) {
+    throw new Error(
+      `ct task ${ctTaskId} is not an ado full-mirror task ` +
+        `(source=${existing.source}, pluginId=${existing.pluginId ?? 'null'}); ` +
+        `refresh requires source='plugin' and pluginId='ado'`,
+    );
   }
   const workItemId = Number(existing.externalId);
   if (!Number.isFinite(workItemId)) {
