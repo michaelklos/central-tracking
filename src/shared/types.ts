@@ -362,9 +362,13 @@ export interface PluginManifest {
    * - `tracksReported: boolean` — when false, the renderer hides
    *   unreported badges/batch actions for tasks owned by this plugin.
    *
-   * Capabilities are defaults: a user-set config key with the same name
-   * still overrides at the plugin/runtime level (e.g. `tracks-reported`
-   * remains a settable config key for ADO).
+   * Capabilities are defaults; a user-set plugin_config key overrides at
+   * the plugin/runtime level. The override key follows the kebab-case
+   * config-key convention (e.g. `tracks-reported`) while the capability
+   * uses camelCase (`tracksReported`) — they refer to the same flag with
+   * different naming conventions on each side of the bridge.
+   * `usePluginCapabilities` in the renderer is responsible for mapping
+   * one to the other.
    */
   capabilities?: Record<string, unknown>;
 }

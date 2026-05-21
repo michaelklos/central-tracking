@@ -105,7 +105,17 @@ export function validatePluginManifest(input: unknown): PluginManifest {
     }
   }
   if (m.capabilities !== undefined) {
-    if (!m.capabilities || typeof m.capabilities !== 'object' || Array.isArray(m.capabilities)) {
+    if (
+      !m.capabilities ||
+      typeof m.capabilities !== 'object' ||
+      Array.isArray(m.capabilities) ||
+      // Reject Date / Map / Set / class instances etc. Manifests come from
+      // `plugin.json` (JSON.parse output is always plain), so this guards
+      // the in-process registerBundledPlugin path against handing weird
+      // shapes to consumers.
+      (Object.getPrototypeOf(m.capabilities) !== Object.prototype &&
+        Object.getPrototypeOf(m.capabilities) !== null)
+    ) {
       throw new Error('Plugin manifest "capabilities" must be a plain object');
     }
   }
@@ -300,8 +310,12 @@ export function getPlugin(db: Database, id: string): Plugin | null {
 
 /**
  * Returns the manifest-declared required keys that have no value persisted.
- * Used by setPluginEnabled and the CLI's `plugin run` gate to refuse to
- * activate a plugin whose webhooks would silently no-op.
+ * Used by setPluginEnabled to refuse enabling a plugin whose required
+ * config is incomplete (otherwise webhook delivery silently no-ops).
+ *
+ * `ct plugin run` has its own gate based on the same configSchema — kept
+ * separate so the run gate can fire even on a disabled plugin (CLI users
+ * may opt into one-shot runs without flipping enabled).
  */
 export function getMissingRequiredKeys(db: Database, pluginId: string): string[] {
   return getPluginConfigSchema(db, pluginId)
@@ -330,8 +344,9 @@ export function setPluginEnabled(db: Database, id: string, enabled: boolean): Pl
   // unset, which silently no-ops. Refuse with a domain code the renderer
   // can catch and surface as "open the config panel".
   if (enabled) {
-    const plugin = getPlugin(db, id);
-    if (!plugin) throw new Error(`Plugin not found: ${id}`);
+    // Confirm the plugin exists before checking config — otherwise an unknown
+    // id would surface as "missing required config" instead of "not found".
+    if (!getPlugin(db, id)) throw new Error(`Plugin not found: ${id}`);
     const missing = getMissingRequiredKeys(db, id);
     if (missing.length) {
       throw new DomainError(

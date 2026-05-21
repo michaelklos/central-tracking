@@ -199,6 +199,29 @@ describe('pluginHandlers', () => {
         validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: [1, 2] }),
       ).toThrow(/capabilities/);
     });
+
+    it('rejects capabilities backed by a non-plain class instance', () => {
+      // Manifests parsed from plugin.json can't produce a Date — but
+      // registerBundledPlugin takes an in-process object and a careless
+      // caller could hand over a class instance. Defensive guard.
+      expect(() =>
+        validatePluginManifest({
+          id: 'c', name: 'C', version: '1', capabilities: new Date() as unknown as Record<string, unknown>,
+        }),
+      ).toThrow(/capabilities/);
+      expect(() =>
+        validatePluginManifest({
+          id: 'c', name: 'C', version: '1', capabilities: new Map() as unknown as Record<string, unknown>,
+        }),
+      ).toThrow(/capabilities/);
+    });
+
+    it('accepts a null-prototype object as capabilities', () => {
+      const caps = Object.create(null);
+      caps.tracksReported = true;
+      const m = validatePluginManifest({ id: 'c', name: 'C', version: '1', capabilities: caps });
+      expect(m.capabilities?.tracksReported).toBe(true);
+    });
   });
 
   describe('registerBundledPlugin', () => {
