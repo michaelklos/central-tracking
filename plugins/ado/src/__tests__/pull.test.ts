@@ -19,6 +19,7 @@ function makeConfig(overrides: Partial<AdoConfig> = {}): AdoConfig {
     workItemTypes: ['User Story', 'Bug', 'Task'],
     pullClosed: false,
     autoCommentOnTimePush: false,
+    tracksReported: true,
     stateMap: null,
     ...overrides,
   };

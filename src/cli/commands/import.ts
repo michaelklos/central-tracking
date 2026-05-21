@@ -83,8 +83,10 @@ export function registerImportCommands(yargs: Argv): Argv {
       .command(
         'format',
         'Show the expected import file format',
-        () => {},
-        () => process.stdout.write(FORMAT_REFERENCE),
+        {},
+        () => {
+          process.stdout.write(FORMAT_REFERENCE);
+        },
       )
       .command(
         'preview <file>',

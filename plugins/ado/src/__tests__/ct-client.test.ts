@@ -86,7 +86,7 @@ describe('CtClient.listPluginConfig env override', () => {
   it('passes reveal:true to listConfig so HTTP returns cleartext', async () => {
     mockResponses({ 'plugins/listConfig': [], 'plugins/schema': [] });
     await client.listPluginConfig();
-    const listArgs = callSpy.mock.calls.find((c) => c[0] === 'plugins/listConfig')?.[1] as unknown[];
+    const listArgs = callSpy.mock.calls.find((c: unknown[]) => c[0] === 'plugins/listConfig')?.[1] as unknown[];
     expect(listArgs).toEqual(['ado', { reveal: true }]);
   });
 });

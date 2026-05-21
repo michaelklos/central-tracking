@@ -79,8 +79,8 @@ describe('formatTaskTable', () => {
       {
         id: '12345678-1234-1234-1234-123456789abc',
         title: 'Test Task',
-        status: 'todo',
-        source: 'ad-hoc',
+        status: 'todo' as const,
+        source: 'ad-hoc' as const,
         totalTimeSeconds: 3600,
         todayTimeSeconds: 300,
         categoryIds: [],
