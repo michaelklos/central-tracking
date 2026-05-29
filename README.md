@@ -1217,10 +1217,12 @@ Builds unsigned distributable(s) locally:
 ```bash
 npm run dist        # both platforms (only works on the current OS)
 npm run dist:mac    # macOS: .dmg + .zip (x64 and arm64)
-npm run dist:win    # Windows: NSIS installer (x64)
+npm run dist:win    # Windows: NSIS installer + .zip (x64)
 ```
 
 Output goes to `release/`. Unsigned builds run fine for local testing; macOS will show a Gatekeeper warning and Windows may show a SmartScreen prompt.
+
+The Windows build emits **both** an NSIS installer (`.exe`) and a portable **`.zip`**. The zip is a no-installer fallback for locked-down machines: NSIS extracts and loads helper DLLs (`System.dll`) from `%TEMP%` at startup, and corporate endpoint security (AppLocker/WDAC DLL rules, Defender ASR, EDR) can block that, causing the installer to fail — sometimes silently. The zip has no installer and no temp extraction: unzip it anywhere the user can write and run `Central Tracking.exe` in place. Note that the zip does **not** set up the `ct` CLI wrapper or PATH entry (the installer does that); set those up manually if needed.
 
 ## Upgrading
 
@@ -1240,6 +1242,8 @@ User data (database, CLI wrapper, settings) is stored outside the application bu
 ### Windows
 
 **Pre-compiled (.exe):** Run the new NSIS installer — it overwrites the existing installation in place. The `ct.cmd` wrapper is rewritten by the installer.
+
+**Pre-compiled (.zip):** For machines where the installer is blocked by security policy, download the `.zip` instead, delete the old extracted folder, and unzip the new one in its place. Your data lives in `%APPDATA%\central-tracking\` and is unaffected.
 
 **Code-built:** `git pull && npm install && npm run build`
 
