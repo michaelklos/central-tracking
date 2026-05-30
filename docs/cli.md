@@ -42,11 +42,18 @@ Commands:
   ct task get <id>              Get a task by ID
   ct task create <title>        Create a new task
   ct task update <id>           Update a task
-  ct task delete <ids..>        Soft-delete task(s)
-  ct task restore <ids..>       Restore deleted task(s)
+  ct task delete [ids..]        Soft-delete task(s)
+  ct task restore [ids..]       Restore deleted task(s)
   ct task purge                 Permanently delete task(s)
   ct task reorder <ids..>       Set task sort order
   ct task batch-update <ids..>  Batch update tasks
+  ct task report <id>           Mark all un-reported time entries on a task as
+                                reported
+  ct task link <id>             Link a task to a remote ticket served by a
+                                plugin
+  ct task unlink <id>           Remove the plugin link from a task
+  ct task unreport <id>         Reset reported state on every time entry of a
+                                task
 
 Options:
       --version  Show version number                                   [boolean]
@@ -64,23 +71,30 @@ ct task list
 List tasks
 
 Options:
-      --version   Show version number                                  [boolean]
-      --json      Output in JSON format               [boolean] [default: false]
-      --debug     Log HTTP request/response to stderr [boolean] [default: false]
-      --timeout   Request timeout in seconds              [number] [default: 10]
-      --done      Show completed tasks                                 [boolean]
-      --deleted   Show deleted tasks (recycle bin)                     [boolean]
-      --all       Show all tasks                                       [boolean]
-  -s, --search    Search title and description                          [string]
-      --status    Filter by status                                      [string]
-      --source    Filter by source                                      [string]
-      --category  Filter by category ID                                 [string]
-      --sort      Sort: manual|recent|created|alphabetical|most-time-today
+      --version         Show version number                            [boolean]
+      --json            Output in JSON format         [boolean] [default: false]
+      --debug           Log HTTP request/response to stderr
+                                                      [boolean] [default: false]
+      --timeout         Request timeout in seconds        [number] [default: 10]
+      --done            Show completed tasks                           [boolean]
+      --deleted         Show deleted tasks (recycle bin)               [boolean]
+      --all             Show all tasks                                 [boolean]
+  -s, --search          Search title and description                    [string]
+      --status          Filter by status                                [string]
+      --source          Filter by source                                [string]
+      --category        Filter by category ID                           [string]
+      --has-unreported  Show only tasks with un-reported time entries  [boolean]
+      --uncategorized   Show only tasks with no categories assigned    [boolean]
+      --date-start      Only tasks with a time entry on/after YYYY-MM-DD[string]
+      --date-end        Only tasks with a time entry on/before YYYY-MM-DD
+                        (inclusive end-of-day)                          [string]
+      --sort            Sort: manual|recent|created|alphabetical|most-time-today
                                                                         [string]
-      --limit     Max results                             [number] [default: 50]
-      --offset    Skip results                             [number] [default: 0]
-      --full-id   Show full UUID instead of prefix    [boolean] [default: false]
-  -h, --help      Show help                                            [boolean]
+      --limit           Max results                       [number] [default: 50]
+      --offset          Skip results                       [number] [default: 0]
+      --full-id         Show full UUID instead of prefix
+                                                      [boolean] [default: false]
+  -h, --help            Show help                                      [boolean]
 ```
 
 #### `ct task get`
@@ -152,36 +166,39 @@ Options:
 #### `ct task delete`
 
 ```
-ct task delete <ids..>
+ct task delete [ids..]
 
 Soft-delete task(s)
 
 Positionals:
-  ids  UUID(s), prefix(es), or name(s)          [array] [required] [default: []]
+  ids  UUID(s), prefix(es), or name(s)                     [array] [default: []]
 
 Options:
       --version  Show version number                                   [boolean]
       --json     Output in JSON format                [boolean] [default: false]
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
+      --all      Soft-delete ALL tasks (moves to recycle bin)          [boolean]
+      --confirm  Required when using --all                             [boolean]
   -h, --help     Show help                                             [boolean]
 ```
 
 #### `ct task restore`
 
 ```
-ct task restore <ids..>
+ct task restore [ids..]
 
 Restore deleted task(s)
 
 Positionals:
-  ids  UUID(s), prefix(es), or name(s)          [array] [required] [default: []]
+  ids  UUID(s), prefix(es), or name(s)                     [array] [default: []]
 
 Options:
       --version  Show version number                                   [boolean]
       --json     Output in JSON format                [boolean] [default: false]
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
+      --all      Restore ALL tasks from recycle bin                    [boolean]
   -h, --help     Show help                                             [boolean]
 ```
 
@@ -237,8 +254,86 @@ Options:
       --timeout   Request timeout in seconds              [number] [default: 10]
       --status      [string] [choices: "todo", "in-progress", "done", "blocked"]
       --source   [string] [choices: "ad-hoc", "email", "meeting-prep", "plugin"]
-      --category                                                         [array]
+      --category  Category IDs to add to each task (additive; existing
+                  categories are preserved)                              [array]
   -h, --help      Show help                                            [boolean]
+```
+
+#### `ct task report`
+
+```
+ct task report <id>
+
+Mark all un-reported time entries on a task as reported
+
+Positionals:
+  id  UUID, prefix, or name substring                        [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct task link`
+
+```
+ct task link <id>
+
+Link a task to a remote ticket served by a plugin
+
+Positionals:
+  id  Task UUID, prefix, or name substring                   [string] [required]
+
+Options:
+      --version   Show version number                                  [boolean]
+      --json      Output in JSON format               [boolean] [default: false]
+      --debug     Log HTTP request/response to stderr [boolean] [default: false]
+      --timeout   Request timeout in seconds              [number] [default: 10]
+      --plugin    Plugin id (e.g. "ado")                     [string] [required]
+      --external  External ticket id (e.g. ADO work item number)
+                                                             [string] [required]
+      --mirror    Full mirror: also flips source so the task is locked and
+                  refreshable                         [boolean] [default: false]
+  -h, --help      Show help                                            [boolean]
+```
+
+#### `ct task unlink`
+
+```
+ct task unlink <id>
+
+Remove the plugin link from a task
+
+Positionals:
+  id  Task UUID, prefix, or name substring                   [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct task unreport`
+
+```
+ct task unreport <id>
+
+Reset reported state on every time entry of a task
+
+Positionals:
+  id  UUID, prefix, or name substring                        [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
 ```
 
 ### `ct timer`
@@ -322,6 +417,10 @@ Commands:
   ct time update <id>     Update a time entry
   ct time delete <id>     Delete a time entry
   ct time today           Show total time tracked today
+  ct time report <id>     Mark a single time entry as reported externally
+  ct time unreport <id>   Mark a single time entry as not yet reported
+  ct time mark-reported   Bulk mark/unmark reported across many tasks,
+                          optionally within a date range
 
 Options:
       --version  Show version number                                   [boolean]
@@ -425,6 +524,63 @@ Options:
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
   -h, --help     Show help                                             [boolean]
+```
+
+#### `ct time report`
+
+```
+ct time report <id>
+
+Mark a single time entry as reported externally
+
+Positionals:
+  id                                                         [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct time unreport`
+
+```
+ct time unreport <id>
+
+Mark a single time entry as not yet reported
+
+Positionals:
+  id                                                         [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct time mark-reported`
+
+```
+ct time mark-reported
+
+Bulk mark/unmark reported across many tasks, optionally within a date range
+
+Options:
+      --version     Show version number                                [boolean]
+      --json        Output in JSON format             [boolean] [default: false]
+      --debug       Log HTTP request/response to stderr
+                                                      [boolean] [default: false]
+      --timeout     Request timeout in seconds            [number] [default: 10]
+      --tasks       Task UUID(s)/prefix(es)                   [array] [required]
+      --start       Lower-bound date YYYY-MM-DD (inclusive)             [string]
+      --end         Upper-bound date YYYY-MM-DD (inclusive end-of-day)  [string]
+      --unreported  Clear reportedAt instead of setting it
+                                                      [boolean] [default: false]
+  -h, --help        Show help                                          [boolean]
 ```
 
 ### `ct report`
@@ -737,8 +893,24 @@ ct import
 Import tasks from file
 
 Commands:
+  ct import format          Show the expected import file format
   ct import preview <file>  Parse import file and show preview
   ct import execute <file>  Execute import from file
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct import format`
+
+```
+ct import format
+
+Show the expected import file format
 
 Options:
       --version  Show version number                                   [boolean]
@@ -834,10 +1006,13 @@ Commands:
   ct plugin enable <id>              Enable a plugin (webhook subscriptions
                                      become active)
   ct plugin disable <id>             Disable a plugin (stops receiving events)
-  ct plugin uninstall <id>           Remove a plugin and its config
+  ct plugin uninstall <id>           Remove a plugin and convert its tasks to
+                                     local ad-hoc
   ct plugin config                   Get or set plugin configuration
-  ct plugin run <id>                 Spawn a plugin's entrypoint with CT_* env
-                                     vars
+  ct plugin schema <id>              Show a plugin's declared config keys
+                                     (required/secret/status/env)
+  ct plugin run <id> [pluginArgs..]  Spawn a plugin's entrypoint with CT_* env
+                                     vars (extra args are forwarded)
 
 Options:
       --version  Show version number                                   [boolean]
@@ -921,7 +1096,7 @@ Options:
 ```
 ct plugin uninstall <id>
 
-Remove a plugin and its config
+Remove a plugin and convert its tasks to local ad-hoc
 
 Positionals:
   id                                                         [string] [required]
@@ -931,6 +1106,8 @@ Options:
       --json     Output in JSON format                [boolean] [default: false]
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
+      --force    Skip the confirmation prompt (required in --json / non-TTY)
+                                                      [boolean] [default: false]
   -h, --help     Show help                                             [boolean]
 ```
 
@@ -943,7 +1120,7 @@ Get or set plugin configuration
 
 Commands:
   ct plugin config get <id> <key>          Read a plugin config value
-  ct plugin config set <id> <key> <value>  Write a plugin config value
+  ct plugin config set <id> <key> [value]  Write a plugin config value
   ct plugin config list <id>               List all config keys for a plugin
   ct plugin config delete <id> <key>       Delete a plugin config key
 
@@ -971,27 +1148,36 @@ Options:
       --json     Output in JSON format                [boolean] [default: false]
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
+      --reveal   Print cleartext for secret keys (default: masked)
+                                                      [boolean] [default: false]
   -h, --help     Show help                                             [boolean]
 ```
 
 ##### `ct plugin config set`
 
 ```
-ct plugin config set <id> <key> <value>
+ct plugin config set <id> <key> [value]
 
 Write a plugin config value
 
 Positionals:
   id                                                         [string] [required]
   key                                                        [string] [required]
-  value                                                      [string] [required]
+  value  Value (omit when using --secret-from-stdin)                    [string]
 
 Options:
-      --version  Show version number                                   [boolean]
-      --json     Output in JSON format                [boolean] [default: false]
-      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
-      --timeout  Request timeout in seconds               [number] [default: 10]
-  -h, --help     Show help                                             [boolean]
+      --version            Show version number                         [boolean]
+      --json               Output in JSON format      [boolean] [default: false]
+      --debug              Log HTTP request/response to stderr
+                                                      [boolean] [default: false]
+      --timeout            Request timeout in seconds     [number] [default: 10]
+      --secret             Force-treat as secret (encrypt via OS keychain)
+                                                      [boolean] [default: false]
+      --secret-from-stdin  Read value from stdin; implies --secret; keeps value
+                           out of shell history       [boolean] [default: false]
+      --allow-plaintext    Allow plaintext storage when OS keyring is
+                           unavailable                [boolean] [default: false]
+  -h, --help               Show help                                   [boolean]
 ```
 
 ##### `ct plugin config list`
@@ -1009,6 +1195,8 @@ Options:
       --json     Output in JSON format                [boolean] [default: false]
       --debug    Log HTTP request/response to stderr  [boolean] [default: false]
       --timeout  Request timeout in seconds               [number] [default: 10]
+      --reveal   Print cleartext for secret keys (default: masked)
+                                                      [boolean] [default: false]
   -h, --help     Show help                                             [boolean]
 ```
 
@@ -1031,15 +1219,34 @@ Options:
   -h, --help     Show help                                             [boolean]
 ```
 
-#### `ct plugin run`
+#### `ct plugin schema`
 
 ```
-ct plugin run <id>
+ct plugin schema <id>
 
-Spawn a plugin's entrypoint with CT_* env vars
+Show a plugin's declared config keys (required/secret/status/env)
 
 Positionals:
   id                                                         [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct plugin run`
+
+```
+ct plugin run <id> [pluginArgs..]
+
+Spawn a plugin's entrypoint with CT_* env vars (extra args are forwarded)
+
+Positionals:
+  id                                                         [string] [required]
+  pluginArgs                                               [array] [default: []]
 
 Options:
       --version  Show version number                                   [boolean]
