@@ -10,7 +10,24 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  verify-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify CLI reference is up to date
+        run: npm run docs:check
+
   build-mac:
+    needs: verify-docs
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +64,7 @@ jobs:
           if-no-files-found: error
 
   build-windows:
+    needs: verify-docs
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
