@@ -40,6 +40,8 @@ Download the latest installer for your platform from the [Releases page](../../r
 
 All data is stored in a local SQLite database; no account or cloud service is required.
 
+The builds aren't code-signed yet, so macOS shows a Gatekeeper warning and Windows a SmartScreen prompt on first run. Each release ships `SHA256SUMS.txt` and build-provenance attestations so you can verify a download is authentic — see [Verifying a download](docs/releasing.md#verifying-a-download).
+
 Building from source instead? See [docs/development.md](docs/development.md).
 
 ## CLI

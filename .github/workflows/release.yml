@@ -85,6 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write      # required to request the OIDC token for provenance
+      attestations: write  # required to write the build-provenance attestation
     steps:
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
@@ -98,10 +100,30 @@ jobs:
           name: windows-distributables
           path: artifacts/win
 
+      - name: Generate SHA-256 checksums
+        run: |
+          set -euo pipefail
+          : > SHA256SUMS.txt
+          for f in artifacts/mac/* artifacts/win/*; do
+            [ -f "$f" ] || continue
+            # Hash from inside each dir so the file records a bare filename, not a path.
+            ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" )
+          done | sort -k2 > SHA256SUMS.txt
+          echo "Checksums:"
+          cat SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/mac/*
+            artifacts/win/*
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/mac/*
             artifacts/win/*
+            SHA256SUMS.txt
           generate_release_notes: true
