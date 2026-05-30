@@ -17,8 +17,8 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CLI_BIN = path.join(REPO_ROOT, 'dist/cli/cli/main.js');
 const TARGETS = [
-  { file: path.join(REPO_ROOT, 'README.md'),  headerLevel: 2 },
-  { file: path.join(REPO_ROOT, 'CLAUDE.md'), headerLevel: 3 },
+  { file: path.join(REPO_ROOT, 'docs/cli.md'), headerLevel: 2 },
+  { file: path.join(REPO_ROOT, '.claude/cli-reference.md'), headerLevel: 3 },
 ];
 const START_MARKER = '<!-- CT_CLI_DOCS:START -->';
 const END_MARKER = '<!-- CT_CLI_DOCS:END -->';
