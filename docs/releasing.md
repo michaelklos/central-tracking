@@ -47,10 +47,10 @@ Get-FileHash "Central Tracking Setup 0.4.0.exe" -Algorithm SHA256
 
 The printed hash must match the corresponding line in `SHA256SUMS.txt`.
 
-**Provenance** — verify the binary was built by this repo's release workflow (requires the [GitHub CLI](https://cli.github.com/)):
+**Provenance** — verify the binary was built by this repo's release workflow (requires the [GitHub CLI](https://cli.github.com/)). Replace `<owner>/<repo>` with the repository you downloaded the release from:
 
 ```bash
-gh attestation verify "Central Tracking Setup 0.4.0.exe" --repo michaelklos/central-tracking
+gh attestation verify "Central Tracking Setup 0.4.0.exe" --repo <owner>/<repo>
 ```
 
 A corporate environment that blocks unsigned installers can use the verified SHA-256 hash to add a **hash-based AppLocker allow rule**, which doesn't require a code-signing certificate.
