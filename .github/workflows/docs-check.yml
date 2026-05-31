@@ -2,25 +2,13 @@ name: Docs Check
 
 # Catches drift between the committed CLI reference (.claude/cli-reference.md)
 # and `ct --help` at PR time — earlier than the release-time verify-docs gate.
-# Path-filtered so it only runs when something that could affect the reference
-# changes. Add this as a required status check in branch protection to block
-# merges on drift.
+# Runs on every PR and push to main (no path filter) so it always reports a
+# status and can safely be marked a required status check in branch protection.
 
 on:
   pull_request:
-    paths:
-      - 'src/cli/**'
-      - 'scripts/generate-cli-docs.js'
-      - '.claude/cli-reference.md'
-      - 'package.json'
-      - '.github/workflows/docs-check.yml'
   push:
     branches: [main]
-    paths:
-      - 'src/cli/**'
-      - 'scripts/generate-cli-docs.js'
-      - '.claude/cli-reference.md'
-      - 'package.json'
 
 jobs:
   docs-check:
