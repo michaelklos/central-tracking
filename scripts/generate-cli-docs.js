@@ -16,10 +16,18 @@ const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CLI_BIN = path.join(REPO_ROOT, 'dist/cli/cli/main.js');
-const TARGETS = [
-  { file: path.join(REPO_ROOT, 'docs/cli.md'), headerLevel: 2 },
+
+// Committed files that embed the generated block between sentinels. These stay
+// in version control (e.g. agent context) and are guarded by `--check`.
+const SPLICE_TARGETS = [
   { file: path.join(REPO_ROOT, '.claude/cli-reference.md'), headerLevel: 3 },
 ];
+
+// Header level used for the standalone (--standalone) build, which produces a
+// complete file from scratch for publishing as a release asset. This file is
+// NOT committed (see .gitignore); it is regenerated fresh in CI each release.
+const STANDALONE_HEADER_LEVEL = 2;
+
 const START_MARKER = '<!-- CT_CLI_DOCS:START -->';
 const END_MARKER = '<!-- CT_CLI_DOCS:END -->';
 
@@ -95,11 +103,38 @@ function spliceMarkers(source, generated) {
   return `${before}\n${generated}\n${after}`;
 }
 
+/** Wrap the generated block in a complete, self-contained Markdown document. */
+function renderStandalone(generated) {
+  return [
+    '# Central Tracking — CLI Reference (`ct`)',
+    '',
+    'Complete command reference for the `ct` CLI, generated from `ct --help`.',
+    'The copy for each release is published as the `cli.md` asset on the',
+    '[GitHub releases page](https://github.com/michaelklos/central-tracking/releases/latest).',
+    '',
+    generated,
+  ].join('\n').trimEnd() + '\n';
+}
+
 function main() {
-  const check = process.argv.includes('--check');
+  const args = process.argv.slice(2);
+
+  // --standalone <path>: write a complete file from scratch (for CI publishing).
+  const standaloneIdx = args.indexOf('--standalone');
+  if (standaloneIdx !== -1) {
+    const outArg = args[standaloneIdx + 1];
+    if (!outArg) throw new Error('--standalone requires an output path');
+    const outPath = path.isAbsolute(outArg) ? outArg : path.join(REPO_ROOT, outArg);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, renderStandalone(generate(STANDALONE_HEADER_LEVEL)), 'utf-8');
+    process.stdout.write(`[docs] wrote standalone ${path.relative(REPO_ROOT, outPath)}\n`);
+    return;
+  }
+
+  const check = args.includes('--check');
   let drift = false;
 
-  for (const target of TARGETS) {
+  for (const target of SPLICE_TARGETS) {
     const generated = generate(target.headerLevel);
     const source = fs.readFileSync(target.file, 'utf-8');
     const updated = spliceMarkers(source, generated);

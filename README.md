@@ -26,7 +26,7 @@ A desktop task and time tracking application built with Electron, React, and Typ
 
 | Doc | What's in it |
 |---|---|
-| [CLI reference](docs/cli.md) | Full `ct` command documentation (auto-generated from `ct --help`) |
+| [CLI reference](https://github.com/michaelklos/central-tracking/releases/latest/download/cli.md) | Full `ct` command documentation (generated from `ct --help`, published per release) |
 | [Development](docs/development.md) | Building from source, dev mode, testing, project structure |
 | [Packaging & releases](docs/releasing.md) | Building distributables, CI releases, code signing |
 | [Plugin development](docs/plugins.md) | Manifest format, lifecycle, webhook payloads |
@@ -61,7 +61,7 @@ ct report export --from 2026-04-01 --to 2026-04-11 --out report.csv
 ct task list --json                 # Machine-readable output
 ```
 
-See the [full CLI reference](docs/cli.md), or run `ct --help` / `ct <command> --help`. To build and install the CLI from source, see [docs/development.md](docs/development.md#building-the-cli).
+See the [full CLI reference](https://github.com/michaelklos/central-tracking/releases/latest/download/cli.md) (published with each release), or run `ct --help` / `ct <command> --help`. To build and install the CLI from source, see [docs/development.md](docs/development.md#building-the-cli).
 
 ## Plugins
 

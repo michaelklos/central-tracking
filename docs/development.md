@@ -61,7 +61,7 @@ Or run directly:
 node dist/cli/cli/main.js --help
 ```
 
-The CLI requires the Electron app to be running. It discovers the server via `{userData}/ct-server.json`. See the [CLI reference](cli.md) for the full command list.
+The CLI requires the Electron app to be running. It discovers the server via `{userData}/ct-server.json`. See the [CLI reference](https://github.com/michaelklos/central-tracking/releases/latest/download/cli.md) for the full command list, or run `npm run docs:cli` to generate it locally.
 
 ## Debug mode
 
@@ -129,6 +129,6 @@ plugins/
 
 ## Further reading
 
-- [CLI reference](cli.md) — full `ct` command documentation
+- [CLI reference](https://github.com/michaelklos/central-tracking/releases/latest/download/cli.md) — full `ct` command documentation (published per release; `npm run docs:cli` to build locally)
 - [Packaging & releases](releasing.md) — building distributables, CI releases, code signing
 - [Plugin development](plugins.md) — manifest format, lifecycle, webhooks

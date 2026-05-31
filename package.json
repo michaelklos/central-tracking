@@ -32,7 +32,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "docs": "npm run build:cli && node scripts/generate-cli-docs.js",
-    "docs:check": "npm run build:cli && node scripts/generate-cli-docs.js --check"
+    "docs:check": "npm run build:cli && node scripts/generate-cli-docs.js --check",
+    "docs:cli": "npm run build:cli && node scripts/generate-cli-docs.js --standalone docs/cli.md"
   },
   "build": {
     "appId": "com.centraltracking.app",
