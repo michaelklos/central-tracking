@@ -63,6 +63,10 @@ node dist/cli/cli/main.js --help
 
 The CLI requires the Electron app to be running. It discovers the server via `{userData}/ct-server.json`. See the [CLI reference](https://github.com/michaelklos/central-tracking/releases/latest/download/cli.md) for the full command list, or run `npm run docs:cli` to generate it locally.
 
+## Git hooks
+
+`npm install` sets up a [husky](https://typicode.github.io/husky/) pre-commit hook (via `lint-staged`). When you stage changes under `src/cli/**`, it runs `npm run docs` and re-stages the regenerated `.claude/cli-reference.md`, so the committed CLI reference never drifts from `ct --help`. If you commit with `--no-verify`, run `npm run docs` yourself — CI (`docs-check`) will otherwise flag the drift on your PR.
+
 ## Debug mode
 
 ```bash
