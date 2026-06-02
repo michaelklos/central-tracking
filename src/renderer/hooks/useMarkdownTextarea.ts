@@ -29,6 +29,13 @@ export function useMarkdownTextarea({ value, onChange, onSave }: Options) {
         return;
       }
 
+      // Cmd/Ctrl+Enter → save (default for any text field, alongside blur)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        onSave?.();
+        return;
+      }
+
       // Enter → markdown list continuation
       if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
         const ta = e.currentTarget;

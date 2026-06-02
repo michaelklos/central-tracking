@@ -70,7 +70,7 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
 
     if (active) {
       const stopNow = new Date().toISOString();
-      const duration = Math.floor(
+      const duration = Math.round(
         (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
       );
       db.instance
@@ -89,7 +89,7 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
   if (isManualEntry) {
     const startMs = new Date(input.startTime ?? now).getTime();
     const endMs = new Date(input.endTime!).getTime();
-    durationSeconds = Math.floor((endMs - startMs) / 1000);
+    durationSeconds = Math.round((endMs - startMs) / 1000);
   }
 
   db.instance
@@ -140,7 +140,7 @@ export function updateTimeEntry(db: Database, id: string, updates: UpdateTimeEnt
   // Recalculate duration if both start and end are set
   const row = db.instance.prepare('SELECT * FROM time_entries WHERE id = ?').get(id) as TimeEntryRow;
   if (row.start_time && row.end_time) {
-    const duration = Math.floor(
+    const duration = Math.round(
       (new Date(row.end_time).getTime() - new Date(row.start_time).getTime()) / 1000
     );
     db.instance.prepare('UPDATE time_entries SET duration_seconds = ? WHERE id = ?').run(duration, id);
@@ -166,8 +166,8 @@ export function getTodayTotal(db: Database): number {
     .prepare(
       `SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
-          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+          ELSE 0
         END
       ), 0) as total FROM time_entries WHERE date(start_time, 'localtime') = date('now', 'localtime')`
     )
@@ -193,8 +193,8 @@ export function getTimeEntryReport(db: Database, start: string, end: string) {
         t.title as task_title,
         COALESCE(SUM(
           CASE WHEN te.end_time IS NOT NULL
-            THEN CAST((julianday(te.end_time) - julianday(te.start_time)) * 86400 AS INTEGER)
-            ELSE CAST((julianday('now') - julianday(te.start_time)) * 86400 AS INTEGER)
+            THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
+            ELSE CAST(ROUND((julianday('now') - julianday(te.start_time)) * 86400) AS INTEGER)
           END
         ), 0) as total_seconds
       FROM time_entries te
@@ -223,8 +223,8 @@ export function getSummaryReport(db: Database, start: string, end: string): Summ
         t.status as task_status,
         COALESCE(SUM(
           CASE WHEN te.end_time IS NOT NULL
-            THEN CAST((julianday(te.end_time) - julianday(te.start_time)) * 86400 AS INTEGER)
-            ELSE CAST((julianday('now') - julianday(te.start_time)) * 86400 AS INTEGER)
+            THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
+            ELSE CAST(ROUND((julianday('now') - julianday(te.start_time)) * 86400) AS INTEGER)
           END
         ), 0) as total_seconds
       FROM time_entries te
@@ -363,7 +363,7 @@ export function stopActiveTimeEntry(db: Database): TimeEntry | null {
   if (!active) return null;
 
   const stopNow = new Date().toISOString();
-  const duration = Math.floor(
+  const duration = Math.round(
     (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
   );
   db.instance

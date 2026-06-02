@@ -25,7 +25,7 @@ const AUTO_LOAD_MAX_BATCHES = 3;
 export function TaskDetail() {
   const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal, refreshActiveEntry } = useTimerContext();
+  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal, refreshActiveEntry, activeEntry } = useTimerContext();
   const pluginCaps = usePluginCapabilities();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
@@ -50,6 +50,8 @@ export function TaskDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentEditDraft, setCommentEditDraft] = useState('');
 
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
@@ -107,6 +109,14 @@ export function TaskDetail() {
     if (currentTaskIdRef.current !== taskId) return;
     setComments(cmts);
   }, [selectedTaskId]);
+
+  const prevActiveIdRef = useRef<string | null>(activeEntry?.id ?? null);
+  useEffect(() => {
+    const cur = activeEntry?.id ?? null;
+    if (prevActiveIdRef.current === cur) return;
+    prevActiveIdRef.current = cur;
+    loadTimeEntries(); // stopped entry now renders its end time instead of "- running"
+  }, [activeEntry, loadTimeEntries]);
 
   const loadSmartDefaults = useCallback(async () => {
     const now = new Date();
@@ -189,6 +199,24 @@ export function TaskDetail() {
   const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });
   const notesMd = useMarkdownTextarea({ value: notesDraft, onChange: setNotesDraft, onSave: handleSaveNotes });
   const commentMd = useMarkdownTextarea({ value: newComment, onChange: setNewComment, onSave: handleAddComment });
+
+  const handleSaveCommentEdit = useCallback(async () => {
+    const id = editingCommentId;
+    if (!id) return;
+    const body = commentEditDraft.trim();
+    const original = comments.find((c) => c.id === id);
+    if (original && body && body !== original.body) {
+      await window.api.comments.update(id, { body });
+    }
+    setEditingCommentId(null);
+    await loadComments();
+  }, [editingCommentId, commentEditDraft, comments, loadComments]);
+
+  const commentEditMd = useMarkdownTextarea({
+    value: commentEditDraft,
+    onChange: setCommentEditDraft,
+    onSave: handleSaveCommentEdit,
+  });
 
   if (!task) return null;
 
@@ -300,6 +328,20 @@ export function TaskDetail() {
       const msg = err instanceof Error ? err.message : String(err);
       setActionError(`Failed to mark reported: ${msg}`);
       window.api.log.error(`TaskDetail.handleMarkReported: ${msg}`);
+    }
+  };
+
+  const handleUnmarkReported = async () => {
+    try {
+      setActionError(null);
+      await window.api.timeEntries.markTaskReported(task.id, null);
+      await loadTimeEntries();
+      await refreshActiveTasks();
+      await refreshTodayTotal();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to unmark reported: ${msg}`);
+      window.api.log.error(`TaskDetail.handleUnmarkReported: ${msg}`);
     }
   };
 
@@ -435,9 +477,18 @@ export function TaskDetail() {
                 </button>
               </>
             ) : (
-              <span className="task-detail__report-chip task-detail__report-chip--done">
-                ✓ Reported
-              </span>
+              <>
+                <span className="task-detail__report-chip task-detail__report-chip--done">
+                  ✓ Reported
+                </span>
+                <button
+                  className="task-detail__report-btn"
+                  onClick={handleUnmarkReported}
+                  title="Mark all entries on this task as not reported"
+                >
+                  Unmark reported
+                </button>
+              </>
             )}
           </div>
         )}
@@ -643,6 +694,7 @@ export function TaskDetail() {
                 placeholder="Add a comment..."
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
+                onBlur={handleAddComment}
                 onKeyDown={commentMd.onKeyDown}
               />
               <div className="task-detail__comment-actions">
@@ -693,7 +745,27 @@ export function TaskDetail() {
                       )}
                     </div>
                   </div>
-                  <p className="comment__body">{comment.body}</p>
+                  {editingCommentId === comment.id ? (
+                    <textarea
+                      className="comment__body-editor"
+                      rows={3}
+                      value={commentEditDraft}
+                      onChange={(e) => setCommentEditDraft(e.target.value)}
+                      onBlur={handleSaveCommentEdit}
+                      onKeyDown={commentEditMd.onKeyDown}
+                      autoFocus
+                    />
+                  ) : !fromAdo ? (
+                    <p
+                      className="comment__body comment__clickable"
+                      title="Click to edit"
+                      onClick={() => { setEditingCommentId(comment.id); setCommentEditDraft(comment.body); }}
+                    >
+                      {comment.body}
+                    </p>
+                  ) : (
+                    <p className="comment__body">{comment.body}</p>
+                  )}
                 </div>
               );
             })}

@@ -506,6 +506,28 @@
   white-space: pre-wrap;
 }
 
+.comment__clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.comment__clickable:hover {
+  color: var(--color-primary);
+}
+
+.comment__body-editor {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  padding: 4px 6px;
+  resize: vertical;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 /* ─── Load more / scroll sentinel ────────────────────────────── */
 
 .task-detail__load-more {
