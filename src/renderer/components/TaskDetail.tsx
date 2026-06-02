@@ -202,6 +202,12 @@ export function TaskDetail() {
       await window.api.comments.create({ taskId: task.id, body, syncable });
       setNewComment('');
       await loadComments();
+    } catch (err) {
+      // Called from onBlur as well as the button, so a throw here would become
+      // an unhandled rejection — surface it instead.
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to add comment: ${msg}`);
+      window.api.log.error(`TaskDetail.handleAddComment: ${msg}`);
     } finally {
       addingCommentRef.current = false;
     }
@@ -216,11 +222,21 @@ export function TaskDetail() {
     if (!id) return;
     const body = commentEditDraft.trim();
     const original = comments.find((c) => c.id === id);
-    if (original && body && body !== original.body) {
-      await window.api.comments.update(id, { body });
+    try {
+      if (original && body && body !== original.body) {
+        await window.api.comments.update(id, { body });
+      }
+      // Only exit edit mode if we're still on the same comment — the user may
+      // have started editing another one while this save was in flight.
+      setEditingCommentId((cur) => (cur === id ? null : cur));
+      await loadComments();
+    } catch (err) {
+      // Called from onBlur, so a throw would become an unhandled rejection.
+      // Keep the draft (don't clear editing state) so the edit isn't lost.
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`Failed to save comment: ${msg}`);
+      window.api.log.error(`TaskDetail.handleSaveCommentEdit: ${msg}`);
     }
-    setEditingCommentId(null);
-    await loadComments();
   }, [editingCommentId, commentEditDraft, comments, loadComments]);
 
   const commentEditMd = useMarkdownTextarea({
@@ -770,7 +786,16 @@ export function TaskDetail() {
                     <p
                       className="comment__body comment__clickable"
                       title="Click to edit"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => { setEditingCommentId(comment.id); setCommentEditDraft(comment.body); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setEditingCommentId(comment.id);
+                          setCommentEditDraft(comment.body);
+                        }
+                      }}
                     >
                       {comment.body}
                     </p>
