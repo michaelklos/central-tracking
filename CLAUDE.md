@@ -102,6 +102,15 @@ Global flags: --json (machine-readable output), --debug (log HTTP traffic), --ti
 Full per-command reference: `.claude/cli-reference.md`  
 Plugin development guide: `docs/plugins.md`
 
+**Keep the CLI reference in sync.** `.claude/cli-reference.md` is generated from
+`ct --help`. Whenever you change the `ct` command tree — add/rename/remove a
+command or option, or edit help text under `src/cli/` — run `npm run docs` and
+commit the regenerated `.claude/cli-reference.md`. A git pre-commit hook
+(husky + lint-staged) does this automatically when `src/cli/**` is staged, and
+CI fails on drift (`docs-check` on PRs, `verify-docs` on release). The
+human-facing `docs/cli.md` is **not** committed — it is published as a release
+asset (`npm run docs:cli`).
+
 ### Building the CLI
 
 ```bash

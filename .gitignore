@@ -19,3 +19,7 @@ coverage/
 *.swp
 *.swo
 localdocs/
+
+# Generated CLI reference — built in CI and published as a release asset
+# (npm run docs:cli). Not version-controlled; see docs/releasing.md.
+docs/cli.md

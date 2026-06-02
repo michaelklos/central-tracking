@@ -1,0 +1,28 @@
+name: Docs Check
+
+# Catches drift between the committed CLI reference (.claude/cli-reference.md)
+# and `ct --help` at PR time — earlier than the release-time verify-docs gate.
+# Runs on every PR and push to main (no path filter) so it always reports a
+# status and can safely be marked a required status check in branch protection.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify committed CLI reference is up to date
+        run: npm run docs:check
