@@ -223,7 +223,11 @@ export function TaskDetail() {
     const body = commentEditDraft.trim();
     const original = comments.find((c) => c.id === id);
     try {
-      if (original && body && body !== original.body) {
+      if (original && !body) {
+        // Empty isn't a valid comment (use × to delete instead). Surface this
+        // rather than silently discarding the cleared text.
+        setActionError('A comment can’t be empty — your edit was discarded. Use × to delete the comment.');
+      } else if (original && body !== original.body) {
         await window.api.comments.update(id, { body });
       }
       // Only exit edit mode if we're still on the same comment — the user may

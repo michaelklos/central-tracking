@@ -139,6 +139,26 @@ describe('TaskDetail - comments & reported toggle', () => {
     });
   });
 
+  it('does not update (or save empty) when an edited comment is cleared and blurred', async () => {
+    (window.api.comments.getByTask as Mock).mockResolvedValue([makeComment()]);
+    const user = userEvent.setup();
+    render(<TaskDetail />);
+    await user.click(await screen.findByText('Comments (1)'));
+
+    const body = await screen.findByText('original body');
+    await user.click(body);
+
+    const editor = screen.getByDisplayValue('original body');
+    await user.clear(editor);
+    await user.tab(); // blur with empty body
+
+    // Empty is invalid — the edit is discarded, not persisted.
+    await waitFor(() => {
+      expect(screen.getByText(/can’t be empty/)).toBeInTheDocument();
+    });
+    expect(window.api.comments.update as Mock).not.toHaveBeenCalled();
+  });
+
   it('"Unmark reported" invokes markTaskReported(taskId, null)', async () => {
     mockTaskContext.tasks = [makeTask({ totalTimeSeconds: 3600, hasUnreportedTime: false, unreportedTimeSeconds: 0 })];
     const user = userEvent.setup();

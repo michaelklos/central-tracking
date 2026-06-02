@@ -13,8 +13,10 @@ const path = require('path');
 
 const bsqliteDir = path.join(__dirname, '..', 'node_modules', 'better-sqlite3');
 // Resolve prebuild-install's JS entrypoint (not the node_modules/.bin shim,
-// which is a .cmd on Windows and can't be run via `node`).
-const prebuildInstall = require.resolve('prebuild-install/bin.js');
+// which is a .cmd on Windows and can't be run via `node`). Resolve from
+// better-sqlite3's own directory so it's found whether prebuild-install is
+// hoisted to the repo root or nested under better-sqlite3/node_modules.
+const prebuildInstall = require.resolve('prebuild-install/bin.js', { paths: [bsqliteDir] });
 
 function run(cmd) {
   execSync(cmd, { cwd: bsqliteDir, stdio: 'inherit' });
