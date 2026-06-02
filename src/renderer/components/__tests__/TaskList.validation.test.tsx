@@ -89,8 +89,6 @@ describe('TaskList - Validation', () => {
     const addBtn = screen.getByText('Add');
     await user.click(addBtn);
 
-    // The input should get a validation class when trying to submit empty
-    const input = screen.getByPlaceholderText('Add a new task...');
     expect(mockTaskContext.createTask).not.toHaveBeenCalled();
   });
 });

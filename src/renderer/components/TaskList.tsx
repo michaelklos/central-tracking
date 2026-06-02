@@ -51,7 +51,6 @@ export function TaskList() {
     selectAllTasks,
     deselectAllTasks,
     selectAllActiveTasks,
-    filter,
     selectedTaskId,
     selectTask,
     createTask,

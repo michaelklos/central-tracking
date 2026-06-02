@@ -67,9 +67,9 @@ describe('Task Sort Options', () => {
   });
 
   it('sorts by created date (newest first)', async () => {
-    const t1 = await ipc.invoke('tasks:create', { title: 'First' });
-    const t2 = await ipc.invoke('tasks:create', { title: 'Second' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'Third' });
+    await ipc.invoke('tasks:create', { title: 'First' });
+    await ipc.invoke('tasks:create', { title: 'Second' });
+    await ipc.invoke('tasks:create', { title: 'Third' });
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'created' });
     expect(result.items[0].title).toBe('Third');
@@ -80,7 +80,7 @@ describe('Task Sort Options', () => {
   it('sorts by recent activity (most recently worked first)', async () => {
     const t1 = await ipc.invoke('tasks:create', { title: 'OldWork' });
     const t2 = await ipc.invoke('tasks:create', { title: 'NewWork' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'NoWork' });
+    await ipc.invoke('tasks:create', { title: 'NoWork' });
 
     // Create a completed time entry for t1 (older)
     await timeIpc.invoke('timeEntries:create', {

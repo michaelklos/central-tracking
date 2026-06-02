@@ -14,6 +14,7 @@ export function createMockIpcMain() {
      * generic just lets the test reader assert via property access without
      * fighting strict mode at every call site.
      */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional default per the comment above
     invoke: async <T = any>(channel: string, ...args: unknown[]): Promise<T> => {
       const handler = handlers.get(channel);
       if (!handler) throw new Error(`No handler for channel: ${channel}`);

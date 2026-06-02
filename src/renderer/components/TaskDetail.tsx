@@ -10,14 +10,13 @@ import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
 import { getStringSetting } from './OptionsMenu';
-import type { Task, TimeEntry, Comment, TaskStatus, TaskSource } from '../../shared/types';
+import type { TimeEntry, Comment, TaskStatus } from '../../shared/types';
 import { allowedAdoStatusTargets } from '../utils/adoFsm';
 import './TaskDetail.css';
 
 type DetailTab = 'details' | 'time' | 'comments' | 'notes';
 
 const STATUS_OPTIONS: TaskStatus[] = ['todo', 'in-progress', 'done', 'blocked'];
-const SOURCE_OPTIONS: TaskSource[] = ['ad-hoc', 'email', 'meeting-prep', 'plugin'];
 
 const TIME_ENTRIES_LIMIT = 20;
 const AUTO_LOAD_MAX_BATCHES = 3;
