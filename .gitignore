@@ -15,6 +15,7 @@ coverage/
 .vscode/
 !.vscode/settings.json
 *.tsbuildinfo
+.tsbuild/
 .eslintcache
 *.swp
 *.swo

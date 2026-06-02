@@ -44,7 +44,6 @@
       "plugins/*/plugin.json",
       "plugins/*/package.json",
       "plugins/*/dist/**/*",
-      "plugins/*/node_modules/**/*",
       "package.json"
     ],
     "asarUnpack": [
@@ -54,8 +53,7 @@
       "**/node_modules/koffi/**/*",
       "dist/cli/cli/**/*",
       "plugins/*/plugin.json",
-      "plugins/*/dist/**/*",
-      "plugins/*/node_modules/**/*"
+      "plugins/*/dist/**/*"
     ],
     "directories": {
       "output": "release",
