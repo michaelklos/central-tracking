@@ -12,7 +12,9 @@ const { execSync } = require('child_process');
 const path = require('path');
 
 const bsqliteDir = path.join(__dirname, '..', 'node_modules', 'better-sqlite3');
-const prebuildInstall = path.join(__dirname, '..', 'node_modules', '.bin', 'prebuild-install');
+// Resolve prebuild-install's JS entrypoint (not the node_modules/.bin shim,
+// which is a .cmd on Windows and can't be run via `node`).
+const prebuildInstall = require.resolve('prebuild-install/bin.js');
 
 function run(cmd) {
   execSync(cmd, { cwd: bsqliteDir, stdio: 'inherit' });

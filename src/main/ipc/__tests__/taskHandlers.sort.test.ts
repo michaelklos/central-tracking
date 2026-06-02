@@ -10,9 +10,7 @@ import { createMockIpcMain } from '../../../test/mocks/electron';
  */
 function todayLocalIso(hourLocal: number, minuteLocal: number = 0): string {
   const now = new Date();
-  const local = new Date(
-    `${now.toLocaleDateString('en-CA')}T${String(hourLocal).padStart(2, '0')}:${String(minuteLocal).padStart(2, '0')}:00`
-  );
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hourLocal, minuteLocal, 0);
   return local.toISOString();
 }
 
@@ -106,7 +104,7 @@ describe('Task Sort Options', () => {
   it('sorts by most time today', async () => {
     const t1 = await ipc.invoke('tasks:create', { title: 'LittleTime' });
     const t2 = await ipc.invoke('tasks:create', { title: 'LotsOfTime' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'NoTime' });
+    await ipc.invoke('tasks:create', { title: 'NoTime' });
 
     // Use local-noon anchored times so entries always land on today regardless
     // of the host's UTC offset (a UTC-based subtraction from "now" can cross
@@ -124,9 +122,6 @@ describe('Task Sort Options', () => {
       startTime: todayLocalIso(11, 0),
       endTime:   todayLocalIso(13, 0),
     });
-
-    // suppress unused variable warning
-    void t3;
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'most-time-today' });
     expect(result.items[0].title).toBe('LotsOfTime');

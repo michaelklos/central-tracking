@@ -12,10 +12,9 @@ import { createMockIpcMain } from '../../../test/mocks/electron';
  */
 function todayLocalIso(hourLocal: number = 12, minuteLocal: number = 0): string {
   const now = new Date();
-  // Build a Date at the requested local clock time today
-  const local = new Date(
-    `${now.toLocaleDateString('en-CA')}T${String(hourLocal).padStart(2, '0')}:${String(minuteLocal).padStart(2, '0')}:00`
-  );
+  // Build a Date at the requested local clock time today (numeric components
+  // avoid any locale/ICU dependence from date string formatting)
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hourLocal, minuteLocal, 0);
   return local.toISOString();
 }
 

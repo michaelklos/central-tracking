@@ -118,7 +118,7 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
       return `(SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
           THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          ELSE CAST(ROUND((julianday('now') - julianday(start_time)) * 86400) AS INTEGER)
         END
       ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time, 'localtime') = date('now', 'localtime')) DESC, created_at DESC`;
     case 'manual':

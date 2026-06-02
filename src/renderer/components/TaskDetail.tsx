@@ -55,6 +55,12 @@ export function TaskDetail() {
   // Track which task the entries are loaded for to prevent stale appends
   const loadedForTaskRef = useRef<string | null>(null);
 
+  // Guards against a double-post: the new-comment box saves on blur AND on the
+  // Add button / Cmd+Enter, and blur fires before the click (and before the
+  // async setNewComment('') flushes), so handleAddComment can run twice with
+  // the same draft. The ref is set synchronously before the first await.
+  const addingCommentRef = useRef(false);
+
   // Track pendingTimeEntry so loadSmartDefaults can check without re-firing
   const pendingTimeEntryRef = useRef(pendingTimeEntry);
   pendingTimeEntryRef.current = pendingTimeEntry;
@@ -184,15 +190,21 @@ export function TaskDetail() {
     if (!task) return;
     const body = newComment.trim();
     if (!body) return;
-    // Only force syncable on full-mirror ADO tasks. Link-only ADO tasks
-    // (pluginId='ado' but source != 'plugin') let the user toggle per
-    // comment via `commentSyncable`, matching the link-mode contract that
-    // pushes are opt-in.
-    const isAdoFullMirror = task.source === 'plugin' && task.pluginId === 'ado';
-    const syncable = isAdoFullMirror ? true : commentSyncable;
-    await window.api.comments.create({ taskId: task.id, body, syncable });
-    setNewComment('');
-    await loadComments();
+    if (addingCommentRef.current) return;
+    addingCommentRef.current = true;
+    try {
+      // Only force syncable on full-mirror ADO tasks. Link-only ADO tasks
+      // (pluginId='ado' but source != 'plugin') let the user toggle per
+      // comment via `commentSyncable`, matching the link-mode contract that
+      // pushes are opt-in.
+      const isAdoFullMirror = task.source === 'plugin' && task.pluginId === 'ado';
+      const syncable = isAdoFullMirror ? true : commentSyncable;
+      await window.api.comments.create({ taskId: task.id, body, syncable });
+      setNewComment('');
+      await loadComments();
+    } finally {
+      addingCommentRef.current = false;
+    }
   }, [task, newComment, commentSyncable, loadComments]);
 
   const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });

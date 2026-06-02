@@ -9,9 +9,7 @@ import { createMockIpcMain } from '../../../test/mocks/electron';
  */
 function todayLocalIso(hourLocal: number, minuteLocal: number = 0): string {
   const now = new Date();
-  const local = new Date(
-    `${now.toLocaleDateString('en-CA')}T${String(hourLocal).padStart(2, '0')}:${String(minuteLocal).padStart(2, '0')}:00`
-  );
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hourLocal, minuteLocal, 0);
   return local.toISOString();
 }
 
