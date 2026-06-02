@@ -1,6 +1,6 @@
 {
   "name": "central-tracking",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Extensible task and time tracking application with plugin architecture for external source integration",
   "main": "dist/main/main.js",
   "workspaces": [
@@ -32,7 +32,9 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "docs": "npm run build:cli && node scripts/generate-cli-docs.js",
-    "docs:check": "npm run build:cli && node scripts/generate-cli-docs.js --check"
+    "docs:check": "npm run build:cli && node scripts/generate-cli-docs.js --check",
+    "docs:cli": "npm run build:cli && node scripts/generate-cli-docs.js --standalone docs/cli.md",
+    "prepare": "husky"
   },
   "build": {
     "appId": "com.centraltracking.app",
@@ -90,6 +92,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -130,7 +138,9 @@
     "electron-builder": "^26.8.1",
     "eslint": "^9.8.0",
     "html-webpack-plugin": "^5.6.0",
+    "husky": "^9.1.7",
     "jsdom": "^28.1.0",
+    "lint-staged": "^17.0.6",
     "png-to-ico": "^2.1.8",
     "style-loader": "^4.0.0",
     "terser-webpack-plugin": "^5.3.16",
