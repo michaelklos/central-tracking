@@ -113,7 +113,10 @@ app.whenReady().then(() => {
   // Window management IPC handlers
   ipcMain.handle('window:setAlwaysOnTop', (_event, flag: boolean) => {
     if (mainWindow) mainWindow.setAlwaysOnTop(flag);
-    if (keepaliveEnabled) flag ? startDisplayKeepalive() : stopDisplayKeepalive();
+    if (keepaliveEnabled) {
+      if (flag) startDisplayKeepalive();
+      else stopDisplayKeepalive();
+    }
   });
   ipcMain.handle('window:getAlwaysOnTop', () => {
     return mainWindow?.isAlwaysOnTop() ?? false;

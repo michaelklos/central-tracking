@@ -21,11 +21,6 @@ export interface TimelineItem {
   label?: string;
 }
 
-function timeStringToMinutes(timeStr: string): number {
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + m;
-}
-
 function setTimeOnDate(date: Date, timeStr: string): Date {
   const [h, m] = timeStr.split(':').map(Number);
   const d = new Date(date);
@@ -47,13 +42,6 @@ export function buildTimeline(entries: TimeEntryWithTask[], options: TimelineOpt
   const refDate = new Date(sorted[0].startTime);
   const workStart = setTimeOnDate(refDate, options.workStartTime);
   const workEnd = setTimeOnDate(refDate, options.workEndTime);
-  const workStartMinutes = timeStringToMinutes(options.workStartTime);
-  const workEndMinutes = timeStringToMinutes(options.workEndTime);
-
-  function isWithinWorkHours(time: Date): boolean {
-    const mins = time.getHours() * 60 + time.getMinutes();
-    return mins >= workStartMinutes && mins <= workEndMinutes;
-  }
 
   function clampToWorkHours(start: Date, end: Date): { start: Date; end: Date } | null {
     const clampedStart = start < workStart ? workStart : start;

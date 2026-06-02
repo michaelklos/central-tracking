@@ -4,7 +4,7 @@ import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils
 import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
 import { toLocalDateString as toDateString } from '../../shared/dateRange';
-import type { TimeEntryWithTask, TaskSource } from '../../shared/types';
+import type { TimeEntryWithTask } from '../../shared/types';
 import './TimelineView.css';
 
 function getStringSetting(key: string, defaultValue: string): string {

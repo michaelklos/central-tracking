@@ -37,7 +37,6 @@ const PANELS: PanelConfig[] = [
   },
 ];
 
-const PIE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#a855f7'];
 const UNCATEGORIZED_COLOR = '#6b7280';
 
 interface CategorySlice {

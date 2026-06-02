@@ -3,6 +3,16 @@ import { Database } from '../../database/database';
 import { registerTaskHandlers } from '../taskHandlers';
 import { createMockIpcMain } from '../../../test/mocks/electron';
 
+/**
+ * Return an ISO UTC string for today at the given local hour, safe to use in
+ * queries that filter by date(start_time, 'localtime') = date('now', 'localtime').
+ */
+function todayLocalIso(hourLocal: number, minuteLocal: number = 0): string {
+  const now = new Date();
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hourLocal, minuteLocal, 0);
+  return local.toISOString();
+}
+
 describe('Task IPC Handlers', () => {
   let db: Database;
   let ipc: ReturnType<typeof createMockIpcMain>;
@@ -624,6 +634,89 @@ describe('Task IPC Handlers', () => {
       });
       const doneTitles = done.items.map((t: { title: string }) => t.title);
       expect(doneTitles).toContain('Done InRange');
+    });
+  });
+
+  // ─── Timer-math regression tests (Bug 4 + Bug 5) ───────────────────
+
+  describe('timer-math aggregation', () => {
+    let timeIpc: ReturnType<typeof createMockIpcMain>;
+    beforeEach(async () => {
+      timeIpc = createMockIpcMain();
+      const { registerTimeEntryHandlers } = await import('../timeEntryHandlers');
+      registerTimeEntryHandlers(timeIpc as never, db);
+    });
+
+    it('regression Bug5: completed entry of exactly one hour sums to 3600 in totalTimeSeconds (not 3599)', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Exact Hour Task' });
+      // Insert a precisely 1-hour entry using fixed timestamps
+      db.instance
+        .prepare(
+          'INSERT INTO time_entries (id, task_id, start_time, end_time, duration_seconds, note, created_at) VALUES (?, ?, ?, ?, 3600, ?, ?)'
+        )
+        .run(
+          'exact-1h',
+          task.id,
+          '2026-05-01T10:00:00.000Z',
+          '2026-05-01T11:00:00.000Z',
+          '',
+          '2026-05-01T10:00:00.000Z',
+        );
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      // julianday float math used to yield 3599.9999… → CAST truncated to 3599.
+      // ROUND fixes this: the result must be exactly 3600.
+      expect(refreshed.totalTimeSeconds).toBe(3600);
+    });
+
+    it('regression Bug5: completed entry of exactly one hour sums to 3600 in todayTimeSeconds (not 3599)', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Exact Hour Today Task' });
+      // Anchor at local noon so the entry is guaranteed to be "today" regardless
+      // of the host's UTC offset.
+      const start = todayLocalIso(10, 0);
+      const end   = todayLocalIso(11, 0);
+      db.instance
+        .prepare(
+          'INSERT INTO time_entries (id, task_id, start_time, end_time, duration_seconds, note, created_at) VALUES (?, ?, ?, ?, 3600, ?, ?)'
+        )
+        .run('exact-1h-today', task.id, start, end, '', start);
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      expect(refreshed.todayTimeSeconds).toBe(3600);
+    });
+
+    it('regression Bug4: running entry (end_time IS NULL) contributes 0 to totalTimeSeconds', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Running Task' });
+      // Start a live timer (no end_time)
+      await timeIpc.invoke('timeEntries:create', { taskId: task.id });
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      // Backend must contribute 0; the renderer holds the live elapsed portion.
+      expect(refreshed.totalTimeSeconds).toBe(0);
+    });
+
+    it('regression Bug4: running entry (end_time IS NULL) contributes 0 to todayTimeSeconds', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Running Today Task' });
+      await timeIpc.invoke('timeEntries:create', { taskId: task.id });
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      expect(refreshed.todayTimeSeconds).toBe(0);
+    });
+
+    it('completed entries still accumulate correctly alongside a running entry', async () => {
+      const task = await ipc.invoke('tasks:create', { title: 'Mixed Task' });
+      // A completed 30-minute entry
+      await timeIpc.invoke('timeEntries:create', {
+        taskId: task.id,
+        startTime: '2026-05-01T10:00:00.000Z',
+        endTime: '2026-05-01T10:30:00.000Z',
+      });
+      // Start a running entry
+      await timeIpc.invoke('timeEntries:create', { taskId: task.id });
+
+      const refreshed = await ipc.invoke('tasks:getById', task.id);
+      // Only the 30-minute completed entry counts in the backend total
+      expect(refreshed.totalTimeSeconds).toBe(30 * 60);
     });
   });
 });

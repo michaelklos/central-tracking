@@ -51,8 +51,8 @@ function rowToTask(db: Database, row: TaskRow): Task {
     .prepare(
       `SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
-          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+          ELSE 0
         END
       ), 0) as total FROM time_entries WHERE task_id = ?`
     )
@@ -62,8 +62,8 @@ function rowToTask(db: Database, row: TaskRow): Task {
     .prepare(
       `SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
-          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+          ELSE 0
         END
       ), 0) as total FROM time_entries WHERE task_id = ? AND date(start_time, 'localtime') = date('now', 'localtime')`
     )
@@ -73,8 +73,8 @@ function rowToTask(db: Database, row: TaskRow): Task {
     .prepare(
       `SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
-          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+          ELSE 0
         END
       ), 0) as total FROM time_entries WHERE task_id = ? AND reported_at IS NULL`
     )
@@ -117,8 +117,8 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
     case 'most-time-today':
       return `(SELECT COALESCE(SUM(
         CASE WHEN end_time IS NOT NULL
-          THEN CAST((julianday(end_time) - julianday(start_time)) * 86400 AS INTEGER)
-          ELSE CAST((julianday('now') - julianday(start_time)) * 86400 AS INTEGER)
+          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+          ELSE CAST(ROUND((julianday('now') - julianday(start_time)) * 86400) AS INTEGER)
         END
       ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time, 'localtime') = date('now', 'localtime')) DESC, created_at DESC`;
     case 'manual':

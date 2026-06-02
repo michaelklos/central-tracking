@@ -4,6 +4,16 @@ import { registerTaskHandlers } from '../taskHandlers';
 import { registerTimeEntryHandlers } from '../timeEntryHandlers';
 import { createMockIpcMain } from '../../../test/mocks/electron';
 
+/**
+ * Return an ISO UTC string for today at the given local hour, safe to use in
+ * queries filtered by date(start_time, 'localtime') = date('now', 'localtime').
+ */
+function todayLocalIso(hourLocal: number, minuteLocal: number = 0): string {
+  const now = new Date();
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hourLocal, minuteLocal, 0);
+  return local.toISOString();
+}
+
 describe('Task Sort Options', () => {
   let db: Database;
   let ipc: ReturnType<typeof createMockIpcMain>;
@@ -55,9 +65,9 @@ describe('Task Sort Options', () => {
   });
 
   it('sorts by created date (newest first)', async () => {
-    const t1 = await ipc.invoke('tasks:create', { title: 'First' });
-    const t2 = await ipc.invoke('tasks:create', { title: 'Second' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'Third' });
+    await ipc.invoke('tasks:create', { title: 'First' });
+    await ipc.invoke('tasks:create', { title: 'Second' });
+    await ipc.invoke('tasks:create', { title: 'Third' });
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'created' });
     expect(result.items[0].title).toBe('Third');
@@ -68,7 +78,7 @@ describe('Task Sort Options', () => {
   it('sorts by recent activity (most recently worked first)', async () => {
     const t1 = await ipc.invoke('tasks:create', { title: 'OldWork' });
     const t2 = await ipc.invoke('tasks:create', { title: 'NewWork' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'NoWork' });
+    await ipc.invoke('tasks:create', { title: 'NoWork' });
 
     // Create a completed time entry for t1 (older)
     await timeIpc.invoke('timeEntries:create', {
@@ -94,30 +104,23 @@ describe('Task Sort Options', () => {
   it('sorts by most time today', async () => {
     const t1 = await ipc.invoke('tasks:create', { title: 'LittleTime' });
     const t2 = await ipc.invoke('tasks:create', { title: 'LotsOfTime' });
-    const t3 = await ipc.invoke('tasks:create', { title: 'NoTime' });
+    await ipc.invoke('tasks:create', { title: 'NoTime' });
 
-    // Anchor entries to "now" so they always fall on the local "today" the
-    // handler queries (`date(start_time, 'localtime') = date('now', 'localtime')`).
-    // Using UTC today directly would put entries on tomorrow's local date in
-    // late-evening US timezones, sinking "today's time" to 0.
-    const now = Date.now();
-    const tEnd1 = new Date(now - 30 * 60_000); // 30m ago
-    const tStart1 = new Date(now - 60 * 60_000); // 1h ago
-    const tEnd2 = new Date(now - 60 * 60_000); // 1h ago
-    const tStart2 = new Date(now - 3 * 60 * 60_000); // 3h ago
-
-    // t1: 30 min today
+    // Use local-noon anchored times so entries always land on today regardless
+    // of the host's UTC offset (a UTC-based subtraction from "now" can cross
+    // midnight in the local timezone for users in negative-offset zones).
+    // t1: 30 min today  (10:00–10:30 local)
     await timeIpc.invoke('timeEntries:create', {
       taskId: t1.id,
-      startTime: tStart1.toISOString(),
-      endTime: tEnd1.toISOString(),
+      startTime: todayLocalIso(10, 0),
+      endTime:   todayLocalIso(10, 30),
     });
 
-    // t2: 2 hours today
+    // t2: 2 hours today  (11:00–13:00 local)
     await timeIpc.invoke('timeEntries:create', {
       taskId: t2.id,
-      startTime: tStart2.toISOString(),
-      endTime: tEnd2.toISOString(),
+      startTime: todayLocalIso(11, 0),
+      endTime:   todayLocalIso(13, 0),
     });
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'most-time-today' });

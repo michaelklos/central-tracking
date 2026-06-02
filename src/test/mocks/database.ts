@@ -1,5 +1,4 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { runMigrations } from '../../main/database/migrations';
 import { Database } from '../../main/database/database';
 
 /**
