@@ -11,7 +11,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
 import { getStringSetting } from './OptionsMenu';
 import type { TimeEntry, Comment, TaskStatus } from '../../shared/types';
-import { allowedAdoStatusTargets } from '../utils/adoFsm';
+import { allowedAdoStatusTargets } from '../../shared/adoFsm';
 import './TaskDetail.css';
 
 type DetailTab = 'details' | 'time' | 'comments' | 'notes';

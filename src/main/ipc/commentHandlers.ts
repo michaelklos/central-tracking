@@ -1,6 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
+import { resolveTaskId } from './taskLookup';
 import type { Comment, CreateCommentInput, PendingSyncComment, TaskSource, UpdateCommentInput, UpsertExternalCommentInput } from '../../shared/types';
 
 interface CommentRow {
@@ -30,6 +31,7 @@ function rowToComment(row: CommentRow): Comment {
 // ─── Exported handler functions (used by both IPC and HTTP server) ───
 
 export function getCommentsByTask(db: Database, taskId: string): Comment[] {
+  taskId = resolveTaskId(db, taskId);
   const rows = db.instance
     .prepare('SELECT * FROM comments WHERE task_id = ? ORDER BY created_at DESC')
     .all(taskId) as CommentRow[];
@@ -37,6 +39,7 @@ export function getCommentsByTask(db: Database, taskId: string): Comment[] {
 }
 
 export function createComment(db: Database, input: CreateCommentInput): Comment {
+  const taskId = resolveTaskId(db, input.taskId);
   const id = uuidv4();
   const now = new Date().toISOString();
 
@@ -45,7 +48,7 @@ export function createComment(db: Database, input: CreateCommentInput): Comment 
       `INSERT INTO comments (id, task_id, body, syncable, synced, created_at, updated_at)
        VALUES (?, ?, ?, ?, 0, ?, ?)`
     )
-    .run(id, input.taskId, input.body, input.syncable ? 1 : 0, now, now);
+    .run(id, taskId, input.body, input.syncable ? 1 : 0, now, now);
 
   const row = db.instance.prepare('SELECT * FROM comments WHERE id = ?').get(id) as CommentRow;
   return rowToComment(row);

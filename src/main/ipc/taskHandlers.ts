@@ -4,23 +4,8 @@ import type { Database } from '../database/database';
 import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
-
-/**
- * Allowed ADO-source status transitions. `blocked` is a local-only state
- * (no ADO mapping), so transitions to/from it bypass the FSM and become
- * a no-op on the next plugin push.
- */
-const ADO_FORWARD_TRANSITIONS: Readonly<Record<TaskStatus, ReadonlyArray<TaskStatus>>> = {
-  todo: ['in-progress', 'done', 'blocked'],
-  'in-progress': ['done', 'blocked'],
-  done: ['in-progress', 'blocked'],
-  blocked: ['todo', 'in-progress', 'done'],
-};
-
-function isAllowedAdoTransition(from: TaskStatus, to: TaskStatus): boolean {
-  if (from === to) return true;
-  return (ADO_FORWARD_TRANSITIONS[from] ?? []).includes(to);
-}
+import { isAllowedAdoTransition } from '../../shared/adoFsm';
+import { resolveTaskId } from './taskLookup';
 
 interface TaskRow {
   id: string;
@@ -212,41 +197,6 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
   }
 
   return { clauses, values };
-}
-
-// Escape `%`, `_`, and `\` so user input is matched literally by SQLite's LIKE.
-// Pairs with `ESCAPE '\'` in the queries below.
-function escapeLike(input: string): string {
-  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
-function resolveTaskId(db: Database, id: string): string {
-  // Full UUID — return as-is
-  if (id.length >= 36) return id;
-
-  // Exact-match fast path (also protects against `%`/`_` in the input)
-  const exact = db.instance
-    .prepare('SELECT id FROM tasks WHERE id = ? OR title = ?')
-    .all(id, id) as { id: string }[];
-  if (exact.length === 1) return exact[0].id;
-
-  const escaped = escapeLike(id);
-
-  // Try ID prefix match
-  const byId = db.instance
-    .prepare("SELECT id FROM tasks WHERE id LIKE ? ESCAPE '\\'")
-    .all(`${escaped}%`) as { id: string }[];
-  if (byId.length === 1) return byId[0].id;
-  if (byId.length > 1) throw new Error(`Ambiguous ID prefix "${id}" matches ${byId.length} tasks. Use more characters.`);
-
-  // Fall back to case-insensitive title match
-  const byTitle = db.instance
-    .prepare("SELECT id FROM tasks WHERE title LIKE ? ESCAPE '\\' AND deleted_at IS NULL")
-    .all(`%${escaped}%`) as { id: string }[];
-  if (byTitle.length === 1) return byTitle[0].id;
-  if (byTitle.length > 1) throw new Error(`Ambiguous name "${id}" matches ${byTitle.length} tasks. Be more specific.`);
-
-  throw new Error(`Task not found: ${id}`);
 }
 
 // ─── Exported handler functions (used by both IPC and HTTP server) ───

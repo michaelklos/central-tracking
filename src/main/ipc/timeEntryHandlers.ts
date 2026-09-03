@@ -4,6 +4,7 @@ import type { Database } from '../database/database';
 import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
+import { resolveTaskId } from './taskLookup';
 
 interface TimeEntryRow {
   id: string;
@@ -32,6 +33,7 @@ function rowToTimeEntry(row: TimeEntryRow): TimeEntry {
 // ─── Exported handler functions (used by both IPC and HTTP server) ───
 
 export function getTimeEntriesByTask(db: Database, taskId: string): TimeEntry[] {
+  taskId = resolveTaskId(db, taskId);
   const rows = db.instance
     .prepare('SELECT * FROM time_entries WHERE task_id = ? ORDER BY start_time DESC')
     .all(taskId) as TimeEntryRow[];
@@ -39,6 +41,7 @@ export function getTimeEntriesByTask(db: Database, taskId: string): TimeEntry[] 
 }
 
 export function getTimeEntriesByTaskPaginated(db: Database, taskId: string, params?: PaginationParams): PaginatedResponse<TimeEntry> {
+  taskId = resolveTaskId(db, taskId);
   const offset = params?.offset ?? 0;
   const limit = params?.limit ?? 20;
   const rows = db.instance
@@ -62,6 +65,10 @@ export function getTimeEntriesByTaskPaginated(db: Database, taskId: string, para
 export function createTimeEntry(db: Database, input: CreateTimeEntryInput): TimeEntry {
   const isManualEntry = input.endTime != null;
 
+  // Resolve a prefix or name substring to a full id first — the CLI advertises
+  // those for `timer start` — then validate.
+  const taskId = resolveTaskId(db, input.taskId);
+
   // Validate the task BEFORE touching the running timer. Previously the
   // singleton-timer stop ran first, so a bad task id (a prefix, a mistyped or
   // purged UUID) stopped the user's timer and only then failed on the foreign
@@ -72,7 +79,7 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
   // that is a separate behavior change, not part of this fix.
   const task = db.instance
     .prepare('SELECT id FROM tasks WHERE id = ?')
-    .get(input.taskId) as { id: string } | undefined;
+    .get(taskId) as { id: string } | undefined;
   if (!task) {
     throw new DomainError('NOT_FOUND', `Task not found: ${input.taskId}`, 404);
   }
@@ -118,7 +125,7 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
       )
       .run(
         id,
-        input.taskId,
+        taskId,
         input.startTime ?? now,
         input.endTime ?? null,
         durationSeconds,
@@ -311,6 +318,7 @@ export function markTaskEntriesReported(
   taskId: string,
   reportedAt: string | null,
 ): { changed: number } {
+  taskId = resolveTaskId(db, taskId);
   const result = reportedAt === null
     ? db.instance
         .prepare('UPDATE time_entries SET reported_at = NULL WHERE task_id = ? AND reported_at IS NOT NULL')
@@ -337,6 +345,7 @@ export function batchMarkTaskEntriesReported(
   opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
 ): { changed: number } {
   if (taskIds.length === 0) return { changed: 0 };
+  taskIds = taskIds.map((id) => resolveTaskId(db, id));
 
   const dateStart = opts.dateStart && opts.dateStart.length > 0 ? opts.dateStart : undefined;
   const dateEnd = opts.dateEnd && opts.dateEnd.length > 0 ? opts.dateEnd : undefined;
