@@ -14,7 +14,27 @@ export type PluginCapabilityMap = Record<string, PluginCapability>;
  * default. Kept here (renderer-only) because it's the renderer reading the
  * override; the host doesn't care which name plugins use.
  */
-const TRACKS_REPORTED_CONFIG_KEY = 'tracks-reported';
+export const TRACKS_REPORTED_CONFIG_KEY = 'tracks-reported';
+
+/**
+ * The one precedence rule for `tracksReported`: user-set config key >
+ * manifest capability default > historical default (true).
+ *
+ * Exported because the plugins settings page renders the same flag as a
+ * toggle. It used to resolve it on its own, ignoring the manifest, so a
+ * plugin declaring `tracksReported: false` would show its toggle on while
+ * the task list hid the badges. The two agreed only because the ADO manifest
+ * happens to declare `true`.
+ *
+ * `manifestValue` is the manifest's capabilities map verbatim, so anything
+ * other than a boolean (missing, or a plugin writing a string) falls through
+ * to the historical default. `override` is the raw config string, or null
+ * when the user has never set it.
+ */
+export function resolveTracksReported(manifestValue: unknown, override: string | null): boolean {
+  const manifestDefault = typeof manifestValue === 'boolean' ? manifestValue : true;
+  return override === null ? manifestDefault : override !== 'false';
+}
 
 /**
  * Loads a `{ pluginId → { enabled, tracksReported } }` map for all installed
@@ -36,12 +56,8 @@ export function usePluginCapabilities(): PluginCapabilityMap {
       const next: PluginCapabilityMap = {};
       await Promise.all(
         caps.map(async (c) => {
-          const manifestDefault =
-            typeof c.capabilities?.tracksReported === 'boolean'
-              ? (c.capabilities.tracksReported as boolean)
-              : true;
           const override = await window.api.plugins.getConfig(c.id, TRACKS_REPORTED_CONFIG_KEY);
-          const tracksReported = override === null ? manifestDefault : override !== 'false';
+          const tracksReported = resolveTracksReported(c.capabilities?.tracksReported, override);
           next[c.id] = { enabled: c.enabled, tracksReported };
         }),
       );
