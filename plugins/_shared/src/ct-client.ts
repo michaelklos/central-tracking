@@ -146,8 +146,18 @@ export class CtClient {
     return this.call('tasks/upsertExternal', [input]);
   }
 
-  setExternalTaskState(taskId: string, externalState: string): Promise<{ ok: true }> {
-    return this.call('tasks/setExternalState', [taskId, externalState]);
+  /**
+   * Record the pushed external state. Pass `pushedStatus` — the ct status the
+   * push was for — so the host keeps `state_dirty` set if the user changed the
+   * status again while the push was in flight; without it that change is
+   * dropped and reverted by the next pull.
+   */
+  setExternalTaskState(
+    taskId: string,
+    externalState: string,
+    pushedStatus?: string,
+  ): Promise<{ ok: true; stillDirty: boolean }> {
+    return this.call('tasks/setExternalState', [taskId, externalState, pushedStatus]);
   }
 
   // ─── Time entries ───

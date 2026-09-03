@@ -199,6 +199,44 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
   return { clauses, values };
 }
 
+/**
+ * The ADO status gate, shared by `updateTask` and `batchUpdateTasks`.
+ *
+ * ADO full-mirror tasks (source='plugin' AND plugin_id='ado'): enforce the FSM
+ * and mark state_dirty so push-state syncs the new state. The plugin clears
+ * the flag via setExternalState after a successful push.
+ *
+ * Link-only ADO tasks (plugin_id='ado' but source != 'plugin', e.g. 'ad-hoc'
+ * or 'email') are NOT FSM-gated and NOT marked state_dirty. The user added a
+ * link for time/comment push convenience; status is still local-only and free
+ * to move in any direction.
+ *
+ * Returns whether the caller should set `state_dirty = 1`; throws when the
+ * transition is illegal.
+ */
+function checkAdoStatusChange(db: Database, id: string, nextStatus: string): { markDirty: boolean } {
+  const current = db.instance
+    .prepare('SELECT plugin_id, source, status FROM tasks WHERE id = ?')
+    .get(id) as { plugin_id: string | null; source: string; status: string } | undefined;
+
+  if (
+    !current ||
+    current.plugin_id !== 'ado' ||
+    current.source !== 'plugin' ||
+    current.status === nextStatus
+  ) {
+    return { markDirty: false };
+  }
+
+  if (!isAllowedAdoTransition(current.status as TaskStatus, nextStatus as TaskStatus)) {
+    throw new DomainError(
+      'INVALID_ADO_TRANSITION',
+      `Illegal ADO transition: ${current.status} → ${nextStatus}`,
+    );
+  }
+  return { markDirty: true };
+}
+
 // ─── Exported handler functions (used by both IPC and HTTP server) ───
 
 export function getAllTasks(db: Database): Task[] {
@@ -357,29 +395,7 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
   }
 
   if (updates.status !== undefined) {
-    // ADO full-mirror tasks (source='plugin' AND plugin_id='ado'): enforce
-    // FSM and mark state_dirty so push-state syncs the new state. Plugin
-    // clears the flag via setExternalState after a successful push.
-    //
-    // Link-only ADO tasks (plugin_id='ado' but source != 'plugin', e.g.
-    // 'ad-hoc' or 'email') are NOT FSM-gated and NOT marked state_dirty.
-    // The user added a link for time/comment push convenience; status is
-    // still local-only and free to move in any direction.
-    const current = db.instance
-      .prepare('SELECT plugin_id, source, status FROM tasks WHERE id = ?')
-      .get(id) as { plugin_id: string | null; source: string; status: string } | undefined;
-    if (
-      current &&
-      current.plugin_id === 'ado' &&
-      current.source === 'plugin' &&
-      current.status !== updates.status
-    ) {
-      if (!isAllowedAdoTransition(current.status as TaskStatus, updates.status as TaskStatus)) {
-        throw new DomainError(
-          'INVALID_ADO_TRANSITION',
-          `Illegal ADO transition: ${current.status} → ${updates.status}`,
-        );
-      }
+    if (checkAdoStatusChange(db, id, updates.status).markDirty) {
       sets.push('state_dirty = 1');
     }
   }
@@ -428,6 +444,14 @@ export function batchUpdateTasks(db: Database, ids: string[], input: BatchUpdate
       const values: unknown[] = [];
 
       if (input.status !== undefined) {
+        // Same gate as updateTask. Without it a batch status change on an ADO
+        // mirror task skipped the FSM and never set state_dirty, so it was
+        // never pushed and the next pull reverted it. An illegal transition
+        // aborts the whole batch: the work is already inside one transaction,
+        // so failing loudly beats applying it to some tasks and not others.
+        if (checkAdoStatusChange(db, id, input.status).markDirty) {
+          sets.push('state_dirty = 1');
+        }
         sets.push('status = ?');
         values.push(input.status);
       }
@@ -658,18 +682,42 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
  * Clear `state_dirty` and set `external_state` after a plugin successfully
  * pushed the local status to the external system.
  */
+/**
+ * Record the external state a plugin just pushed, and clear `state_dirty`.
+ *
+ * `pushedStatus` is the ct status the plugin actually pushed. When given, the
+ * flag is cleared only if the task still has that status: if the user changed
+ * it again while the push was in flight, their change is still unpushed, and
+ * clearing the flag would drop it silently — the next pull would see a clean
+ * task and revert ct to what ADO holds. `external_state` is recorded either
+ * way, because ADO really is in that state.
+ *
+ * Omitting `pushedStatus` keeps the old clear-unconditionally behavior, so an
+ * already-packaged plugin that doesn't send it still works.
+ */
 export function setExternalTaskState(
   db: Database,
   id: string,
   externalState: string,
-): { ok: true } {
+  pushedStatus?: string,
+): { ok: true; stillDirty: boolean } {
   id = resolveTaskId(db, id);
+
+  const current = db.instance
+    .prepare('SELECT status FROM tasks WHERE id = ?')
+    .get(id) as { status: string } | undefined;
+  if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${id}`, 404);
+
+  const raced = pushedStatus !== undefined && current.status !== pushedStatus;
+
   db.instance
     .prepare(
-      "UPDATE tasks SET external_state = ?, state_dirty = 0, updated_at = datetime('now') WHERE id = ?",
+      `UPDATE tasks SET external_state = ?, state_dirty = ?, updated_at = datetime('now')
+       WHERE id = ?`,
     )
-    .run(externalState, id);
-  return { ok: true };
+    .run(externalState, raced ? 1 : 0, id);
+
+  return { ok: true, stillDirty: raced };
 }
 
 /**
@@ -786,7 +834,7 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:deleteAll', () => deleteAllTasks(db));
   ipcMain.handle('tasks:resetApp', () => resetApp(db));
   ipcMain.handle('tasks:upsertExternal', (_event, input: UpsertExternalTaskInput) => upsertExternalTask(db, input));
-  ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string) => setExternalTaskState(db, id, externalState));
+  ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string, pushedStatus?: string) => setExternalTaskState(db, id, externalState, pushedStatus));
   ipcMain.handle(
     'tasks:link',
     (_event, id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>

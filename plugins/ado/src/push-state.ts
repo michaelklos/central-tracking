@@ -143,7 +143,17 @@ async function pushOneTask(
   // Bookkeeping after a successful PATCH MUST propagate failures; otherwise
   // ADO has the new state but ct keeps state_dirty=1 and the old
   // external_state, and the next pull reads "drift" and reverts ct.
-  await ct.setExternalTaskState(task.id, mapped);
+  //
+  // `task.status` is what this push was for. The host clears state_dirty only
+  // if the task still has it — a status change made while the PATCH was in
+  // flight stays dirty and gets pushed on the next run, instead of being
+  // cleared here and reverted by the next pull.
+  const { stillDirty } = await ct.setExternalTaskState(task.id, mapped, task.status);
+  if (stillDirty) {
+    warnings.push(
+      `[ado] push-state: #${task.externalId} status changed during push; left dirty for the next run`,
+    );
+  }
   return 'pushed';
 }
 

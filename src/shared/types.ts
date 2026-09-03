@@ -471,7 +471,7 @@ export interface CentralTrackingAPI {
     deleteAll(): Promise<{ deletedCount: number }>;
     resetApp(): Promise<void>;
     upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
-    setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
+    setExternalState(id: string, externalState: string, pushedStatus?: string): Promise<{ ok: true; stillDirty: boolean }>;
     /**
      * Manually link an existing task to a remote ticket served by `pluginId`.
      * `mode: 'link'` just stores plugin_id/external_id (task stays editable).

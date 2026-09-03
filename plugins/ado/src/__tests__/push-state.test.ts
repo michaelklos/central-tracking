@@ -85,7 +85,7 @@ function makeMocks(
   return {
     ct: {
       getTasks: vi.fn().mockResolvedValue(tasks),
-      setExternalTaskState: vi.fn().mockResolvedValue({ ok: true }),
+      setExternalTaskState: vi.fn().mockResolvedValue({ ok: true, stillDirty: false }),
     },
     ado: {
       getWorkItem: vi.fn((id: number) => Promise.resolve(workItems[id])),
@@ -137,7 +137,23 @@ describe('pushState', () => {
     expect(wiId).toBe(101);
     expect(ops[0]).toEqual({ op: 'test', path: '/rev', value: 7 });
     expect(ops[1]).toEqual({ op: 'add', path: `/fields/${STATE_FIELD}`, value: 'Closed' });
-    expect(m.ct.setExternalTaskState).toHaveBeenCalledWith('t1', 'Closed');
+    // The pushed ct status goes with it, so the host can tell whether the
+    // user changed the status while this PATCH was in flight.
+    expect(m.ct.setExternalTaskState).toHaveBeenCalledWith('t1', 'Closed', 'done');
+  });
+
+  it('warns when the host reports the task changed during the push', async () => {
+    const task = makeTask('t1', '101', 'done', 'Active');
+    const m = makeMocks([task], { 101: makeWorkItem(101, 7, 'Active') });
+    m.ado.patchWorkItem.mockResolvedValue(makeWorkItem(101, 8, 'Closed'));
+    m.ct.setExternalTaskState.mockResolvedValue({ ok: true, stillDirty: true });
+
+    const res = await pushState(cast(m).ado, cast(m).ct, makeConfig());
+
+    // The PATCH did land, so it counts as pushed; the task stays dirty on the
+    // host and the next run picks up the newer status.
+    expect(res.pushed).toBe(1);
+    expect(res.warnings.some((w) => w.includes('status changed during push'))).toBe(true);
   });
 
   it('skips blocked tasks with a warning and leaves state_dirty set', async () => {
