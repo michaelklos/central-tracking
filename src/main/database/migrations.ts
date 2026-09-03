@@ -249,11 +249,20 @@ export function runMigrations(db: BetterSqlite3.Database, upTo?: number): void {
 
         // Deferred until just before commit: with enforcement off, a rebuild
         // could otherwise leave dangling references behind and commit them.
+        //
+        // Scoped to `tasks` deliberately. An unscoped `foreign_key_check`
+        // scans the whole database, so any pre-existing orphan row a
+        // migration did not cause would abort it and leave the user in the
+        // startup-failure path — the dead app this change exists to prevent.
+        // `tasks` is what migration 009 rebuilds, and the FK it introduces
+        // (tasks.plugin_id → plugins.id) is what can actually dangle; the
+        // INSERT…SELECT preserves every task id, so references from
+        // time_entries and comments survive by construction.
         if (disablesForeignKeys) {
-          const violations = db.pragma('foreign_key_check') as unknown[];
+          const violations = db.pragma('foreign_key_check(tasks)') as unknown[];
           if (violations.length > 0) {
             throw new Error(
-              `${violations.length} foreign key violation(s) after the rebuild`,
+              `${violations.length} foreign key violation(s) in "tasks" after the rebuild`,
             );
           }
         }
