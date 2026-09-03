@@ -16,6 +16,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    // Pin a non-UTC, DST-observing zone. Day boundaries are local calendar
+    // days (see src/shared/dateRange.ts), and under TZ=UTC — which is what CI
+    // would otherwise run — local and UTC days coincide, so every test of that
+    // behavior would pass without exercising it.
+    env: { TZ: 'America/New_York' },
     setupFiles: ['src/test/setup.ts'],
     include: [
       'src/**/__tests__/**/*.test.{ts,tsx}',

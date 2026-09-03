@@ -1,4 +1,5 @@
 import type { Database } from '../database/database';
+import { isoToLocalDateString } from '../../shared/dateRange';
 
 interface TimeEntryRow {
   id: string;
@@ -23,7 +24,9 @@ export function generateCsvContent(db: Database, start: string, end: string): st
 
   const lines = ['Date,Task,Start,End,Duration,Note'];
   for (const row of rows) {
-    const date = row.start_time.split('T')[0];
+    // Local calendar date, matching the range endpoints and the report
+    // queries; splitting the ISO string would label it with the UTC date.
+    const date = isoToLocalDateString(row.start_time);
     const startTime = row.start_time;
     const endTime = row.end_time ?? '';
     const duration = row.duration_seconds ?? 0;

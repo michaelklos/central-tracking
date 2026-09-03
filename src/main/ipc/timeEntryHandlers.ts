@@ -216,7 +216,7 @@ export function getTimeEntryReport(db: Database, start: string, end: string) {
   const rows = db.instance
     .prepare(
       `SELECT
-        date(te.start_time) as date,
+        date(te.start_time, 'localtime') as date,
         te.task_id,
         t.title as task_title,
         COALESCE(SUM(
@@ -228,8 +228,8 @@ export function getTimeEntryReport(db: Database, start: string, end: string) {
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
       WHERE te.start_time >= ? AND te.start_time <= ?
-      GROUP BY date(te.start_time), te.task_id
-      ORDER BY date(te.start_time)`
+      GROUP BY date(te.start_time, 'localtime'), te.task_id
+      ORDER BY date(te.start_time, 'localtime')`
     )
     .all(start, end) as { date: string; task_id: string; task_title: string; total_seconds: number }[];
   return rows.map((r) => ({
@@ -244,7 +244,7 @@ export function getSummaryReport(db: Database, start: string, end: string): Summ
   const rows = db.instance
     .prepare(
       `SELECT
-        date(te.start_time) as date,
+        date(te.start_time, 'localtime') as date,
         te.task_id,
         t.title as task_title,
         t.source as task_source,
@@ -258,8 +258,8 @@ export function getSummaryReport(db: Database, start: string, end: string): Summ
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
       WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
-      GROUP BY date(te.start_time), te.task_id
-      ORDER BY date(te.start_time)`
+      GROUP BY date(te.start_time, 'localtime'), te.task_id
+      ORDER BY date(te.start_time, 'localtime')`
     )
     .all(start, end) as { date: string; task_id: string; task_title: string; task_source: string; task_status: string; total_seconds: number }[];
 

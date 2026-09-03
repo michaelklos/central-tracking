@@ -572,9 +572,21 @@ describe('Task IPC Handlers', () => {
       expect(titles).not.toContain('No Entries');
     });
 
-    it('boundary dates are inclusive (start of day on dateStart, end of day on dateEnd)', async () => {
-      await seedTaskWithEntry('Start Edge', '2026-03-01T00:00:00.000Z', '2026-03-01T00:30:00.000Z');
-      await seedTaskWithEntry('End Edge', '2026-03-31T23:30:00.000Z', '2026-03-31T23:59:00.000Z');
+    it('boundary dates are inclusive at the edges of the LOCAL day', async () => {
+      // Seeded from local wall-clock components: the range endpoints are local
+      // midnight and local 23:59:59.999, so an entry at UTC midnight on the
+      // first day is not necessarily inside the range (west of UTC it belongs
+      // to the previous local day).
+      await seedTaskWithEntry(
+        'Start Edge',
+        new Date(2026, 2, 1, 0, 0, 0, 0).toISOString(),
+        new Date(2026, 2, 1, 0, 30, 0, 0).toISOString(),
+      );
+      await seedTaskWithEntry(
+        'End Edge',
+        new Date(2026, 2, 31, 23, 30, 0, 0).toISOString(),
+        new Date(2026, 2, 31, 23, 59, 0, 0).toISOString(),
+      );
 
       const res = await ipc.invoke('tasks:getActive', { dateStart: '2026-03-01', dateEnd: '2026-03-31' });
       const titles = res.items.map((t: { title: string }) => t.title);
