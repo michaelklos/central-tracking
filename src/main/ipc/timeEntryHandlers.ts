@@ -66,6 +66,10 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
   // singleton-timer stop ran first, so a bad task id (a prefix, a mistyped or
   // purged UUID) stopped the user's timer and only then failed on the foreign
   // key, leaving them with no timer and a 500.
+  //
+  // No `deleted_at IS NULL` clause: a soft-deleted task still accepts a timer
+  // start, which is exactly what the foreign key allowed before. Tightening
+  // that is a separate behavior change, not part of this fix.
   const task = db.instance
     .prepare('SELECT id FROM tasks WHERE id = ?')
     .get(input.taskId) as { id: string } | undefined;
