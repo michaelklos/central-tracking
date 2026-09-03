@@ -601,9 +601,14 @@ export function deleteAllTasks(db: Database): { deletedCount: number } {
 
 /**
  * Upsert a task by (plugin_id, external_id). Insert if not found, otherwise
- * update mirror fields. Title/notes/description are overwritten (the plugin
- * owns them). Status is overwritten only when state_dirty=0; if state_dirty=1
- * a local push is pending and we must not clobber it.
+ * update mirror fields.
+ *
+ * Title/notes/description/status are overwritten only for full mirrors
+ * (source='plugin'), where the plugin owns them. Link-only tasks keep their
+ * user-authored values; see the comment on `isFullMirror` below.
+ *
+ * Status is additionally gated on state_dirty=0; if state_dirty=1 a local push
+ * is pending and we must not clobber it.
  */
 export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput): Task {
   if (!input.pluginId) {
@@ -611,8 +616,10 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
   }
   const now = new Date().toISOString();
   const existing = db.instance
-    .prepare('SELECT id, state_dirty FROM tasks WHERE plugin_id = ? AND external_id = ?')
-    .get(input.pluginId, input.externalId) as { id: string; state_dirty: number } | undefined;
+    .prepare('SELECT id, state_dirty, source FROM tasks WHERE plugin_id = ? AND external_id = ?')
+    .get(input.pluginId, input.externalId) as
+    | { id: string; state_dirty: number; source: string }
+    | undefined;
 
   if (!existing) {
     const id = uuidv4();
@@ -648,8 +655,26 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
     return rowToTask(db, row);
   }
 
-  const sets: string[] = ['title = ?', 'notes = ?', 'description = ?'];
-  const values: unknown[] = [input.title, input.notes ?? '', input.description ?? ''];
+  // Link-only tasks (`linkTaskToPlugin` mode='link') keep source='ad-hoc' and
+  // are documented as user-owned: "Title/notes remain user-editable ... does
+  // not pull state into ct." Only full mirrors (source='plugin') may have
+  // their user-facing columns rewritten by a pull. The remote metadata columns
+  // below are still refreshed for both, since those describe the work item
+  // rather than the ct task.
+  //
+  // Note this must stay a column-level skip. Adding `AND source = 'plugin'` to
+  // the lookup above would instead miss the row and fall into the INSERT
+  // branch, duplicating (plugin_id, external_id) into the partial unique index
+  // from migration 007.
+  const isFullMirror = existing.source === 'plugin';
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (isFullMirror) {
+    sets.push('title = ?', 'notes = ?', 'description = ?');
+    values.push(input.title, input.notes ?? '', input.description ?? '');
+  }
 
   if (input.externalUrl !== undefined) {
     sets.push('external_url = ?');
@@ -666,7 +691,7 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
   sets.push('external_refreshed_at = ?');
   values.push(input.externalRefreshedAt ?? now);
 
-  if (input.status !== undefined && existing.state_dirty === 0) {
+  if (isFullMirror && input.status !== undefined && existing.state_dirty === 0) {
     sets.push('status = ?');
     values.push(input.status);
   }

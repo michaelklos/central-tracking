@@ -14,20 +14,31 @@ const MAX_BODY_SIZE = 1024 * 1024; // 1MB
 const DEFAULT_PORT = 19532;
 const MAX_PORT_ATTEMPTS = 5;
 
+/**
+ * Collect the request body as Buffers and decode once at the end.
+ *
+ * Decoding per chunk (`body += chunk.toString()`) corrupts any multi-byte
+ * UTF-8 character that straddles a socket read boundary, silently replacing it
+ * with U+FFFD. Summing `chunk.length` on Buffers also keeps the size limit
+ * measured in bytes rather than characters.
+ */
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks: Buffer[] = [];
     let size = 0;
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY_SIZE) {
-        req.destroy();
-        reject(new Error('Request body too large'));
+        // Stop reading but do NOT destroy the socket here: the caller still has
+        // to write a 413 onto it. The caller destroys once the response has
+        // flushed.
+        req.pause();
+        reject(new DomainError('PAYLOAD_TOO_LARGE', 'Request body too large', 413));
         return;
       }
-      body += chunk.toString();
+      chunks.push(chunk);
     });
-    req.on('end', () => resolve(body));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }
@@ -60,8 +71,31 @@ export async function startHttpServer(
   let boundPort = 0;
 
   const server = http.createServer(async (req, res) => {
-    // Drain request body before sending any error response to avoid ECONNRESET
-    const bodyStr = await readBody(req);
+    // Drain request body before sending any error response to avoid ECONNRESET.
+    // This must be guarded: an oversized body (or a client abort mid-upload)
+    // rejects, and an unguarded await would escape as an unhandled rejection in
+    // the Electron main process with no response ever written, which the CLI
+    // sees as a socket hang up.
+    let bodyStr: string;
+    try {
+      bodyStr = await readBody(req);
+    } catch (err) {
+      // Tear the request down only after the error response has flushed,
+      // otherwise the client gets a reset instead of the status code.
+      res.on('finish', () => {
+        if (!req.destroyed) req.destroy();
+      });
+      if (err instanceof DomainError) {
+        sendJson(res, err.httpStatus, {
+          ok: false,
+          error: { code: err.code, message: err.message },
+        });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        sendJson(res, 400, { ok: false, error: { code: 'BAD_REQUEST', message } });
+      }
+      return;
+    }
 
     // Only accept POST to /api/*
     if (req.method !== 'POST' || !req.url?.startsWith('/api/')) {

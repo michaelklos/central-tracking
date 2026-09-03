@@ -112,9 +112,14 @@ function sendOnce<T>(
         },
       },
       (res) => {
-        let body = '';
-        res.on('data', (chunk: string) => (body += chunk));
+        // Decode once at the end: appending each raw chunk corrupts multi-byte
+        // UTF-8 characters that straddle a socket read boundary.
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
         res.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf8');
           if (debug) {
             process.stderr.write(`[ct debug] ${res.statusCode} ${body.slice(0, 500)}\n`);
           }
