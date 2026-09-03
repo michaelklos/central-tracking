@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 import { useReportContext } from '../context/ReportContext';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
+import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { generateMarkdownReport } from '../utils/markdownReport';
 import { CategoryPieCharts } from './CategoryPieCharts';
 import type { SummaryReportEntry } from '../../shared/types';
@@ -19,8 +20,8 @@ export function ReportView() {
   useEffect(() => {
     if (mode === 'categories') return;
     const myGeneration = ++loadGenerationRef.current;
-    const start = `${startDate}T00:00:00Z`;
-    const end = `${endDate}T23:59:59Z`;
+    const start = toIsoStartOfDay(startDate);
+    const end = toIsoEndOfDay(endDate);
     (async () => {
       const data = await window.api.timeEntries.getSummaryReport(start, end);
       // Bail if a newer load has started while we awaited.
@@ -30,8 +31,8 @@ export function ReportView() {
   }, [startDate, endDate, mode]);
 
   const handleExportCsv = async () => {
-    const start = `${startDate}T00:00:00Z`;
-    const end = `${endDate}T23:59:59Z`;
+    const start = toIsoStartOfDay(startDate);
+    const end = toIsoEndOfDay(endDate);
     await window.api.reports.exportCsv(start, end);
   };
 

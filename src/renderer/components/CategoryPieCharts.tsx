@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDuration } from '../utils/time';
-import { toLocalDateString as toDateString } from '../../shared/dateRange';
+import { toLocalDateString as toDateString, toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import type { Category, SummaryReportEntry } from '../../shared/types';
 import './CategoryPieCharts.css';
 
@@ -118,8 +118,8 @@ export function CategoryPieCharts({ categories }: Props) {
         const start = override ? override.start : PANELS[i].defaultStart();
         const end = override ? override.end : PANELS[i].defaultEnd();
         const data = await window.api.timeEntries.getSummaryReport(
-          `${start}T00:00:00Z`,
-          `${end}T23:59:59Z`
+          toIsoStartOfDay(start),
+          toIsoEndOfDay(end),
         );
         // Bail if a newer load has started while we awaited.
         if (loadGenerationRef.current !== myGeneration) return;

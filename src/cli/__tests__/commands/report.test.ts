@@ -6,7 +6,7 @@ import { runCli } from './harness';
 import { registerReportCommands } from '../../commands/report';
 
 describe('ct report summary', () => {
-  it('converts --from/--to to start-of-day / end-of-day ISO', async () => {
+  it('converts --from/--to to local start-of-day / end-of-day ISO', async () => {
     const { calls } = await runCli(
       registerReportCommands,
       ['report', 'summary', '--from', '2026-04-01', '--to', '2026-04-07'],
@@ -14,8 +14,11 @@ describe('ct report summary', () => {
     );
     expect(calls[0].endpoint).toBe('timeEntries/getSummaryReport');
     const [start, end] = calls[0].args as [string, string];
-    expect(start).toBe('2026-04-01T00:00:00.000Z');
-    expect(end).toBe('2026-04-07T23:59:59.999Z');
+    // A day is a local calendar day, so the endpoints are the instants of
+    // local midnight and 23:59:59.999 — not the literal `Z` strings this used
+    // to assert, which dropped an evening's entries west of UTC.
+    expect(start).toBe(new Date(2026, 3, 1, 0, 0, 0, 0).toISOString());
+    expect(end).toBe(new Date(2026, 3, 7, 23, 59, 59, 999).toISOString());
   });
 
   it('renders empty-range message', async () => {
