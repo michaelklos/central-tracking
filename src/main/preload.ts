@@ -44,8 +44,8 @@ const api = {
     deleteAll: () => ipcRenderer.invoke('tasks:deleteAll'),
     resetApp: () => ipcRenderer.invoke('tasks:resetApp'),
     upsertExternal: (input: UpsertExternalTaskInput) => ipcRenderer.invoke('tasks:upsertExternal', input),
-    setExternalState: (id: string, externalState: string) =>
-      ipcRenderer.invoke('tasks:setExternalState', id, externalState),
+    setExternalState: (id: string, externalState: string, pushedStatus?: string) =>
+      ipcRenderer.invoke('tasks:setExternalState', id, externalState, pushedStatus),
     link: (id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>
       ipcRenderer.invoke('tasks:link', id, input),
     unlink: (id: string) => ipcRenderer.invoke('tasks:unlink', id),
