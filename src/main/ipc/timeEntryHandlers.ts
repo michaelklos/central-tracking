@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
 import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
+import { DomainError } from '../errors';
 
 interface TimeEntryRow {
   id: string;
@@ -61,24 +62,15 @@ export function getTimeEntriesByTaskPaginated(db: Database, taskId: string, para
 export function createTimeEntry(db: Database, input: CreateTimeEntryInput): TimeEntry {
   const isManualEntry = input.endTime != null;
 
-  // Singleton timer: stop any currently active entry first
-  // But only if this is NOT a manual (completed) entry
-  if (!isManualEntry) {
-    const active = db.instance
-      .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
-      .get() as TimeEntryRow | undefined;
-
-    if (active) {
-      const stopNow = new Date().toISOString();
-      const duration = Math.round(
-        (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
-      );
-      db.instance
-        .prepare(
-          'UPDATE time_entries SET end_time = ?, duration_seconds = ? WHERE id = ?'
-        )
-        .run(stopNow, duration, active.id);
-    }
+  // Validate the task BEFORE touching the running timer. Previously the
+  // singleton-timer stop ran first, so a bad task id (a prefix, a mistyped or
+  // purged UUID) stopped the user's timer and only then failed on the foreign
+  // key, leaving them with no timer and a 500.
+  const task = db.instance
+    .prepare('SELECT id FROM tasks WHERE id = ?')
+    .get(input.taskId) as { id: string } | undefined;
+  if (!task) {
+    throw new DomainError('NOT_FOUND', `Task not found: ${input.taskId}`, 404);
   }
 
   const id = uuidv4();
@@ -92,20 +84,45 @@ export function createTimeEntry(db: Database, input: CreateTimeEntryInput): Time
     durationSeconds = Math.round((endMs - startMs) / 1000);
   }
 
-  db.instance
-    .prepare(
-      `INSERT INTO time_entries (id, task_id, start_time, end_time, duration_seconds, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      id,
-      input.taskId,
-      input.startTime ?? now,
-      input.endTime ?? null,
-      durationSeconds,
-      input.note ?? '',
-      now
-    );
+  // Stop-then-insert must be atomic: if the insert fails for any reason the
+  // previously running timer has to stay running.
+  const create = db.instance.transaction(() => {
+    // Singleton timer: stop any currently active entry first
+    // But only if this is NOT a manual (completed) entry
+    if (!isManualEntry) {
+      const active = db.instance
+        .prepare('SELECT * FROM time_entries WHERE end_time IS NULL')
+        .get() as TimeEntryRow | undefined;
+
+      if (active) {
+        const stopNow = new Date().toISOString();
+        const duration = Math.round(
+          (new Date(stopNow).getTime() - new Date(active.start_time).getTime()) / 1000
+        );
+        db.instance
+          .prepare(
+            'UPDATE time_entries SET end_time = ?, duration_seconds = ? WHERE id = ?'
+          )
+          .run(stopNow, duration, active.id);
+      }
+    }
+
+    db.instance
+      .prepare(
+        `INSERT INTO time_entries (id, task_id, start_time, end_time, duration_seconds, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        input.taskId,
+        input.startTime ?? now,
+        input.endTime ?? null,
+        durationSeconds,
+        input.note ?? '',
+        now
+      );
+  });
+  create();
 
   const row = db.instance.prepare('SELECT * FROM time_entries WHERE id = ?').get(id) as TimeEntryRow;
   return rowToTimeEntry(row);
