@@ -28,6 +28,30 @@ describe('migration atomicity', () => {
     db.close();
   });
 
+  it('does not fail 009 over a pre-existing orphan it did not cause', () => {
+    // The foreign_key_check guarding the `tasks` rebuild must be scoped to
+    // `tasks`. Unscoped it scans the whole database, so unrelated damage from
+    // an older schema would abort the migration and leave the user in the
+    // startup-failure path — the dead app this change exists to prevent.
+    const db = new BetterSqlite3(':memory:');
+    db.pragma('foreign_keys = OFF');
+    runMigrations(db, 8);
+
+    db.prepare("INSERT INTO tasks (id, title) VALUES ('t1', 'Kept')").run();
+    // An orphan in another table, of the kind an older schema could leave.
+    db.prepare(
+      "INSERT INTO comments (id, task_id, body) VALUES ('c1', 'purged-task', 'orphan')",
+    ).run();
+
+    expect(() => runMigrations(db, 9)).not.toThrow();
+
+    const version = (db.prepare('SELECT MAX(version) as v FROM schema_version').get() as { v: number }).v;
+    expect(version).toBe(9);
+    const kept = db.prepare("SELECT title FROM tasks WHERE id = 't1'").get() as { title: string };
+    expect(kept.title).toBe('Kept');
+    db.close();
+  });
+
   it('rolls the whole migration back when a statement in it fails', () => {
     const db = new BetterSqlite3(':memory:');
     db.pragma('foreign_keys = ON');
