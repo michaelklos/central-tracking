@@ -64,22 +64,30 @@ export function updateCategory(db: Database, id: string, updates: UpdateCategory
 }
 
 export function deleteCategory(db: Database, id: string): void {
-  db.instance.prepare('DELETE FROM task_categories WHERE category_id = ?').run(id);
-  db.instance.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  // Both deletes or neither: a failure between them would leave the category
+  // gone from every task but still in the list.
+  db.instance.transaction(() => {
+    db.instance.prepare('DELETE FROM task_categories WHERE category_id = ?').run(id);
+    db.instance.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  })();
 }
 
 export function assignCategoriesToTask(db: Database, taskId: string, categoryIds: string[]): void {
   taskId = resolveTaskId(db, taskId);
-  db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(taskId);
   const insert = db.instance.prepare(
     'INSERT OR IGNORE INTO task_categories (task_id, category_id) VALUES (?, ?)'
   );
-  const transaction = db.instance.transaction(() => {
+  // The DELETE has to be inside the transaction with the inserts. `OR IGNORE`
+  // does not cover foreign-key violations, so one unknown category id throws
+  // after the DELETE has already committed — wiping every category off the
+  // task. Verified: the insert raises "FOREIGN KEY constraint failed" and the
+  // task is left with none.
+  db.instance.transaction(() => {
+    db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(taskId);
     for (const catId of categoryIds) {
       insert.run(taskId, catId);
     }
-  });
-  transaction();
+  })();
 }
 
 // ─── IPC registration (thin wrappers around exported functions) ─────

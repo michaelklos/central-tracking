@@ -407,13 +407,19 @@ export function updateTask(db: Database, id: string, updates: UpdateTaskInput): 
   }
 
   if (updates.categoryIds !== undefined) {
-    db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(id);
+    const categoryIds = updates.categoryIds;
     const insertCat = db.instance.prepare(
       'INSERT OR IGNORE INTO task_categories (task_id, category_id) VALUES (?, ?)'
     );
-    for (const catId of updates.categoryIds) {
-      insertCat.run(id, catId);
-    }
+    // Same hazard as assignCategoriesToTask: `OR IGNORE` does not cover
+    // foreign-key violations, so an unknown id throws after the DELETE has
+    // committed and the task loses every category it had.
+    db.instance.transaction(() => {
+      db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(id);
+      for (const catId of categoryIds) {
+        insertCat.run(id, catId);
+      }
+    })();
   }
 
   const row = db.instance.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow;
