@@ -24,21 +24,34 @@ const MAX_PORT_ATTEMPTS = 5;
  */
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+    let chunks: Buffer[] = [];
     let size = 0;
+    let rejected = false;
+
     req.on('data', (chunk: Buffer) => {
+      // Over the limit: stop buffering but keep consuming, and do not settle
+      // yet. Answering mid-upload closes the socket while the client is still
+      // writing, which it sees as ECONNRESET instead of our 413 — the very
+      // thing the "drain before responding" rule below exists to prevent.
+      // Draining costs bandwidth but not memory, since nothing is retained.
+      if (rejected) return;
+
       size += chunk.length;
       if (size > MAX_BODY_SIZE) {
-        // Stop reading but do NOT destroy the socket here: the caller still has
-        // to write a 413 onto it. The caller destroys once the response has
-        // flushed.
-        req.pause();
-        reject(new DomainError('PAYLOAD_TOO_LARGE', 'Request body too large', 413));
+        rejected = true;
+        chunks = [];
         return;
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+
+    req.on('end', () => {
+      if (rejected) {
+        reject(new DomainError('PAYLOAD_TOO_LARGE', 'Request body too large', 413));
+        return;
+      }
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
     req.on('error', reject);
   });
 }
@@ -80,11 +93,8 @@ export async function startHttpServer(
     try {
       bodyStr = await readBody(req);
     } catch (err) {
-      // Tear the request down only after the error response has flushed,
-      // otherwise the client gets a reset instead of the status code.
-      res.on('finish', () => {
-        if (!req.destroyed) req.destroy();
-      });
+      // No explicit destroy: the body is still being drained above and the
+      // connection closes on its own once the response is written.
       if (err instanceof DomainError) {
         sendJson(res, err.httpStatus, {
           ok: false,

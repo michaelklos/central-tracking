@@ -44,7 +44,12 @@ describe('createTimeEntry with an invalid task id', () => {
     expect(stillActive!.endTime).toBeNull();
   });
 
-  it('rejects an id prefix rather than silently matching', () => {
+  // Documents CURRENT behavior, not desired behavior. Review finding 6 says
+  // these handlers should call resolveTaskId, because the CLI advertises
+  // "UUID, prefix, or name substring" for `timer start`. When that is fixed,
+  // this expectation should flip to resolving the prefix — it is not a
+  // regression.
+  it('does not yet resolve an id prefix (pending review finding 6)', () => {
     expect(() => createTimeEntry(db, { taskId: taskId.slice(0, 8) })).toThrow(DomainError);
   });
 
