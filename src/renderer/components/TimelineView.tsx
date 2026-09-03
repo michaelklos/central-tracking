@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils/timeline';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
-import { toLocalDateString as toDateString } from '../../shared/dateRange';
+import { toLocalDateString as toDateString, toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import type { TimeEntryWithTask } from '../../shared/types';
 import './TimelineView.css';
 
@@ -52,8 +52,12 @@ export function TimelineView() {
   const isViewingToday = isSameDay(viewDate, new Date());
 
   const loadTimeline = useCallback(async () => {
-    const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 0, 0, 0).toISOString();
-    const end = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 23, 59, 59).toISOString();
+    // Same local-day endpoints as every other surface. This was already
+    // local, but hand-rolled and a second short of midnight, so an entry
+    // started in the last second of the day fell outside the timeline.
+    const dateStr = toDateString(viewDate);
+    const start = toIsoStartOfDay(dateStr);
+    const end = toIsoEndOfDay(dateStr);
 
     const data = await window.api.timeEntries.getByDateRangeWithTasks(start, end);
     setEntries(data);

@@ -1,5 +1,5 @@
 import type { Database } from '../database/database';
-import { isoToLocalDateString } from '../../shared/dateRange';
+import { isoToLocalDateString, isoToLocalDateTimeString } from '../../shared/dateRange';
 
 interface TimeEntryRow {
   id: string;
@@ -27,8 +27,11 @@ export function generateCsvContent(db: Database, start: string, end: string): st
     // Local calendar date, matching the range endpoints and the report
     // queries; splitting the ISO string would label it with the UTC date.
     const date = isoToLocalDateString(row.start_time);
-    const startTime = row.start_time;
-    const endTime = row.end_time ?? '';
+    // Local wall-clock, so Start/End name the same day as the Date column.
+    // They used to be raw UTC ISO, which after the Date column became local
+    // made the file disagree with itself for any evening entry.
+    const startTime = isoToLocalDateTimeString(row.start_time);
+    const endTime = row.end_time ? isoToLocalDateTimeString(row.end_time) : '';
     const duration = row.duration_seconds ?? 0;
     const hours = Math.floor(duration / 3600);
     const minutes = Math.floor((duration % 3600) / 60);
