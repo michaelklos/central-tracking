@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { Plugin } from '../../shared/types';
 import { HelpPopover } from './HelpPopover';
+import { resolveTracksReported, TRACKS_REPORTED_CONFIG_KEY } from '../hooks/usePluginCapabilities';
 import './PluginsSettings.css';
 
 function AdoHelp() {
@@ -29,8 +30,6 @@ interface PluginRowState {
   error: string | null;
 }
 
-const TRACKS_REPORTED_KEY = 'tracks-reported';
-
 export function PluginsSettings() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -39,13 +38,20 @@ export function PluginsSettings() {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await window.api.plugins.list();
+      const [list, caps] = await Promise.all([
+        window.api.plugins.list(),
+        window.api.plugins.getCapabilities(),
+      ]);
       setPlugins(list);
+      // Resolve through the same helper the task list uses. Reading only the
+      // config key here ignored the manifest default, so this page and the
+      // badges could disagree for any plugin declaring tracksReported: false.
+      const manifestById = new Map(caps.map((c) => [c.id, c.capabilities?.tracksReported]));
       const values: Record<string, boolean> = {};
       await Promise.all(
         list.map(async (p) => {
-          const raw = await window.api.plugins.getConfig(p.id, TRACKS_REPORTED_KEY);
-          values[p.id] = raw === null ? true : raw !== 'false';
+          const raw = await window.api.plugins.getConfig(p.id, TRACKS_REPORTED_CONFIG_KEY);
+          values[p.id] = resolveTracksReported(manifestById.get(p.id), raw);
         }),
       );
       setTracksReported(values);
@@ -77,7 +83,7 @@ export function PluginsSettings() {
     const next = !(tracksReported[p.id] ?? true);
     setTracksReported((prev) => ({ ...prev, [p.id]: next }));
     try {
-      await window.api.plugins.setConfig(p.id, TRACKS_REPORTED_KEY, String(next));
+      await window.api.plugins.setConfig(p.id, TRACKS_REPORTED_CONFIG_KEY, String(next));
     } catch (err) {
       // Revert optimistic toggle on failure.
       setTracksReported((prev) => ({ ...prev, [p.id]: !next }));
