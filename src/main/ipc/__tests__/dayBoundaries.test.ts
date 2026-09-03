@@ -62,11 +62,17 @@ describe('local day boundaries', () => {
     expect(rows.map((r) => r.date)).toEqual(['2026-03-10']);
   });
 
-  it('labels it with the local day in the CSV export', () => {
+  it('exports a CSV row whose Date, Start and End all name the same local day', () => {
     const csv = generateCsvContent(db, toIsoStartOfDay('2026-03-10'), toIsoEndOfDay('2026-03-10'));
     const dataLine = csv.split('\n')[1];
     expect(dataLine).toBeDefined();
-    expect(dataLine.startsWith('2026-03-10,')).toBe(true);
+
+    // Asserting only the Date column would miss the file disagreeing with
+    // itself: Date local, Start/End raw UTC ISO naming the next day.
+    const [date, , startCol, endCol] = dataLine.split(',');
+    expect(date).toBe('2026-03-10');
+    expect(startCol).toBe('2026-03-10 20:00:00');
+    expect(endCol).toBe('2026-03-10 21:00:00');
   });
 
   it('agrees with getTodayTotal, which has always used localtime', () => {

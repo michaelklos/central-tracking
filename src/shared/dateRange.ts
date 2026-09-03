@@ -58,3 +58,15 @@ export function toIsoEndOfDay(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
 }
+
+/**
+ * An ISO timestamp as local wall-clock `YYYY-MM-DD HH:MM:SS`, for the CSV
+ * export. Spreadsheets parse this as a datetime, where a `Z` (or offset)
+ * timestamp lands as text; more importantly it agrees with the local Date
+ * column beside it instead of naming a different day.
+ */
+export function isoToLocalDateTimeString(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${toLocalDateString(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
