@@ -36,9 +36,10 @@ export interface PushStateResult {
 const STATE_FIELD = 'System.State';
 
 /**
- * Allowed local-side ADO transitions. Mirrors the backend FSM in
- * `taskHandlers.ts:isAllowedAdoTransition`. Kept in sync; if you change
- * one, change the other.
+ * Allowed local-side ADO transitions. Mirrors the host's single source of
+ * truth in `src/shared/adoFsm.ts`. This is a separate esbuild-bundled
+ * workspace with `rootDir: src` and cannot import from the host, so the two
+ * copies are kept in sync by hand — change one, change the other.
  */
 const ALLOWED: Readonly<Record<CtTaskStatus, ReadonlyArray<CtTaskStatus>>> = {
   todo: ['in-progress', 'done', 'blocked'],

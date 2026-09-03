@@ -1,6 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
+import { resolveTaskId } from './taskLookup';
 import type { Category, CreateCategoryInput, UpdateCategoryInput } from '../../shared/types';
 
 interface CategoryRow {
@@ -68,6 +69,7 @@ export function deleteCategory(db: Database, id: string): void {
 }
 
 export function assignCategoriesToTask(db: Database, taskId: string, categoryIds: string[]): void {
+  taskId = resolveTaskId(db, taskId);
   db.instance.prepare('DELETE FROM task_categories WHERE task_id = ?').run(taskId);
   const insert = db.instance.prepare(
     'INSERT OR IGNORE INTO task_categories (task_id, category_id) VALUES (?, ?)'
