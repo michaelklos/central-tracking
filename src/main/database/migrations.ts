@@ -188,6 +188,43 @@ export const MIGRATIONS: readonly string[] = [
   `,
 ];
 
+/**
+ * Statements that must not run inside a transaction. `PRAGMA foreign_keys` is
+ * silently a no-op while one is open, so migration 009 — which drops and
+ * recreates `tasks` — would run with foreign keys still enforced if the pragma
+ * were left inline. They are applied around the transaction instead.
+ */
+const FK_PRAGMA = /^\s*PRAGMA\s+foreign_keys\s*=\s*(ON|OFF)\s*;\s*$/gim;
+
+export class MigrationError extends Error {
+  constructor(readonly version: number, readonly cause: unknown) {
+    super(
+      `Migration ${String(version).padStart(3, '0')} failed: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    );
+    this.name = 'MigrationError';
+  }
+}
+
+/**
+ * Apply pending migrations, each in its own transaction.
+ *
+ * Previously each migration was a bare `db.exec`, so every statement committed
+ * on its own. A failure partway left the database half-migrated with the
+ * `schema_version` row unwritten, so the next launch re-ran the same migration
+ * from the top and failed again — permanently, with nothing catching it. For
+ * migration 009 that window sits between `DROP TABLE tasks` and the recreation
+ * of its indexes, where the failure would take the user's tasks with it.
+ *
+ * SQLite DDL is transactional, so wrapping each migration makes it atomic: it
+ * either lands whole, `schema_version` row included, or the database is
+ * untouched and the error names the migration.
+ *
+ * This follows the procedure the SQLite docs give for table rebuilds: toggle
+ * `foreign_keys` outside the transaction, do the work inside it, and check for
+ * violations before committing.
+ */
 export function runMigrations(db: BetterSqlite3.Database, upTo?: number): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)');
 
@@ -198,6 +235,33 @@ export function runMigrations(db: BetterSqlite3.Database, upTo?: number): void {
   const target = upTo ?? MIGRATIONS.length;
 
   for (let i = currentVersion; i < Math.min(target, MIGRATIONS.length); i++) {
-    db.exec(MIGRATIONS[i]);
+    const version = i + 1;
+    const sql = MIGRATIONS[i];
+    const disablesForeignKeys = /PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(sql);
+    const body = sql.replace(FK_PRAGMA, '');
+
+    const foreignKeysWereOn = db.pragma('foreign_keys', { simple: true }) === 1;
+    if (disablesForeignKeys) db.pragma('foreign_keys = OFF');
+
+    try {
+      db.transaction(() => {
+        db.exec(body);
+
+        // Deferred until just before commit: with enforcement off, a rebuild
+        // could otherwise leave dangling references behind and commit them.
+        if (disablesForeignKeys) {
+          const violations = db.pragma('foreign_key_check') as unknown[];
+          if (violations.length > 0) {
+            throw new Error(
+              `${violations.length} foreign key violation(s) after the rebuild`,
+            );
+          }
+        }
+      })();
+    } catch (err) {
+      throw new MigrationError(version, err);
+    } finally {
+      if (disablesForeignKeys && foreignKeysWereOn) db.pragma('foreign_keys = ON');
+    }
   }
 }
