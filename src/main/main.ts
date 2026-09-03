@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Database } from './database/database';
@@ -88,7 +88,24 @@ app.whenReady().then(() => {
   }
 
   const dbPath = path.join(userDataPath, 'central-tracking.db');
-  database = new Database(dbPath);
+  try {
+    database = new Database(dbPath);
+  } catch (err) {
+    // Opening the database runs pending migrations. A failure here used to
+    // throw out of app startup with nothing catching it: the window never
+    // appeared and the only trace was in the log. Each migration is atomic, so
+    // the database is intact — say so, and point at the log rather than
+    // leaving the user with an app that silently does not start.
+    const message = err instanceof Error ? err.message : String(err);
+    log.error('Database initialization failed:', message);
+    dialog.showErrorBox(
+      'Central Tracking could not start',
+      `${message}\n\nYour data has not been modified. The full log is at:\n` +
+        `${path.join(userDataPath, 'central-tracking.log')}`,
+    );
+    app.quit();
+    return;
+  }
 
   // Auto-register any plugins shipped inside the app bundle. No-op in dev
   // (app.isPackaged=false). Idempotent across launches — version bumps
