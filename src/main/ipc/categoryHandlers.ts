@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
 import { resolveTaskId } from './taskLookup';
+import { sqliteTimeToIso } from '../sqliteTime';
 import type { Category, CreateCategoryInput, UpdateCategoryInput } from '../../shared/types';
 
 interface CategoryRow {
@@ -16,7 +17,7 @@ function rowToCategory(row: CategoryRow): Category {
     id: row.id,
     name: row.name,
     color: row.color,
-    createdAt: row.created_at,
+    createdAt: sqliteTimeToIso(row.created_at),
   };
 }
 

@@ -6,6 +6,7 @@ import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { isAllowedAdoTransition } from '../../shared/adoFsm';
 import { resolveTaskId } from './taskLookup';
+import { sqliteTimeToIso } from '../sqliteTime';
 
 interface TaskRow {
   id: string;
@@ -80,14 +81,14 @@ function rowToTask(db: Database, row: TaskRow): Task {
     hasUnreportedTime: unreportedTime.total > 0,
     categoryIds: catRows.map((r) => r.category_id),
     notes: row.notes ?? '',
-    deletedAt: row.deleted_at,
+    deletedAt: sqliteTimeToIso(row.deleted_at),
     externalUrl: row.external_url,
     externalState: row.external_state,
     externalCompletedHours: row.external_completed_hours,
     externalRefreshedAt: row.external_refreshed_at,
     stateDirty: row.state_dirty === 1,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: sqliteTimeToIso(row.created_at),
+    updatedAt: sqliteTimeToIso(row.updated_at),
   };
 }
 

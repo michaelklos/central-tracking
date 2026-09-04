@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
 import { resolveTaskId } from './taskLookup';
+import { sqliteTimeToIso } from '../sqliteTime';
 import type { Comment, CreateCommentInput, PendingSyncComment, TaskSource, UpdateCommentInput, UpsertExternalCommentInput } from '../../shared/types';
 
 interface CommentRow {
@@ -23,8 +24,8 @@ function rowToComment(row: CommentRow): Comment {
     syncable: row.syncable === 1,
     synced: row.synced === 1,
     externalId: row.external_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: sqliteTimeToIso(row.created_at),
+    updatedAt: sqliteTimeToIso(row.updated_at),
   };
 }
 
