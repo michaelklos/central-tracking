@@ -66,6 +66,23 @@ export function TaskDetail() {
   const pendingTimeEntryRef = useRef(pendingTimeEntry);
   pendingTimeEntryRef.current = pendingTimeEntry;
 
+  /**
+   * Run an action, surfacing a failure inline instead of leaving a dangling
+   * rejection. Several of these handlers are wired to onBlur, where a throw
+   * becomes an unhandled rejection. `where` names the handler in the log;
+   * `label` leads the message the user sees.
+   */
+  const guard = useCallback(async (where: string, label: string, fn: () => Promise<void>) => {
+    try {
+      setActionError(null);
+      await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setActionError(`${label}: ${msg}`);
+      window.api.log.error(`TaskDetail.${where}: ${msg}`);
+    }
+  }, []);
+
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   // Track which task is currently selected via a ref so async loaders can
@@ -194,25 +211,21 @@ export function TaskDetail() {
     if (addingCommentRef.current) return;
     addingCommentRef.current = true;
     try {
-      // Only force syncable on full-mirror ADO tasks. Link-only ADO tasks
-      // (pluginId='ado' but source != 'plugin') let the user toggle per
-      // comment via `commentSyncable`, matching the link-mode contract that
-      // pushes are opt-in.
-      const isAdoFullMirror = task.source === 'plugin' && task.pluginId === 'ado';
-      const syncable = isAdoFullMirror ? true : commentSyncable;
-      await window.api.comments.create({ taskId: task.id, body, syncable });
-      setNewComment('');
-      await loadComments();
-    } catch (err) {
-      // Called from onBlur as well as the button, so a throw here would become
-      // an unhandled rejection — surface it instead.
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to add comment: ${msg}`);
-      window.api.log.error(`TaskDetail.handleAddComment: ${msg}`);
+      await guard('handleAddComment', 'Failed to add comment', async () => {
+        // Only force syncable on full-mirror ADO tasks. Link-only ADO tasks
+        // (pluginId='ado' but source != 'plugin') let the user toggle per
+        // comment via `commentSyncable`, matching the link-mode contract that
+        // pushes are opt-in.
+        const isAdoFullMirror = task.source === 'plugin' && task.pluginId === 'ado';
+        const syncable = isAdoFullMirror ? true : commentSyncable;
+        await window.api.comments.create({ taskId: task.id, body, syncable });
+        setNewComment('');
+        await loadComments();
+      });
     } finally {
       addingCommentRef.current = false;
     }
-  }, [task, newComment, commentSyncable, loadComments]);
+  }, [task, newComment, commentSyncable, loadComments, guard]);
 
   const descMd = useMarkdownTextarea({ value: descDraft, onChange: setDescDraft, onSave: handleSaveDesc });
   const notesMd = useMarkdownTextarea({ value: notesDraft, onChange: setNotesDraft, onSave: handleSaveNotes });
@@ -223,7 +236,9 @@ export function TaskDetail() {
     if (!id) return;
     const body = commentEditDraft.trim();
     const original = comments.find((c) => c.id === id);
-    try {
+    // On failure the editing state is deliberately left alone so the draft
+    // isn't lost.
+    await guard('handleSaveCommentEdit', 'Failed to save comment', async () => {
       if (original && !body) {
         // Empty isn't a valid comment (use × to delete instead). Surface this
         // rather than silently discarding the cleared text.
@@ -235,14 +250,8 @@ export function TaskDetail() {
       // have started editing another one while this save was in flight.
       setEditingCommentId((cur) => (cur === id ? null : cur));
       await loadComments();
-    } catch (err) {
-      // Called from onBlur, so a throw would become an unhandled rejection.
-      // Keep the draft (don't clear editing state) so the edit isn't lost.
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to save comment: ${msg}`);
-      window.api.log.error(`TaskDetail.handleSaveCommentEdit: ${msg}`);
-    }
-  }, [editingCommentId, commentEditDraft, comments, loadComments]);
+    });
+  }, [editingCommentId, commentEditDraft, comments, loadComments, guard]);
 
   const commentEditMd = useMarkdownTextarea({
     value: commentEditDraft,
@@ -254,66 +263,64 @@ export function TaskDetail() {
 
   const handleSaveTitle = async () => {
     const trimmed = titleDraft.trim();
-    if (trimmed && trimmed !== task.title) {
-      await updateTask(task.id, { title: trimmed });
-    }
+    await guard('handleSaveTitle', 'Failed to rename task', async () => {
+      if (trimmed && trimmed !== task.title) {
+        await updateTask(task.id, { title: trimmed });
+      }
+    });
     setEditingTitle(false);
   };
 
-  const handleStatusChange = async (status: TaskStatus) => {
-    try {
-      setActionError(null);
+  // The backend rejects illegal ADO transitions with INVALID_ADO_TRANSITION.
+  const handleStatusChange = (status: TaskStatus) =>
+    guard('handleStatusChange', 'Status change rejected', async () => {
       await updateTask(task.id, { status });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Backend rejects illegal ADO transitions with INVALID_ADO_TRANSITION.
-      // Surface the message inline rather than letting the promise dangle.
-      setActionError(`Status change rejected: ${msg}`);
-      window.api.log.error(`TaskDetail.handleStatusChange: ${msg}`);
-    }
-  };
+    });
 
-  const handleComplete = async () => {
-    try {
-      setActionError(null);
+  const handleComplete = () =>
+    guard('handleComplete', 'Failed to complete task', async () => {
       if (isRunningForTask(task.id)) {
         await stopTimer();
       }
       await updateTask(task.id, { status: 'done' });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to complete task: ${msg}`);
-      window.api.log.error(`TaskDetail.handleComplete: ${msg}`);
-    }
-  };
+    });
 
-  const handleReactivate = async () => {
-    await updateTask(task.id, { status: 'todo' });
-    await startTimer(task.id);
-  };
+  const handleReactivate = () =>
+    guard('handleReactivate', 'Failed to reactivate task', async () => {
+      await updateTask(task.id, { status: 'todo' });
+      await startTimer(task.id);
+    });
 
   const handleCategoryToggle = async (catId: string) => {
     const current = task.categoryIds;
     const next = current.includes(catId)
       ? current.filter((id) => id !== catId)
       : [...current, catId];
-    await updateTask(task.id, { categoryIds: next });
+    await guard('handleCategoryToggle', 'Failed to change categories', async () => {
+      await updateTask(task.id, { categoryIds: next });
+    });
   };
 
-  const handleDeleteComment = async (id: string) => {
-    await window.api.comments.delete(id);
-    await loadComments();
-  };
+  const handleDeleteComment = (id: string) =>
+    guard('handleDeleteComment', 'Failed to delete comment', async () => {
+      await window.api.comments.delete(id);
+      await loadComments();
+    });
 
-  const handleDeleteTimeEntry = async (id: string) => {
-    await window.api.timeEntries.delete(id);
-    setTimeEntries((prev) => prev.filter((e) => e.id !== id));
-    setTimeEntriesTotal((prev) => prev - 1);
-    await loadSmartDefaults();
-    await refreshActiveTasks();
-    await refreshTodayTotal();
-  };
+  const handleDeleteTimeEntry = (id: string) =>
+    guard('handleDeleteTimeEntry', 'Failed to delete time entry', async () => {
+      await window.api.timeEntries.delete(id);
+      setTimeEntries((prev) => prev.filter((e) => e.id !== id));
+      setTimeEntriesTotal((prev) => prev - 1);
+      await loadSmartDefaults();
+      await refreshActiveTasks();
+      await refreshTodayTotal();
+    });
 
+  // handleCreateEntry and handleUpdateEntry deliberately let a failure
+  // propagate: TimeEntryEditor catches it and shows the message beside the
+  // fields it belongs to, keeping the draft, instead of the form closing and
+  // the error appearing in the page-level banner.
   const handleCreateEntry = async (startTime: string, endTime: string, note: string) => {
     const entry = await window.api.timeEntries.create({ taskId: task.id, startTime, endTime, note });
     setTimeEntries((prev) => [entry, ...prev]);
@@ -336,62 +343,38 @@ export function TaskDetail() {
     }
   };
 
-  const handleToggleEntryReported = async (id: string, reportedAt: string | null) => {
-    try {
-      setActionError(null);
+  const handleToggleEntryReported = (id: string, reportedAt: string | null) =>
+    guard('handleToggleEntryReported', 'Failed to update reported state', async () => {
       const updated = await window.api.timeEntries.update(id, { reportedAt });
       setTimeEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
       await refreshActiveTasks();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to update reported state: ${msg}`);
-      window.api.log.error(`TaskDetail.handleToggleEntryReported: ${msg}`);
-    }
-  };
+    });
 
-  const handleMarkReported = async () => {
-    try {
-      setActionError(null);
+  const handleMarkReported = () =>
+    guard('handleMarkReported', 'Failed to mark reported', async () => {
       await window.api.timeEntries.markTaskReported(task.id, new Date().toISOString());
       await loadTimeEntries();
       await refreshActiveTasks();
       await refreshTodayTotal();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to mark reported: ${msg}`);
-      window.api.log.error(`TaskDetail.handleMarkReported: ${msg}`);
-    }
-  };
+    });
 
-  const handleUnmarkReported = async () => {
-    try {
-      setActionError(null);
+  const handleUnmarkReported = () =>
+    guard('handleUnmarkReported', 'Failed to unmark reported', async () => {
       await window.api.timeEntries.markTaskReported(task.id, null);
       await loadTimeEntries();
       await refreshActiveTasks();
       await refreshTodayTotal();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Failed to unmark reported: ${msg}`);
-      window.api.log.error(`TaskDetail.handleUnmarkReported: ${msg}`);
-    }
-  };
+    });
 
-  const handleTimerToggle = async () => {
-    try {
-      setActionError(null);
+  const handleTimerToggle = () =>
+    guard('handleTimerToggle', 'Timer toggle failed', async () => {
       if (isRunningForTask(task.id)) {
         await stopTimer();
       } else {
         await startTimer(task.id);
       }
       await loadTimeEntries();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActionError(`Timer toggle failed: ${msg}`);
-      window.api.log.error(`TaskDetail.handleTimerToggle: ${msg}`);
-    }
-  };
+    });
 
   const handleNavigateToTimeline = (date: string) => {
     navigate('/timeline?date=' + date);

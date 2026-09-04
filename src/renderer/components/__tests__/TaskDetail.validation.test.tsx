@@ -88,6 +88,19 @@ describe('TaskDetail - Validation', () => {
     expect(screen.getByText('No categories')).toBeInTheDocument();
   });
 
+  it('surfaces a failed rename inline instead of leaving the rejection dangling', async () => {
+    const user = userEvent.setup();
+    mockTaskContext.updateTask = vi.fn().mockRejectedValue(new Error('database is locked'));
+    render(<TaskDetail />);
+
+    await user.click(screen.getByText('Test Task'));
+    const input = screen.getByDisplayValue('Test Task');
+    await user.clear(input);
+    await user.type(input, 'Renamed{Enter}');
+
+    expect(await screen.findByText(/Failed to rename task: database is locked/)).toBeInTheDocument();
+  });
+
   it('empty title shows red border and prevents save', async () => {
     const user = userEvent.setup();
     render(<TaskDetail />);
