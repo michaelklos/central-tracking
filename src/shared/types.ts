@@ -220,6 +220,8 @@ export interface TaskFilterParams {
   hasUnreportedTime?: boolean;
   /** Include only tasks that have no categories assigned. */
   uncategorized?: boolean;
+  /** Include only tasks whose status has not been pushed to their plugin. */
+  stateDirty?: boolean;
   /** YYYY-MM-DD. Include only tasks with at least one time entry whose
    *  start_time falls on or after this date. Empty/undefined = unbounded. */
   dateStart?: string;

@@ -57,7 +57,7 @@ export interface ApiRoute {
 
 export const apiManifest: readonly ApiRoute[] = [
   // Tasks
-  { route: 'tasks/getAll',           ipcChannel: 'tasks:getAll',           mutates: false, handler: (db) => getAllTasks(db) },
+  { route: 'tasks/getAll',           ipcChannel: 'tasks:getAll',           mutates: false, handler: (db, params) => getAllTasks(db, params as never) },
   { route: 'tasks/getById',          ipcChannel: 'tasks:getById',          mutates: false, handler: (db, id) => getTaskById(db, id as string) },
   { route: 'tasks/getActive',        ipcChannel: 'tasks:getActive',        mutates: false, handler: (db, params) => getActiveTasks(db, params as never) },
   { route: 'tasks/getActiveIds',     ipcChannel: 'tasks:getActiveIds',     mutates: false, handler: (db, params) => getActiveTaskIds(db, params as never) },

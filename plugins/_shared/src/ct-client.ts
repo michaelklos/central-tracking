@@ -124,22 +124,26 @@ export class CtClient {
   }
 
   /**
-   * Fetch all tasks and filter client-side. The HTTP `tasks/getAll` route
-   * does not accept filter params; we keep that surface stable and filter
-   * here to avoid expanding the backend handler for one consumer.
+   * Fetch tasks. `tasks/getAll` takes the same filter params the rest of the
+   * task routes do, so the whole table no longer crosses the wire to be
+   * filtered here — an `ado sync` did that twice per run.
+   *
+   * The client-side `pluginId` pass stays for one case the SQL does not
+   * cover: an empty array means "no plugin matches", but `buildFilterClauses`
+   * adds no clause for it and would return everything.
    */
   async getTasks(filter: GetTasksFilter = {}): Promise<CtTask[]> {
-    const all = await this.call<CtTask[]>('tasks/getAll', []);
     const pluginIds = filter.pluginId === undefined
       ? null
       : Array.isArray(filter.pluginId) ? filter.pluginId : [filter.pluginId];
-    return all.filter((t) => {
-      if (filter.source && !filter.source.includes(t.source)) return false;
-      if (pluginIds && (t.pluginId === null || !pluginIds.includes(t.pluginId))) return false;
-      if (filter.hasUnreportedTime === true && !t.hasUnreportedTime) return false;
-      if (filter.stateDirty === true && !t.stateDirty) return false;
-      return true;
-    });
+    const tasks = await this.call<CtTask[]>('tasks/getAll', [{
+      source: filter.source,
+      pluginId: pluginIds ?? undefined,
+      hasUnreportedTime: filter.hasUnreportedTime,
+      stateDirty: filter.stateDirty,
+    }]);
+    if (!pluginIds) return tasks;
+    return tasks.filter((t) => t.pluginId !== null && pluginIds.includes(t.pluginId));
   }
 
   upsertExternalTask(input: UpsertExternalTaskInput): Promise<CtTask> {

@@ -6,6 +6,7 @@ import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { resolveTaskId } from './taskLookup';
 import { sqliteTimeToIso } from '../sqliteTime';
+import { sumDurationSeconds } from '../sql/duration';
 
 interface TimeEntryRow {
   id: string;
@@ -193,12 +194,7 @@ export function getActiveTimeEntry(db: Database): TimeEntry | null {
 export function getTodayTotal(db: Database): number {
   const row = db.instance
     .prepare(
-      `SELECT COALESCE(SUM(
-        CASE WHEN te.end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
-          ELSE 0
-        END
-      ), 0) as total
+      `SELECT ${sumDurationSeconds('completed', 'te.')} as total
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
       WHERE date(te.start_time, 'localtime') = date('now', 'localtime')
@@ -227,12 +223,7 @@ export function getTimeEntryReport(db: Database, start: string, end: string) {
         date(te.start_time, 'localtime') as date,
         te.task_id,
         t.title as task_title,
-        COALESCE(SUM(
-          CASE WHEN te.end_time IS NOT NULL
-            THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
-            ELSE CAST(ROUND((julianday('now') - julianday(te.start_time)) * 86400) AS INTEGER)
-          END
-        ), 0) as total_seconds
+        ${sumDurationSeconds('withRunning', 'te.')} as total_seconds
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
       WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
@@ -257,12 +248,7 @@ export function getSummaryReport(db: Database, start: string, end: string): Summ
         t.title as task_title,
         t.source as task_source,
         t.status as task_status,
-        COALESCE(SUM(
-          CASE WHEN te.end_time IS NOT NULL
-            THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
-            ELSE CAST(ROUND((julianday('now') - julianday(te.start_time)) * 86400) AS INTEGER)
-          END
-        ), 0) as total_seconds
+        ${sumDurationSeconds('withRunning', 'te.')} as total_seconds
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
       WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
