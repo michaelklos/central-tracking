@@ -119,6 +119,15 @@ describe('TaskContext page size setting', () => {
     );
   });
 
+  it('clamps a page size below the settings minimum', async () => {
+    localStorage.setItem('ct-option-page-size', '1');
+    await renderProvider();
+
+    await waitFor(() => expect(window.api.tasks.getActive).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10 })
+    ));
+  });
+
   it('falls back to 50 when the stored value is not a usable number', async () => {
     localStorage.setItem('ct-option-page-size', 'lots');
     await renderProvider();
