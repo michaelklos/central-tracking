@@ -1,12 +1,13 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput, LinkTaskInput } from '../../shared/types';
+import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskFilterParams, TaskQueryParams, UpsertExternalTaskInput, LinkTaskInput } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { isAllowedAdoTransition } from '../../shared/adoFsm';
 import { resolveTaskId } from './taskLookup';
 import { sqliteTimeToIso } from '../sqliteTime';
+import { durationSeconds, sumDurationSeconds } from '../sql/duration';
 
 interface TaskRow {
   id: string;
@@ -28,44 +29,75 @@ interface TaskRow {
   updated_at: string;
 }
 
-function rowToTask(db: Database, row: TaskRow): Task {
-  const catRows = db.instance
-    .prepare('SELECT category_id FROM task_categories WHERE task_id = ?')
-    .all(row.id) as { category_id: string }[];
+interface TaskAggregates {
+  categoryIds: string[];
+  totalSeconds: number;
+  todaySeconds: number;
+  unreportedSeconds: number;
+}
 
-  const totalTime = db.instance
-    .prepare(
-      `SELECT COALESCE(SUM(
-        CASE WHEN end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
-          ELSE 0
-        END
-      ), 0) as total FROM time_entries WHERE task_id = ?`
-    )
-    .get(row.id) as { total: number };
+const EMPTY_AGGREGATES: TaskAggregates = {
+  categoryIds: [], totalSeconds: 0, todaySeconds: 0, unreportedSeconds: 0,
+};
 
-  const todayTime = db.instance
-    .prepare(
-      `SELECT COALESCE(SUM(
-        CASE WHEN end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
-          ELSE 0
-        END
-      ), 0) as total FROM time_entries WHERE task_id = ? AND date(start_time, 'localtime') = date('now', 'localtime')`
-    )
-    .get(row.id) as { total: number };
+// SQLite's default parameter limit is 999; stay well inside it.
+const ID_CHUNK = 400;
 
-  const unreportedTime = db.instance
-    .prepare(
-      `SELECT COALESCE(SUM(
-        CASE WHEN end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
-          ELSE 0
-        END
-      ), 0) as total FROM time_entries WHERE task_id = ? AND reported_at IS NULL`
-    )
-    .get(row.id) as { total: number };
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
 
+/**
+ * Category ids and the three time totals for a set of tasks, in two queries
+ * per chunk rather than four per task. Building a Task row used to cost four
+ * round trips each, so a 50-row page was ~200 of them — repeated on every
+ * `ct:data-changed`.
+ */
+function taskAggregates(db: Database, ids: string[]): Map<string, TaskAggregates> {
+  const byId = new Map<string, TaskAggregates>();
+  for (const id of ids) {
+    byId.set(id, { categoryIds: [], totalSeconds: 0, todaySeconds: 0, unreportedSeconds: 0 });
+  }
+  if (ids.length === 0) return byId;
+
+  // A running entry counts as zero here: the renderer adds the live counter
+  // on top, so these totals stay stable between refreshes.
+  const dur = durationSeconds('completed');
+  for (const part of chunk(ids, ID_CHUNK)) {
+    const placeholders = part.map(() => '?').join(',');
+
+    const catRows = db.instance
+      .prepare(`SELECT task_id, category_id FROM task_categories WHERE task_id IN (${placeholders})`)
+      .all(...part) as { task_id: string; category_id: string }[];
+    for (const r of catRows) {
+      byId.get(r.task_id)?.categoryIds.push(r.category_id);
+    }
+
+    const totals = db.instance
+      .prepare(
+        `SELECT task_id,
+          COALESCE(SUM(${dur}), 0) AS total,
+          COALESCE(SUM(CASE WHEN date(start_time, 'localtime') = date('now', 'localtime')
+            THEN ${dur} ELSE 0 END), 0) AS today,
+          COALESCE(SUM(CASE WHEN reported_at IS NULL THEN ${dur} ELSE 0 END), 0) AS unreported
+        FROM time_entries WHERE task_id IN (${placeholders})
+        GROUP BY task_id`
+      )
+      .all(...part) as { task_id: string; total: number; today: number; unreported: number }[];
+    for (const r of totals) {
+      const agg = byId.get(r.task_id);
+      if (!agg) continue;
+      agg.totalSeconds = r.total;
+      agg.todaySeconds = r.today;
+      agg.unreportedSeconds = r.unreported;
+    }
+  }
+  return byId;
+}
+
+function buildTask(row: TaskRow, agg: TaskAggregates): Task {
   return {
     id: row.id,
     title: row.title,
@@ -75,11 +107,11 @@ function rowToTask(db: Database, row: TaskRow): Task {
     externalId: row.external_id,
     pluginId: row.plugin_id,
     sortOrder: row.sort_order,
-    totalTimeSeconds: totalTime.total,
-    todayTimeSeconds: todayTime.total,
-    unreportedTimeSeconds: unreportedTime.total,
-    hasUnreportedTime: unreportedTime.total > 0,
-    categoryIds: catRows.map((r) => r.category_id),
+    totalTimeSeconds: agg.totalSeconds,
+    todayTimeSeconds: agg.todaySeconds,
+    unreportedTimeSeconds: agg.unreportedSeconds,
+    hasUnreportedTime: agg.unreportedSeconds > 0,
+    categoryIds: agg.categoryIds,
     notes: row.notes ?? '',
     deletedAt: sqliteTimeToIso(row.deleted_at),
     externalUrl: row.external_url,
@@ -92,6 +124,16 @@ function rowToTask(db: Database, row: TaskRow): Task {
   };
 }
 
+/** Build a whole page of tasks without going back to the database per row. */
+function rowsToTasks(db: Database, rows: TaskRow[]): Task[] {
+  const aggregates = taskAggregates(db, rows.map((r) => r.id));
+  return rows.map((row) => buildTask(row, aggregates.get(row.id) ?? EMPTY_AGGREGATES));
+}
+
+function rowToTask(db: Database, row: TaskRow): Task {
+  return rowsToTasks(db, [row])[0];
+}
+
 function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): string {
   switch (sortBy) {
     case 'recent':
@@ -101,12 +143,11 @@ function getSortOrderClause(sortBy: TaskSortBy | undefined, isDone: boolean): st
     case 'alphabetical':
       return `title COLLATE NOCASE ASC`;
     case 'most-time-today':
-      return `(SELECT COALESCE(SUM(
-        CASE WHEN end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
-          ELSE CAST(ROUND((julianday('now') - julianday(start_time)) * 86400) AS INTEGER)
-        END
-      ), 0) FROM time_entries WHERE task_id = tasks.id AND date(start_time, 'localtime') = date('now', 'localtime')) DESC, created_at DESC`;
+      // Sorting counts the running entry, so the task being worked on right
+      // now climbs the list as it is tracked.
+      return `(SELECT ${sumDurationSeconds('withRunning')} FROM time_entries
+        WHERE task_id = tasks.id AND date(start_time, 'localtime') = date('now', 'localtime')
+      ) DESC, created_at DESC`;
     case 'manual':
     default:
       return isDone ? `updated_at DESC` : `sort_order ASC, created_at DESC`;
@@ -168,6 +209,10 @@ function buildFilterClauses(params?: TaskQueryParams): { clauses: string[]; valu
     clauses.push(
       `EXISTS (SELECT 1 FROM time_entries WHERE task_id = tasks.id AND reported_at IS NULL)`,
     );
+  }
+
+  if (params?.stateDirty === true) {
+    clauses.push('state_dirty = 1');
   }
 
   if (params?.uncategorized === true) {
@@ -240,11 +285,13 @@ function checkAdoStatusChange(db: Database, id: string, nextStatus: string): { m
 
 // ─── Exported handler functions (used by both IPC and HTTP server) ───
 
-export function getAllTasks(db: Database): Task[] {
+export function getAllTasks(db: Database, params?: TaskFilterParams): Task[] {
+  const { clauses, values } = buildFilterClauses(params);
+  const where = ['deleted_at IS NULL', ...clauses].join(' AND ');
   const rows = db.instance
-    .prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC')
-    .all() as TaskRow[];
-  return rows.map((row) => rowToTask(db, row));
+    .prepare(`SELECT * FROM tasks WHERE ${where} ORDER BY sort_order ASC, created_at DESC`)
+    .all(...values) as TaskRow[];
+  return rowsToTasks(db, rows);
 }
 
 export function getTaskById(db: Database, id: string): Task | null {
@@ -264,13 +311,17 @@ export function getActiveTaskIds(db: Database, params?: TaskQueryParams): string
   return rows.map((r) => r.id);
 }
 
-export function getActiveTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
+/**
+ * The active and done listings differ only in which side of `status = 'done'`
+ * they take; they were 30-line duplicates.
+ */
+function getTasksPage(db: Database, done: boolean, params?: TaskQueryParams): PaginatedResponse<Task> {
   const offset = params?.offset ?? 0;
   const limit = params?.limit ?? 50;
-  const orderBy = getSortOrderClause(params?.sortBy, false);
+  const orderBy = getSortOrderClause(params?.sortBy, done);
   const { clauses, values } = buildFilterClauses(params);
 
-  const baseWhere = "status != 'done' AND deleted_at IS NULL";
+  const baseWhere = `status ${done ? '=' : '!='} 'done' AND deleted_at IS NULL`;
   const where = clauses.length > 0
     ? `${baseWhere} AND ${clauses.join(' AND ')}`
     : baseWhere;
@@ -285,7 +336,7 @@ export function getActiveTasks(db: Database, params?: TaskQueryParams): Paginate
   const countRow = db.instance
     .prepare(`SELECT COUNT(*) as total FROM tasks WHERE ${where}`)
     .get(...values) as { total: number };
-  const items = rows.map((row) => rowToTask(db, row));
+  const items = rowsToTasks(db, rows);
   return {
     items,
     total: countRow.total,
@@ -295,35 +346,12 @@ export function getActiveTasks(db: Database, params?: TaskQueryParams): Paginate
   };
 }
 
+export function getActiveTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
+  return getTasksPage(db, false, params);
+}
+
 export function getDoneTasks(db: Database, params?: TaskQueryParams): PaginatedResponse<Task> {
-  const offset = params?.offset ?? 0;
-  const limit = params?.limit ?? 50;
-  const orderBy = getSortOrderClause(params?.sortBy, true);
-  const { clauses, values } = buildFilterClauses(params);
-
-  const baseWhere = "status = 'done' AND deleted_at IS NULL";
-  const where = clauses.length > 0
-    ? `${baseWhere} AND ${clauses.join(' AND ')}`
-    : baseWhere;
-
-  const rows = db.instance
-    .prepare(
-      `SELECT * FROM tasks WHERE ${where}
-       ORDER BY ${orderBy}
-       LIMIT ? OFFSET ?`
-    )
-    .all(...values, limit, offset) as TaskRow[];
-  const countRow = db.instance
-    .prepare(`SELECT COUNT(*) as total FROM tasks WHERE ${where}`)
-    .get(...values) as { total: number };
-  const items = rows.map((row) => rowToTask(db, row));
-  return {
-    items,
-    total: countRow.total,
-    offset,
-    limit,
-    hasMore: offset + items.length < countRow.total,
-  };
+  return getTasksPage(db, true, params);
 }
 
 export function createTask(db: Database, input: CreateTaskInput): Task {
@@ -518,7 +546,7 @@ export function getDeletedTasks(db: Database, params?: PaginationParams): Pagina
   const countRow = db.instance
     .prepare('SELECT COUNT(*) as total FROM tasks WHERE deleted_at IS NOT NULL')
     .get() as { total: number };
-  const items = rows.map((row) => rowToTask(db, row));
+  const items = rowsToTasks(db, rows);
   return {
     items,
     total: countRow.total,
@@ -864,7 +892,7 @@ export function resetApp(db: Database): void {
 // ─── IPC registration (thin wrappers around exported functions) ─────
 
 export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
-  ipcMain.handle('tasks:getAll', () => getAllTasks(db));
+  ipcMain.handle('tasks:getAll', (_event, params?: TaskFilterParams) => getAllTasks(db, params));
   ipcMain.handle('tasks:getById', (_event, id: string) => getTaskById(db, id));
   ipcMain.handle('tasks:getActive', (_event, params?: TaskQueryParams) => getActiveTasks(db, params));
   ipcMain.handle('tasks:getActiveIds', (_event, params?: TaskQueryParams) => getActiveTaskIds(db, params));
