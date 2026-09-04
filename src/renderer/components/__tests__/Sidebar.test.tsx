@@ -130,4 +130,25 @@ describe('Sidebar', () => {
     await user.click(screen.getByTitle('Collapse sidebar'));
     expect(localStorage.getItem('central-tracking:sidebar-collapsed')).toBe('true');
   });
+
+  /**
+   * searchIn belongs to the search-mode dropdown, whose own state is persisted
+   * separately and pushed into the filter by an effect that fires only when the
+   * mode changes. Resetting the filter to {} dropped searchIn with nothing to
+   * put it back, so search fell to title-only while the dropdown read "All".
+   */
+  it('Reset filters keeps the search mode the dropdown is showing', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('central-tracking:search-mode', 'all');
+    mockTaskContext.filter = { search: 'flake' };
+    render(<Sidebar />);
+
+    await user.click(screen.getByText('Reset filters'));
+
+    const resetCall = mockTaskContext.setFilter.mock.calls
+      .map((c) => c[0])
+      .filter((arg) => typeof arg === 'object' && arg !== null)
+      .pop();
+    expect(resetCall).toEqual({ searchIn: 'all' });
+  });
 });
