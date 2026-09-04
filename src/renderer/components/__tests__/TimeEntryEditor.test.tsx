@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimeEntryEditor } from '../TimeEntryEditor';
@@ -212,6 +212,94 @@ describe('TimeEntryEditor - Running Entry', () => {
       null,
       ''
     );
+  });
+});
+
+/**
+ * A running entry occupies start..now. Backdating its start over work that was
+ * already logged used to pass validation, because the check only asked whether
+ * the new start instant landed inside another entry.
+ */
+describe('TimeEntryEditor - Running Entry overlap', () => {
+  // Local wall-clock, since the editor's date/time inputs are local.
+  const localIso = (h: number, m: number) =>
+    new Date(2024, 5, 15, h, m, 0, 0).toISOString();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2024, 5, 15, 18, 0, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const setStartTime = async (
+    user: ReturnType<typeof userEvent.setup>,
+    value: string,
+  ) => {
+    await user.click(screen.getAllByTitle('Click to edit')[0]);
+    const input = screen.getByTestId('entry-start-time');
+    await user.clear(input);
+    await user.type(input, value);
+    await user.click(screen.getByText('Save'));
+  };
+
+  const renderRunning = (completed: TimeEntry[]) => {
+    const running = makeEntry({
+      id: 'te-running',
+      startTime: localIso(17, 0),
+      endTime: null,
+      durationSeconds: null,
+      note: '',
+    });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TimeEntryEditor
+        entry={running}
+        allEntries={[running, ...completed]}
+        onSave={onSave}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    return onSave;
+  };
+
+  it('rejects a start backdated over a completed entry that now falls inside the span', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onSave = renderRunning([
+      makeEntry({ id: 'te-done', startTime: localIso(14, 0), endTime: localIso(15, 0) }),
+    ]);
+
+    await setStartTime(user, '13:00');
+
+    expect(screen.getByText(/overlaps with an existing time entry/i)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('still rejects a start landing inside a completed entry', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onSave = renderRunning([
+      makeEntry({ id: 'te-done', startTime: localIso(14, 0), endTime: localIso(15, 0) }),
+    ]);
+
+    await setStartTime(user, '14:30');
+
+    expect(screen.getByText(/overlaps with an existing time entry/i)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('accepts a start that clears every completed entry', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onSave = renderRunning([
+      makeEntry({ id: 'te-done', startTime: localIso(14, 0), endTime: localIso(15, 0) }),
+    ]);
+
+    await setStartTime(user, '15:30');
+
+    expect(onSave).toHaveBeenCalledWith('te-running', expect.any(String), null, '');
   });
 });
 
