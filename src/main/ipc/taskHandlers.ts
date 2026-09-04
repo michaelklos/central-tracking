@@ -746,8 +746,9 @@ export function setExternalTaskState(
  *   full mirror: the renderer locks title/notes, the FSM applies, and the
  *   next pull will refresh state from the remote.
  *
- * Throws a DomainError if the plugin is missing/disabled or the externalId is
- * empty so the caller can surface a clear message.
+ * Throws a DomainError if the plugin is missing/disabled, the externalId is
+ * empty, or another task already holds that external id, so the caller can
+ * surface a clear message.
  */
 export function linkTaskToPlugin(
   db: Database,
@@ -769,6 +770,37 @@ export function linkTaskToPlugin(
   }
 
   const resolvedId = resolveTaskId(db, taskId);
+
+  // Two partial unique indexes cover external_id: (plugin_id, external_id)
+  // from migration 009 and (source, external_id) from 007. Neither excludes
+  // soft-deleted rows, so a task sitting in the recycle bin still holds its
+  // external id and still collides. Check both pairs -- and check them
+  // against the source this link will leave the task with, which is 'plugin'
+  // in mirror mode -- so the user gets a message naming the other task
+  // instead of a raw SQLite "UNIQUE constraint failed".
+  const newSource = input.mode === 'mirror'
+    ? 'plugin'
+    : (db.instance.prepare('SELECT source FROM tasks WHERE id = ?').get(resolvedId) as
+        { source: string } | undefined)?.source;
+  const conflict = db.instance
+    .prepare(
+      `SELECT id, title, deleted_at FROM tasks
+       WHERE id != ? AND external_id = ?
+         AND (plugin_id = ? OR source = ?)
+       LIMIT 1`,
+    )
+    .get(resolvedId, externalId, input.pluginId, newSource ?? null) as
+      { id: string; title: string; deleted_at: string | null } | undefined;
+  if (conflict) {
+    const where = conflict.deleted_at ? ' (in the recycle bin)' : '';
+    throw new DomainError(
+      'CONFLICT',
+      `External id "${externalId}" is already linked to task "${conflict.title}"${where}. ` +
+        'Unlink that task first.',
+      409,
+    );
+  }
+
   const sets: string[] = ['plugin_id = ?', 'external_id = ?'];
   const values: unknown[] = [input.pluginId, externalId];
   if (input.mode === 'mirror') {

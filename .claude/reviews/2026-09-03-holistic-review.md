@@ -16,11 +16,11 @@
 >   export's Start/End columns, and `TimelineView`, which was already local
 >   but a second short of midnight.
 >
-> Tier 3 correctness, second pass: the push-time running entry and the
-> soft-delete filtering are fixed.
+> Tier 3 correctness, second pass: the push-time running entry, the
+> soft-delete filtering and the `linkTaskToPlugin` duplicate external id are
+> fixed.
 >
-> Still open from tier 3: `linkTaskToPlugin` duplicate
-> external id, ADO comment HTML and pagination, Sidebar reset filters,
+> Still open from tier 3: ADO comment HTML and pagination, Sidebar reset filters,
 > TimeEntryEditor overlap, all performance items, all simplification items,
 > and the entire addendum.
 
@@ -163,9 +163,15 @@ Correctness:
 - `taskHandlers.ts:460` — `deleted_at` written via `datetime('now')` while
   everything else is ISO. The renderer parses it as local time, so the recycle
   bin shows "deleted -1 days ago".
-- `taskHandlers.ts:741` — `linkTaskToPlugin` does not check whether another task
+- ~~`taskHandlers.ts:741` — `linkTaskToPlugin` does not check whether another task
   already holds that external id, so the unique index throws a raw SQLite error
-  surfaced verbatim to the user.
+  surfaced verbatim to the user.~~ **Fixed.** Note there are *two* partial
+  unique indexes on `external_id`, not one: `(plugin_id, external_id)` from
+  migration 009 and `(source, external_id)` from 007. The pre-check mirrors
+  both predicates exactly — including the fact that neither excludes
+  soft-deleted rows, so a task in the recycle bin genuinely still collides and
+  the message says so. Mirroring the predicates rather than guessing them is
+  what keeps the check from rejecting links the index would have allowed.
 - ~~`timeEntryHandlers.ts:201` — soft-delete is filtered inconsistently. The UI
   report excludes deleted tasks; `ct report`, the CSV export and the TimerBar
   total do not.~~ **Fixed, with one correction: `ct report` was never
