@@ -701,6 +701,10 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
  *
  * Omitting `pushedStatus` keeps the old clear-unconditionally behavior, so an
  * already-packaged plugin that doesn't send it still works.
+ *
+ * The read and the write share one transaction: a status change landing
+ * between them would otherwise be lost the same way, just through a much
+ * narrower window.
  */
 export function setExternalTaskState(
   db: Database,
@@ -710,19 +714,23 @@ export function setExternalTaskState(
 ): { ok: true; stillDirty: boolean } {
   id = resolveTaskId(db, id);
 
-  const current = db.instance
-    .prepare('SELECT status FROM tasks WHERE id = ?')
-    .get(id) as { status: string } | undefined;
-  if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${id}`, 404);
+  const raced = db.instance.transaction(() => {
+    const current = db.instance
+      .prepare('SELECT status FROM tasks WHERE id = ?')
+      .get(id) as { status: string } | undefined;
+    if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${id}`, 404);
 
-  const raced = pushedStatus !== undefined && current.status !== pushedStatus;
+    const stillDirty = pushedStatus !== undefined && current.status !== pushedStatus;
 
-  db.instance
-    .prepare(
-      `UPDATE tasks SET external_state = ?, state_dirty = ?, updated_at = datetime('now')
-       WHERE id = ?`,
-    )
-    .run(externalState, raced ? 1 : 0, id);
+    db.instance
+      .prepare(
+        `UPDATE tasks SET external_state = ?, state_dirty = ?, updated_at = datetime('now')
+         WHERE id = ?`,
+      )
+      .run(externalState, stillDirty ? 1 : 0, id);
+
+    return stillDirty;
+  })() as boolean;
 
   return { ok: true, stillDirty: raced };
 }
