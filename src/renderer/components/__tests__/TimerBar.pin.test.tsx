@@ -32,6 +32,7 @@ const mockTaskContext = {
 
 vi.mock('../../context/TimerContext', () => ({
   useTimerContext: () => mockTimerContext,
+  useElapsedSeconds: () => mockTimerContext.elapsedSeconds,
 }));
 
 vi.mock('../../context/TaskContext', () => ({
