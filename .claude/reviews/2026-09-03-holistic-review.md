@@ -16,10 +16,11 @@
 >   export's Start/End columns, and `TimelineView`, which was already local
 >   but a second short of midnight.
 >
-> Still open from tier 3: the remaining correctness candidates (soft-delete
-> filtering, `linkTaskToPlugin` duplicate external id, push-time running
-> entry, ADO comment HTML and pagination, Sidebar reset filters,
-> TimeEntryEditor overlap), all performance items, all simplification items,
+> Tier 3 correctness, second pass: the push-time running entry is fixed.
+>
+> Still open from tier 3: soft-delete filtering, `linkTaskToPlugin` duplicate
+> external id, ADO comment HTML and pagination, Sidebar reset filters,
+> TimeEntryEditor overlap, all performance items, all simplification items,
 > and the entire addendum.
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
@@ -167,9 +168,13 @@ Correctness:
 - `timeEntryHandlers.ts:201` — soft-delete is filtered inconsistently. The UI
   report excludes deleted tasks; `ct report`, the CSV export and the TimerBar
   total do not.
-- `plugins/ado/src/push-time.ts:146` — push-time stamps the running entry as
+- ~~`plugins/ado/src/push-time.ts:146` — push-time stamps the running entry as
   reported although its duration was never summed, so that time never reaches
-  ADO.
+  ADO.~~ **Fixed**, but in `timeEntryHandlers.ts`, not in the plugin: the
+  finding located the symptom, not the cause. `markTaskEntriesReported` marked
+  every unreported row including the running one, so the CLI and the UI's
+  "mark reported" had the same hole. Both mark functions now require
+  `end_time IS NOT NULL`; clearing is deliberately left unrestricted.
 - `plugins/ado/src/pull.ts:114` — mirrored comments keep raw ADO HTML. The
   description goes through turndown; comments do not, and the renderer prints
   the body as text.
