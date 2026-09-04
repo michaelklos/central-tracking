@@ -211,7 +211,10 @@ export function getTodayTotal(db: Database): number {
 export function getTimeEntriesByDateRange(db: Database, start: string, end: string): TimeEntry[] {
   const rows = db.instance
     .prepare(
-      'SELECT * FROM time_entries WHERE start_time >= ? AND start_time <= ? ORDER BY start_time DESC'
+      `SELECT te.* FROM time_entries te
+       JOIN tasks t ON t.id = te.task_id
+       WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
+       ORDER BY te.start_time DESC`
     )
     .all(start, end) as TimeEntryRow[];
   return rows.map(rowToTimeEntry);

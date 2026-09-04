@@ -112,9 +112,12 @@ async function mirrorComments(
     const input: UpsertExternalCommentInput = {
       taskId: task.id,
       externalId: String(c.id),
-      // ADO comment bodies are HTML, same as System.Description. The renderer
-      // prints a comment body as text, so mirroring it raw showed the markup.
-      body: htmlToMd(turndown, c.text),
+      // ADO comment bodies are usually HTML, same as System.Description, and
+      // the renderer prints a comment body as text -- so mirroring raw showed
+      // the markup. ADO also supports markdown comments, which arrive with
+      // format='markdown' and are already in the shape ct wants; running
+      // those through turndown would escape and mangle them.
+      body: c.format === 'markdown' ? c.text.trim() : htmlToMd(turndown, c.text),
     };
     await ct.upsertExternalComment(input);
     count++;

@@ -211,4 +211,26 @@ describe('refresh — full-mirror gate', () => {
       expect.objectContaining({ externalId: '7', body: 'Deployed to **staging**' }),
     );
   });
+
+  it('leaves a markdown-format comment alone rather than turndowning it', async () => {
+    const task = makeCtTask();
+    const upsertExternalComment = vi.fn().mockResolvedValue(undefined);
+    const ct = {
+      getTaskById: vi.fn().mockResolvedValue(task),
+      upsertExternalTask: vi.fn().mockResolvedValue(task),
+      upsertExternalComment,
+    } as unknown as CtClient;
+    const ado = {
+      getWorkItem: vi.fn().mockResolvedValue(makeWorkItem()),
+      getWorkItemComments: vi.fn().mockResolvedValue([
+        { id: 8, format: 'markdown', text: 'Deployed to **staging** with `--force`' },
+      ]),
+    } as unknown as AdoClient;
+
+    await refresh(ado, ct, makeConfig(), 'ct-1');
+
+    expect(upsertExternalComment).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Deployed to **staging** with `--force`' }),
+    );
+  });
 });
