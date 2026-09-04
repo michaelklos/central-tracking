@@ -263,11 +263,14 @@ export function TaskDetail() {
 
   const handleSaveTitle = async () => {
     const trimmed = titleDraft.trim();
-    await guard('handleSaveTitle', 'Failed to rename task', async () => {
-      if (trimmed && trimmed !== task.title) {
+    // Only enter `guard` when there is a rename to make: it clears the error
+    // banner on the way in, and this runs on blur, so a bare click away from
+    // the title would otherwise wipe an unrelated message.
+    if (trimmed && trimmed !== task.title) {
+      await guard('handleSaveTitle', 'Failed to rename task', async () => {
         await updateTask(task.id, { title: trimmed });
-      }
-    });
+      });
+    }
     setEditingTitle(false);
   };
 
