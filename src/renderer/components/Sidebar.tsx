@@ -203,20 +203,25 @@ export function Sidebar() {
   };
 
   const handleToggleAction = (index: number) => {
-    if (!importPreview) return;
-    const items = importPreview.items.map((item, i) => {
-      if (i !== index) return item;
-      // Items with an existing task toggle between 'update' and 'skip'
-      // New items toggle between 'create' and 'skip'
-      let nextAction: ImportPreviewItem['action'];
-      if (item.existingTask) {
-        nextAction = item.action === 'skip' ? 'update' : 'skip';
-      } else {
-        nextAction = item.action === 'skip' ? 'create' : 'skip';
-      }
-      return { ...item, action: nextAction };
+    // Updater form: this depends on the previous value, and toggling two rows
+    // in the same tick with the captured `importPreview` would drop the first
+    // toggle (CLAUDE.md, recurring footgun 2).
+    setImportPreview((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.map((item, i) => {
+        if (i !== index) return item;
+        // Items with an existing task toggle between 'update' and 'skip'
+        // New items toggle between 'create' and 'skip'
+        let nextAction: ImportPreviewItem['action'];
+        if (item.existingTask) {
+          nextAction = item.action === 'skip' ? 'update' : 'skip';
+        } else {
+          nextAction = item.action === 'skip' ? 'create' : 'skip';
+        }
+        return { ...item, action: nextAction };
+      });
+      return { ...prev, items };
     });
-    setImportPreview({ ...importPreview, items });
   };
 
   const handleImportConfirm = async () => {

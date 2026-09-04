@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus } from '../../shared/types';
+import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationParams, PaginatedResponse, SummaryReportEntry, TimeEntryWithTask, TaskSource, TaskStatus, BatchMarkReportedOptions } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { resolveTaskId } from './taskLookup';
@@ -343,7 +343,7 @@ export function markTaskEntriesReported(
 export function batchMarkTaskEntriesReported(
   db: Database,
   taskIds: string[],
-  opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+  opts: BatchMarkReportedOptions,
 ): { changed: number } {
   if (taskIds.length === 0) return { changed: 0 };
   taskIds = taskIds.map((id) => resolveTaskId(db, id));
@@ -425,7 +425,7 @@ export function registerTimeEntryHandlers(ipcMain: IpcMain, db: Database): void 
   ipcMain.handle('timeEntries:markTaskReported', (_event, taskId: string, reportedAt: string | null) => markTaskEntriesReported(db, taskId, reportedAt));
   ipcMain.handle(
     'timeEntries:batchMarkReported',
-    (_event, taskIds: string[], opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string }) =>
+    (_event, taskIds: string[], opts: BatchMarkReportedOptions) =>
       batchMarkTaskEntriesReported(db, taskIds, opts),
   );
 }

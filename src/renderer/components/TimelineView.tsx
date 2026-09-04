@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildTimeline, type TimelineItem, type TimelineOptions } from '../utils/timeline';
 import { useTaskContext } from '../context/TaskContext';
@@ -51,7 +51,12 @@ export function TimelineView() {
 
   const isViewingToday = isSameDay(viewDate, new Date());
 
+  // Guards against a slow fetch for a day the user has already navigated away
+  // from overwriting the newer day's timeline (CLAUDE.md, recurring footgun 3).
+  const loadGenerationRef = useRef(0);
+
   const loadTimeline = useCallback(async () => {
+    const myGeneration = ++loadGenerationRef.current;
     // Same local-day endpoints as every other surface. This was already
     // local, but hand-rolled and a second short of midnight, so an entry
     // started in the last second of the day fell outside the timeline.
@@ -60,6 +65,8 @@ export function TimelineView() {
     const end = toIsoEndOfDay(dateStr);
 
     const data = await window.api.timeEntries.getByDateRangeWithTasks(start, end);
+    // Bail if a newer load has started while we awaited.
+    if (loadGenerationRef.current !== myGeneration) return;
     setEntries(data);
 
     const options: TimelineOptions = {
