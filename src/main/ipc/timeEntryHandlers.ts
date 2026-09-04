@@ -304,13 +304,20 @@ export function getTimeEntriesByDateRangeWithTasks(db: Database, start: string, 
 }
 
 /**
- * Bulk-set reported_at on every time entry of a task.
+ * Bulk-set reported_at on every completed time entry of a task.
  *
  * - `reportedAt: string` (ISO timestamp) → mark only the currently UNREPORTED
  *   entries. This preserves the original timestamp on already-reported entries
  *   (e.g. for a recurring task that you've reported partial weeks of).
  * - `reportedAt: null` → unset reported_at on every entry of the task,
  *   restoring them to "not yet reported."
+ *
+ * A still-running entry (`end_time IS NULL`) is never marked. Its duration is
+ * not final, so every consumer that sums time to report — ADO push-time sums
+ * `durationSeconds`, which is null while running — pushes zero for it. Marking
+ * it reported anyway would retire the entry before its time ever left ct, and
+ * it would never be picked up again. Clearing (`reportedAt: null`) is not
+ * restricted: it only ever restores rows to unreported.
  *
  * Returns the count of rows changed.
  */
@@ -325,7 +332,10 @@ export function markTaskEntriesReported(
         .prepare('UPDATE time_entries SET reported_at = NULL WHERE task_id = ? AND reported_at IS NOT NULL')
         .run(taskId)
     : db.instance
-        .prepare('UPDATE time_entries SET reported_at = ? WHERE task_id = ? AND reported_at IS NULL')
+        .prepare(
+          `UPDATE time_entries SET reported_at = ?
+           WHERE task_id = ? AND reported_at IS NULL AND end_time IS NOT NULL`,
+        )
         .run(reportedAt, taskId);
   return { changed: result.changes };
 }
@@ -375,7 +385,8 @@ export function batchMarkTaskEntriesReported(
     } else {
       const sql = `UPDATE time_entries SET reported_at = ?
                    WHERE task_id IN (${placeholders})
-                     AND reported_at IS NULL${dateWhere}`;
+                     AND reported_at IS NULL
+                     AND end_time IS NOT NULL${dateWhere}`;
       const stmt = db.instance.prepare(sql);
       const res = stmt.run(reportedAt, ...taskIds, ...dateValues);
       return res.changes;
