@@ -18,6 +18,7 @@ export function generateCsvContent(db: Database, start: string, end: string): st
        FROM time_entries te
        JOIN tasks t ON t.id = te.task_id
        WHERE te.start_time >= ? AND te.start_time <= ?
+         AND t.deleted_at IS NULL
        ORDER BY te.start_time`
     )
     .all(start, end) as (TimeEntryRow & { task_title: string })[];

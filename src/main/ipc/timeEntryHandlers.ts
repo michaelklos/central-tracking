@@ -194,11 +194,15 @@ export function getTodayTotal(db: Database): number {
   const row = db.instance
     .prepare(
       `SELECT COALESCE(SUM(
-        CASE WHEN end_time IS NOT NULL
-          THEN CAST(ROUND((julianday(end_time) - julianday(start_time)) * 86400) AS INTEGER)
+        CASE WHEN te.end_time IS NOT NULL
+          THEN CAST(ROUND((julianday(te.end_time) - julianday(te.start_time)) * 86400) AS INTEGER)
           ELSE 0
         END
-      ), 0) as total FROM time_entries WHERE date(start_time, 'localtime') = date('now', 'localtime')`
+      ), 0) as total
+      FROM time_entries te
+      JOIN tasks t ON t.id = te.task_id
+      WHERE date(te.start_time, 'localtime') = date('now', 'localtime')
+        AND t.deleted_at IS NULL`
     )
     .get() as { total: number };
   return row.total;
@@ -228,7 +232,7 @@ export function getTimeEntryReport(db: Database, start: string, end: string) {
         ), 0) as total_seconds
       FROM time_entries te
       JOIN tasks t ON t.id = te.task_id
-      WHERE te.start_time >= ? AND te.start_time <= ?
+      WHERE te.start_time >= ? AND te.start_time <= ? AND t.deleted_at IS NULL
       GROUP BY date(te.start_time, 'localtime'), te.task_id
       ORDER BY date(te.start_time, 'localtime')`
     )
