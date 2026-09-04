@@ -65,8 +65,38 @@ vi.mock('../../context/TimerContext', () => ({
   useElapsedSeconds: () => mockTimerContext.elapsedSeconds,
 }));
 
+describe('TaskList - context menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockTaskContext.activeTasks = [{ id: 't1', title: 'Right click me', status: 'todo', source: 'ad-hoc', categoryIds: [], pluginId: null }];
+    mockTaskContext.tasks = [...mockTaskContext.activeTasks];
+    mockTaskContext.batchMode = false;
+  });
+
+  it('opens on right-click over a task row', async () => {
+    const user = userEvent.setup();
+    render(<TaskList />);
+
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByText('Right click me') });
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('stays out of the way in batch mode, where right-click is not a selection', async () => {
+    const user = userEvent.setup();
+    mockTaskContext.batchMode = true;
+    render(<TaskList />);
+
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByText('Right click me') });
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+});
+
 describe('TaskList', () => {
   beforeEach(() => {
+    mockTaskContext.batchMode = false;
     mockTaskContext.activeTasks = [];
     mockTaskContext.doneTasks = [];
     mockTaskContext.tasks = [];
