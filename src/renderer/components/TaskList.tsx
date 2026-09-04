@@ -32,6 +32,8 @@ const STATUS_ORDER: Record<string, number> = {
 
 type GroupBy = 'none' | 'status' | 'source';
 
+const COLLAPSED_GROUPS_KEY = 'ct-collapsed-groups';
+
 /**
  * Today's time for one row. The live counter is read here rather than in
  * TaskList so a running timer re-renders this one cell each second instead
@@ -85,7 +87,15 @@ export function TaskList() {
   const [addAsTodo, setAddAsTodo] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>('status');
   const newTaskInputRef = useRef<HTMLInputElement>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(['Done']));
+  // Which groups are collapsed, persisted like the rest of the UI state so
+  // the list looks the same next launch.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+      if (stored) return new Set(JSON.parse(stored) as string[]);
+    } catch { /* ignore */ }
+    return new Set(['Done']);
+  });
   const [loadingDone, setLoadingDone] = useState(false);
   const [loadingMoreActive, setLoadingMoreActive] = useState(false);
   const [loadingMoreDone, setLoadingMoreDone] = useState(false);
@@ -115,7 +125,9 @@ export function TaskList() {
         if (!groups[key]) groups[key] = [];
         groups[key].push(task);
       }
-      // Always add a Done group (even if empty, so the header shows)
+      // To Do and Done keep their headers even when empty: To Do is where a
+      // new task lands, and both are places the user goes looking.
+      if (!groups[STATUS_LABELS['todo']]) groups[STATUS_LABELS['todo']] = [];
       groups['Done'] = doneTasks;
 
       // Sort group keys so "Done" is last
@@ -151,6 +163,9 @@ export function TaskList() {
       } else {
         next.add(group);
       }
+      try {
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
+      } catch { /* ignore */ }
       return next;
     });
 

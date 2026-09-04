@@ -94,6 +94,8 @@ vi.mock('../../context/TimerContext', () => ({
 describe('TaskList - Groups', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Collapse state persists now, so one test's expand would leak.
+    localStorage.clear();
     mockTaskContext.updateTask = vi.fn().mockResolvedValue({});
     mockTaskContext.loadDoneTasks = vi.fn().mockResolvedValue(undefined);
     mockTaskContext.doneTasksLoaded = false;
@@ -202,5 +204,41 @@ describe('TaskList - Groups', () => {
     const checkBtn = screen.getByTitle('Mark as done');
     await user.click(checkBtn);
     expect(mockTaskContext.updateTask).toHaveBeenCalledWith('1', { status: 'done' });
+  });
+});
+
+describe('TaskList - To Do stays visible', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [];
+    mockTaskContext.tasks = [];
+    mockTaskContext.doneTasksLoaded = false;
+  });
+
+  it('renders the To Do header even with no to-do tasks', () => {
+    mockTaskContext.activeTasks = [makeTask({ id: '1', title: 'Running', status: 'in-progress' })];
+    mockTaskContext.tasks = [...mockTaskContext.activeTasks];
+    render(<TaskList />);
+
+    const headers = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headers.some((t) => t?.includes('To Do'))).toBe(true);
+  });
+
+  it('remembers which groups were collapsed', async () => {
+    const user = userEvent.setup();
+    mockTaskContext.activeTasks = [makeTask({ id: '1', title: 'Todo Task', status: 'todo' })];
+    mockTaskContext.tasks = [...mockTaskContext.activeTasks];
+    const { unmount } = render(<TaskList />);
+
+    const todoHeader = screen.getAllByRole('heading', { level: 3 })
+      .find((h) => h.textContent?.includes('To Do'));
+    await user.click(todoHeader!);
+    expect(screen.queryByText('Todo Task')).not.toBeInTheDocument();
+
+    unmount();
+    render(<TaskList />);
+    expect(screen.queryByText('Todo Task')).not.toBeInTheDocument();
   });
 });
