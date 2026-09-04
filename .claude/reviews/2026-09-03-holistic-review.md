@@ -1,5 +1,27 @@
 # Holistic codebase review — 2026-09-03
 
+> **Status (updated as work landed).** Tier 1 (1-4) and tier 2 (5-8) are fixed.
+> From tier 3: `batchUpdateTasks` FSM/state_dirty, `setExternalTaskState`
+> clearing state_dirty, the category DELETE outside its transaction, migration
+> atomicity, the `datetime('now')` timestamp format, and all four CLAUDE.md
+> violations are fixed. Each fix was checked against the pre-fix code to
+> confirm its tests actually fail there.
+>
+> Two corrections to this report, both found while implementing:
+> - **Finding 5's suggested fix is wrong.** Pointing the renderer at
+>   `dateRange.ts` would have made all four surfaces *consistently* wrong.
+>   The helper itself emitted a UTC day (`T00:00:00.000Z`) from a local
+>   calendar date; the skew was in the helper, not only in its callers.
+> - **Finding 5 has a fifth surface** the report does not list: the CSV
+>   export's Start/End columns, and `TimelineView`, which was already local
+>   but a second short of midnight.
+>
+> Still open from tier 3: the remaining correctness candidates (soft-delete
+> filtering, `linkTaskToPlugin` duplicate external id, push-time running
+> entry, ADO comment HTML and pagination, Sidebar reset filters,
+> TimeEntryEditor overlap), all performance items, all simplification items,
+> and the entire addendum.
+
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
 not verified, except the four marked **CONFIRMED**, which were re-checked
