@@ -21,6 +21,13 @@
 > soft-delete filtering, the `linkTaskToPlugin` duplicate external id and the
 > TimeEntryEditor overlap are fixed.
 >
+> Post-review fix (Copilot, PR #26): `setExternalTaskState`'s back-compat
+> guard used `!== undefined`, which the HTTP transport defeats — `CtClient`
+> sends positional args, and `JSON.stringify` turns a trailing `undefined`
+> into `null`, so omitting `pushedStatus` left `state_dirty` set forever
+> instead of clearing it. Now `!= null`. A good catch: the finding was filed
+> as latent (the only in-repo caller always passes a status) and it was.
+>
 > **Tier 3 correctness is now closed.** Still open: all performance items, all
 > simplification items, and the addendum except A11, which is deferred (see
 > its section for why — the premise, not the effort).

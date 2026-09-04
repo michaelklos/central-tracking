@@ -85,6 +85,75 @@ describe('HTTP Server', () => {
     });
   });
 
+  /**
+   * `CtClient.setExternalTaskState` sends positional args, so omitting
+   * `pushedStatus` puts `undefined` at the end of the array — and
+   * JSON.stringify turns a trailing `undefined` into `null`. The handler must
+   * treat that as "no status was pushed" (its documented back-compat path),
+   * not as "the pushed status was null".
+   */
+  describe('setExternalState back-compat over HTTP', () => {
+    const createDirtyTask = async () => {
+      const { body } = await makeRequest(server.port, server.token, 'tasks/create', [
+        { title: 'Mirror' },
+      ]);
+      const id = (body.data as { id: string }).id;
+      // Mirror-task columns are set directly: creating a real plugin task
+      // needs a plugins row, and none of that matters to the flag's logic.
+      db.instance
+        .prepare("UPDATE tasks SET source = 'plugin', state_dirty = 1 WHERE id = ?")
+        .run(id);
+      return id;
+    };
+
+    const stateDirty = (id: string) =>
+      (db.instance.prepare('SELECT state_dirty FROM tasks WHERE id = ?').get(id) as
+        { state_dirty: number }).state_dirty;
+
+    it('clears state_dirty when pushedStatus is omitted', async () => {
+      const id = await createDirtyTask();
+
+      // Exactly what CtClient sends when the caller omits the argument.
+      const { body } = await makeRequest(server.port, server.token, 'tasks/setExternalState', [
+        id,
+        'Active',
+        undefined,
+      ]);
+
+      expect(body.ok).toBe(true);
+      expect((body.data as { stillDirty: boolean }).stillDirty).toBe(false);
+      expect(stateDirty(id)).toBe(0);
+    });
+
+    it('still keeps state_dirty when the status moved under an in-flight push', async () => {
+      const id = await createDirtyTask();
+      db.instance.prepare("UPDATE tasks SET status = 'done' WHERE id = ?").run(id);
+
+      const { body } = await makeRequest(server.port, server.token, 'tasks/setExternalState', [
+        id,
+        'Active',
+        'in-progress',
+      ]);
+
+      expect((body.data as { stillDirty: boolean }).stillDirty).toBe(true);
+      expect(stateDirty(id)).toBe(1);
+    });
+
+    it('clears state_dirty when the pushed status is still current', async () => {
+      const id = await createDirtyTask();
+      db.instance.prepare("UPDATE tasks SET status = 'in-progress' WHERE id = ?").run(id);
+
+      const { body } = await makeRequest(server.port, server.token, 'tasks/setExternalState', [
+        id,
+        'Active',
+        'in-progress',
+      ]);
+
+      expect((body.data as { stillDirty: boolean }).stillDirty).toBe(false);
+      expect(stateDirty(id)).toBe(0);
+    });
+  });
+
   describe('authentication', () => {
     it('rejects requests without auth token', async () => {
       const { status, body } = await makeRequest(server.port, '', 'tasks/getAll', [], {

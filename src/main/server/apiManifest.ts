@@ -76,7 +76,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/restoreAll',       ipcChannel: 'tasks:restoreAll',       mutates: true,  event: 'task.restored',  handler: (db) => restoreAllDeleted(db) },
   { route: 'tasks/deleteAll',        ipcChannel: 'tasks:deleteAll',        mutates: true,  event: 'task.deleted',   handler: (db) => deleteAllTasks(db) },
   { route: 'tasks/upsertExternal',   ipcChannel: 'tasks:upsertExternal',   mutates: true,  event: 'task.updated',   handler: (db, input) => upsertExternalTask(db, input as never) },
-  { route: 'tasks/setExternalState', ipcChannel: 'tasks:setExternalState', mutates: true,  event: 'task.updated',   handler: (db, id, externalState, pushedStatus) => setExternalTaskState(db, id as string, externalState as string, pushedStatus as string | undefined) },
+  { route: 'tasks/setExternalState', ipcChannel: 'tasks:setExternalState', mutates: true,  event: 'task.updated',   handler: (db, id, externalState, pushedStatus) => setExternalTaskState(db, id as string, externalState as string, pushedStatus as string | null | undefined) },
   { route: 'tasks/link',             ipcChannel: 'tasks:link',             mutates: true,  event: 'task.updated',   handler: (db, id, input) => linkTaskToPlugin(db, id as string, input as LinkTaskInput) },
   { route: 'tasks/unlink',           ipcChannel: 'tasks:unlink',           mutates: true,  event: 'task.updated',   handler: (db, id) => unlinkTaskFromPlugin(db, id as string) },
 
