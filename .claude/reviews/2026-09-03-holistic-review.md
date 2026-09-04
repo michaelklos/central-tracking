@@ -16,9 +16,10 @@
 >   export's Start/End columns, and `TimelineView`, which was already local
 >   but a second short of midnight.
 >
-> Tier 3 correctness, second pass: the push-time running entry is fixed.
+> Tier 3 correctness, second pass: the push-time running entry and the
+> soft-delete filtering are fixed.
 >
-> Still open from tier 3: soft-delete filtering, `linkTaskToPlugin` duplicate
+> Still open from tier 3: `linkTaskToPlugin` duplicate
 > external id, ADO comment HTML and pagination, Sidebar reset filters,
 > TimeEntryEditor overlap, all performance items, all simplification items,
 > and the entire addendum.
@@ -165,9 +166,14 @@ Correctness:
 - `taskHandlers.ts:741` — `linkTaskToPlugin` does not check whether another task
   already holds that external id, so the unique index throws a raw SQLite error
   surfaced verbatim to the user.
-- `timeEntryHandlers.ts:201` — soft-delete is filtered inconsistently. The UI
+- ~~`timeEntryHandlers.ts:201` — soft-delete is filtered inconsistently. The UI
   report excludes deleted tasks; `ct report`, the CSV export and the TimerBar
-  total do not.
+  total do not.~~ **Fixed, with one correction: `ct report` was never
+  affected.** It calls `getSummaryReport`, which already filtered — the same
+  handler the UI report uses. The three surfaces that actually leaked deleted
+  tasks were `getTodayTotal` (TimerBar, `ct status`, `ct time`), which did not
+  join `tasks` at all, the `timeEntries/getReport` route, and the CSV export.
+  All three now filter, so every surface agrees with the recycle bin.
 - ~~`plugins/ado/src/push-time.ts:146` — push-time stamps the running entry as
   reported although its duration was never summed, so that time never reaches
   ADO.~~ **Fixed**, but in `timeEntryHandlers.ts`, not in the plugin: the
