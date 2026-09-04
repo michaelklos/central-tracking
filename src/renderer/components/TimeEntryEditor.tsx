@@ -117,6 +117,22 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
     setEditing(true);
   };
 
+  /**
+   * Run the save callback, keeping a backend failure inside this form: the
+   * draft stays put and the message lands next to the field, rather than the
+   * callback's rejection escaping as an unhandled promise while the form
+   * closes as if it had saved. Returns false when the save failed.
+   */
+  const attempt = async (fn: () => Promise<void>): Promise<boolean> => {
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  };
+
   const handleSubmit = async () => {
     if (!dateDraft || !timeDraft) {
       setError('Date and start time are required');
@@ -152,7 +168,7 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
           return;
         }
       }
-      await props.onSave(props.entry.id, startIso, null, noteDraft);
+      if (!await attempt(() => props.onSave(props.entry.id, startIso, null, noteDraft))) return;
       setEditing(false);
       setError('');
       return;
@@ -178,12 +194,12 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
     }
 
     if (isCreate) {
-      await props.onCreate(startIso, endIso, noteDraft);
+      if (!await attempt(() => props.onCreate(startIso, endIso, noteDraft))) return;
       // Reset form
       setNoteDraft('');
       setError('');
     } else {
-      await props.onSave(props.entry.id, startIso, endIso, noteDraft);
+      if (!await attempt(() => props.onSave(props.entry.id, startIso, endIso, noteDraft))) return;
       setEditing(false);
       setError('');
     }

@@ -141,6 +141,19 @@ describe('TimeEntryEditor - Edit Mode', () => {
     expect(defaultProps.onSave).not.toHaveBeenCalled();
   });
 
+  it('keeps the form open and shows the message when the save is rejected', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockRejectedValue(new Error('Time entry overlaps'));
+    render(<TimeEntryEditor {...defaultProps} onSave={onSave} />);
+    await user.click(screen.getAllByTitle('Click to edit')[0]);
+
+    await user.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('Time entry overlaps')).toBeInTheDocument();
+    // Still in edit mode, so the draft is not lost.
+    expect(screen.getByTestId('entry-duration')).toBeInTheDocument();
+  });
+
   it('calls onSave with correct values when saving', async () => {
     const user = userEvent.setup();
     render(<TimeEntryEditor {...defaultProps} />);
