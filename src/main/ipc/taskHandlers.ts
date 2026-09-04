@@ -686,10 +686,6 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
 }
 
 /**
- * Clear `state_dirty` and set `external_state` after a plugin successfully
- * pushed the local status to the external system.
- */
-/**
  * Record the external state a plugin just pushed, and clear `state_dirty`.
  *
  * `pushedStatus` is the ct status the plugin actually pushed. When given, the
