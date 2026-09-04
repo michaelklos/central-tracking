@@ -5,11 +5,8 @@ import { useTaskContext } from '../context/TaskContext';
 import { formatDurationHuman } from '../../shared/duration';
 import { toLocalDateString as toDateString, toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import type { TimeEntryWithTask } from '../../shared/types';
+import { getStringSetting } from '../utils/settings';
 import './TimelineView.css';
-
-function getStringSetting(key: string, defaultValue: string): string {
-  return localStorage.getItem(key) ?? defaultValue;
-}
 
 function sourcePrefix(source?: string): string {
   switch (source) {

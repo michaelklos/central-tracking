@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react';
 import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy } from '../../shared/types';
-
-const ACTIVE_TASKS_LIMIT = 50;
-const DONE_TASKS_LIMIT = 50;
-const DELETED_TASKS_LIMIT = 50;
+// Page size is a setting, read per fetch so a change takes effect on the next
+// refresh rather than needing a reload.
+import { getPageSize } from '../utils/settings';
 
 interface TaskContextValue {
   // Legacy — combined view of all loaded tasks (for TaskDetail lookup)
@@ -204,11 +203,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }), [filter]);
 
   // A refresh restores every page the user has loaded, not just the first
-  // one. Refetching `limit: ACTIVE_TASKS_LIMIT` would throw away everything
+  // one. Refetching only the first page would throw away everything
   // "load more" paged in on every mutation and every `ct:data-changed`.
   const refreshActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
-      offset: 0, limit: Math.max(ACTIVE_TASKS_LIMIT, activeLoadedRef.current), sortBy,
+      offset: 0, limit: Math.max(getPageSize(), activeLoadedRef.current), sortBy,
       ...filterToParams(),
     });
     activeLoadedRef.current = res.items.length;
@@ -220,7 +219,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const loadMoreActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
-      offset: activeLoadedRef.current, limit: ACTIVE_TASKS_LIMIT, sortBy,
+      offset: activeLoadedRef.current, limit: getPageSize(), sortBy,
       ...filterToParams(),
     });
     activeLoadedRef.current += res.items.length;
@@ -232,7 +231,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const loadDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
-      offset: 0, limit: Math.max(DONE_TASKS_LIMIT, doneLoadedRef.current), sortBy,
+      offset: 0, limit: Math.max(getPageSize(), doneLoadedRef.current), sortBy,
       ...filterToParams(),
     });
     doneLoadedRef.current = res.items.length;
@@ -245,7 +244,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const loadMoreDoneTasks = useCallback(async () => {
     const res = await window.api.tasks.getDone({
-      offset: doneLoadedRef.current, limit: DONE_TASKS_LIMIT, sortBy,
+      offset: doneLoadedRef.current, limit: getPageSize(), sortBy,
       ...filterToParams(),
     });
     doneLoadedRef.current += res.items.length;
@@ -267,7 +266,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // Deleted tasks (recycle bin) loading
   const loadDeletedTasks = useCallback(async () => {
     const res = await window.api.tasks.getDeleted({
-      offset: 0, limit: Math.max(DELETED_TASKS_LIMIT, deletedLoadedRef.current),
+      offset: 0, limit: Math.max(getPageSize(), deletedLoadedRef.current),
     });
     deletedLoadedRef.current = res.items.length;
     setDeletedTasks(res.items);
@@ -277,7 +276,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadMoreDeletedTasks = useCallback(async () => {
-    const res = await window.api.tasks.getDeleted({ offset: deletedLoadedRef.current, limit: DELETED_TASKS_LIMIT });
+    const res = await window.api.tasks.getDeleted({ offset: deletedLoadedRef.current, limit: getPageSize() });
     deletedLoadedRef.current += res.items.length;
     setDeletedTasks((prev) => [...prev, ...res.items]);
     setDeletedTasksTotal(res.total);

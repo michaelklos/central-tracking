@@ -73,6 +73,7 @@ async function renderProvider() {
 describe('TaskContext pagination window', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     window.api.tasks.getActive = pagedGetActive([...page1, ...page2]) as never;
   });
 
@@ -98,6 +99,31 @@ describe('TaskContext pagination window', () => {
     expect(window.api.tasks.getActive).toHaveBeenLastCalledWith(
       expect.objectContaining({ offset: 50, limit: 50 })
     );
+  });
+});
+
+describe('TaskContext page size setting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    window.api.tasks.getActive = pagedGetActive([...page1, ...page2]) as never;
+  });
+
+  it('loads the configured page size instead of the built-in 50', async () => {
+    localStorage.setItem('ct-option-page-size', '75');
+    await renderProvider();
+
+    await waitFor(() => expect(screen.getByTestId('active-count').textContent).toBe('75'));
+    expect(window.api.tasks.getActive).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 0, limit: 75 })
+    );
+  });
+
+  it('falls back to 50 when the stored value is not a usable number', async () => {
+    localStorage.setItem('ct-option-page-size', 'lots');
+    await renderProvider();
+
+    await waitFor(() => expect(screen.getByTestId('active-count').textContent).toBe('50'));
   });
 });
 
@@ -137,6 +163,7 @@ describe('TaskContext created-task slot', () => {
 describe('TaskContext batch operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     window.api.tasks.getActive = pagedGetActive(page1) as never;
     window.api.tasks.getDone = vi.fn().mockResolvedValue(
       { items: [], total: 3, offset: 0, limit: 0, hasMore: false }
