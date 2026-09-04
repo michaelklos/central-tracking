@@ -101,6 +101,22 @@ describe('TaskDetail - Validation', () => {
     expect(await screen.findByText(/Failed to rename task: database is locked/)).toBeInTheDocument();
   });
 
+  it('leaves an unrelated error banner alone when the title is blurred unchanged', async () => {
+    const user = userEvent.setup();
+    mockTaskContext.updateTask = vi.fn().mockRejectedValue(new Error('nope'));
+    render(<TaskDetail />);
+
+    // Provoke a banner from a different action, then click into and out of
+    // the title without changing it.
+    await user.selectOptions(screen.getAllByRole('combobox')[0], 'done');
+    expect(await screen.findByText(/Status change rejected: nope/)).toBeInTheDocument();
+
+    await user.click(screen.getByText('Test Task'));
+    await user.tab();
+
+    expect(screen.getByText(/Status change rejected: nope/)).toBeInTheDocument();
+  });
+
   it('empty title shows red border and prevents save', async () => {
     const user = userEvent.setup();
     render(<TaskDetail />);
