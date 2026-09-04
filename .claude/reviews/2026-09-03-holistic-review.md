@@ -20,9 +20,8 @@
 > soft-delete filtering, the `linkTaskToPlugin` duplicate external id and the
 > TimeEntryEditor overlap are fixed.
 >
-> Still open from tier 3: ADO comment HTML and pagination, Sidebar reset
-> filters, all performance items, all simplification items, and the entire
-> addendum.
+> Still open from tier 3: ADO comment HTML and pagination, all performance
+> items, all simplification items, and the entire addendum.
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -192,8 +191,14 @@ Correctness:
   the body as text.
 - `plugins/ado/src/ado-client.ts:147` — comment pagination ignored, only the
   first page is mirrored.
-- `Sidebar.tsx:430` — "Reset filters" sets `{}` and drops `searchIn`, so search
-  silently reverts to title-only while the dropdown still says "All".
+- ~~`Sidebar.tsx:430` — "Reset filters" sets `{}` and drops `searchIn`, so search
+  silently reverts to title-only while the dropdown still says "All".~~
+  **Fixed.** Confirmed the mechanism: the effect that pushes `searchIn` into
+  the filter is keyed on `searchMode`, so it fires only when the mode
+  *changes* and never restores what the reset dropped. Reset now seeds
+  `{ searchIn: searchMode }`. Leaving `searchIn` out of the button's
+  visibility guard is correct — it is the dropdown's state, not a filter the
+  reset should clear.
 - ~~`TimeEntryEditor.tsx:145` — overlap validation misses a completed entry lying
   fully inside the new range.~~ **Fixed**, though only in the branch the line
   number points at. The *range* path delegates to `validateTimeEntry`, whose

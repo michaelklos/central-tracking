@@ -432,7 +432,13 @@ export function Sidebar() {
                   {(filter.search || filter.statuses?.length || filter.sources?.length || filter.categoryIds?.length || filter.hasUnreportedTime || filter.uncategorized || filter.dateStart || filter.dateEnd) && (
                     <button
                       className="sidebar__clear-filters"
-                      onClick={() => { setFilter({}); setLocalSearch(''); }}
+                      // searchIn is not a filter the user set here -- it is the
+                      // search-mode dropdown's own persisted state, pushed into
+                      // the filter by an effect that only fires when the mode
+                      // *changes*. Resetting to {} dropped it and nothing put it
+                      // back, so search silently fell to title-only while the
+                      // dropdown still read "All".
+                      onClick={() => { setFilter({ searchIn: searchMode }); setLocalSearch(''); }}
                     >
                       Reset filters
                     </button>
