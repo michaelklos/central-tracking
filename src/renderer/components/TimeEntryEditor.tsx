@@ -126,8 +126,12 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
     const startIso = combineDateTimeToISO(dateDraft, timeDraft);
 
     if (isRunning) {
-      // Running entry: validate the new start is in the past and doesn't fall
-      // inside any other (completed) entry.
+      // Running entry: validate the new start is in the past and that the span
+      // it now claims doesn't overlap any completed entry. A running entry
+      // occupies start..now, not a single instant, so testing only whether the
+      // new start lands inside another entry misses every completed entry that
+      // sits between the new start and now -- exactly what happens when you
+      // backdate a running timer past work you already logged.
       const startMs = new Date(startIso).getTime();
       if (isNaN(startMs)) {
         setError('Invalid date format');
@@ -137,12 +141,13 @@ export function TimeEntryEditor(props: TimeEntryEditorProps) {
         setError('Start time cannot be in the future');
         return;
       }
+      const nowMs = Date.now();
       for (const other of props.allEntries) {
         if (other.id === props.entry.id) continue;
         if (!other.endTime) continue;
         const oStart = new Date(other.startTime).getTime();
         const oEnd = new Date(other.endTime).getTime();
-        if (startMs >= oStart && startMs < oEnd) {
+        if (startMs < oEnd && nowMs > oStart) {
           setError('Start time overlaps with an existing time entry');
           return;
         }

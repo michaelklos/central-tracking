@@ -17,12 +17,12 @@
 >   but a second short of midnight.
 >
 > Tier 3 correctness, second pass: the push-time running entry, the
-> soft-delete filtering and the `linkTaskToPlugin` duplicate external id are
-> fixed.
+> soft-delete filtering, the `linkTaskToPlugin` duplicate external id and the
+> TimeEntryEditor overlap are fixed.
 >
-> Still open from tier 3: ADO comment HTML and pagination, Sidebar reset filters,
-> TimeEntryEditor overlap, all performance items, all simplification items,
-> and the entire addendum.
+> Still open from tier 3: ADO comment HTML and pagination, Sidebar reset
+> filters, all performance items, all simplification items, and the entire
+> addendum.
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -194,8 +194,15 @@ Correctness:
   first page is mirrored.
 - `Sidebar.tsx:430` — "Reset filters" sets `{}` and drops `searchIn`, so search
   silently reverts to title-only while the dropdown still says "All".
-- `TimeEntryEditor.tsx:145` — overlap validation misses a completed entry lying
-  fully inside the new range.
+- ~~`TimeEntryEditor.tsx:145` — overlap validation misses a completed entry lying
+  fully inside the new range.~~ **Fixed**, though only in the branch the line
+  number points at. The *range* path delegates to `validateTimeEntry`, whose
+  `startMs < eEndMs && endMs > eStartMs` is the standard interval test and
+  already catches containment — no bug there. The bug is the **running-entry**
+  branch, which tested only whether the new start instant landed inside another
+  entry. A running entry occupies `start..now`, so backdating it over work
+  already logged passed validation. That branch now does the same interval
+  test against `now`.
 
 CLAUDE.md violations, each against a rule the file states explicitly:
 - `Sidebar.tsx:219` — `setImportPreview({...importPreview, ...})` in a handler.
