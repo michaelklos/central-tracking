@@ -79,7 +79,14 @@ export interface AdoWorkItemBatchResponse {
 export interface AdoWorkItemComment {
   id: number;
   workItemId: number;
+  /**
+   * The comment body. Its dialect is given by `format`: ADO's older comments
+   * (and everything posted by this plugin) are HTML, but ADO also supports
+   * markdown comments, whose `text` is already markdown.
+   */
   text: string;
+  /** Absent on older comments, which are HTML. */
+  format?: 'markdown' | 'html';
   createdBy: { displayName: string; uniqueName: string };
   createdDate: string;
   modifiedDate?: string;

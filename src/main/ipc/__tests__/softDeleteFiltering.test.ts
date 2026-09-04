@@ -79,6 +79,28 @@ describe('soft-deleted tasks are excluded from time totals', () => {
     expect(csv).not.toContain('Deleted');
   });
 
+  it('getByDateRange drops the soft-deleted task', async () => {
+    await ipc.invoke('timeEntries:create', {
+      taskId: keptId,
+      startTime: '2024-01-15T09:00:00Z',
+      endTime: '2024-01-15T10:00:00Z',
+    });
+    const gone = await ipc.invoke('timeEntries:create', {
+      taskId: deletedId,
+      startTime: '2024-01-15T11:00:00Z',
+      endTime: '2024-01-15T12:00:00Z',
+    });
+    await taskIpc.invoke('tasks:delete', deletedId);
+
+    const entries = await ipc.invoke(
+      'timeEntries:getByDateRange',
+      '2024-01-01T00:00:00Z',
+      '2024-01-31T23:59:59.999Z',
+    );
+    expect(entries.map((e: { id: string }) => e.id)).not.toContain(gone.id);
+    expect(entries).toHaveLength(1);
+  });
+
   it('restoring the task brings its time back', async () => {
     await ipc.invoke('timeEntries:create', {
       taskId: deletedId,
