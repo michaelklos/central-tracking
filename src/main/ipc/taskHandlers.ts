@@ -700,7 +700,13 @@ export function upsertExternalTask(db: Database, input: UpsertExternalTaskInput)
  * way, because ADO really is in that state.
  *
  * Omitting `pushedStatus` keeps the old clear-unconditionally behavior, so an
- * already-packaged plugin that doesn't send it still works.
+ * already-packaged plugin that doesn't send it still works. The check is
+ * `!= null`, not `!== undefined`, because omitting it over HTTP does not
+ * arrive as `undefined`: `CtClient` sends a positional `[id, state, undefined]`
+ * array, and `JSON.stringify` turns a trailing `undefined` into `null`. An
+ * `!== undefined` check would treat that as "a status was pushed", compare it
+ * against the real status, and leave `state_dirty` set forever — the exact
+ * opposite of the back-compat this promises.
  *
  * The read and the write share one transaction: a status change landing
  * between them would otherwise be lost the same way, just through a much
@@ -710,7 +716,8 @@ export function setExternalTaskState(
   db: Database,
   id: string,
   externalState: string,
-  pushedStatus?: string,
+  // `null` is reachable: see the note above on JSON transport.
+  pushedStatus?: string | null,
 ): { ok: true; stillDirty: boolean } {
   id = resolveTaskId(db, id);
 
@@ -720,7 +727,7 @@ export function setExternalTaskState(
       .get(id) as { status: string } | undefined;
     if (!current) throw new DomainError('NOT_FOUND', `Task not found: ${id}`, 404);
 
-    const stillDirty = pushedStatus !== undefined && current.status !== pushedStatus;
+    const stillDirty = pushedStatus != null && current.status !== pushedStatus;
 
     db.instance
       .prepare(
@@ -881,7 +888,7 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:deleteAll', () => deleteAllTasks(db));
   ipcMain.handle('tasks:resetApp', () => resetApp(db));
   ipcMain.handle('tasks:upsertExternal', (_event, input: UpsertExternalTaskInput) => upsertExternalTask(db, input));
-  ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string, pushedStatus?: string) => setExternalTaskState(db, id, externalState, pushedStatus));
+  ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string, pushedStatus?: string | null) => setExternalTaskState(db, id, externalState, pushedStatus));
   ipcMain.handle(
     'tasks:link',
     (_event, id: string, input: LinkTaskInput) =>
