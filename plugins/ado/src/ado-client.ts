@@ -25,6 +25,12 @@ export interface AdoClientOptions {
 
 const API_VERSION = '7.1';
 const API_VERSION_PREVIEW_COMMENTS = '7.1-preview.4';
+/**
+ * Safety stop for comment paging. ADO caps a page at 200 comments, so this is
+ * 10k comments on one work item -- far past anything real, and only there so a
+ * server that keeps handing back a continuation token cannot loop forever.
+ */
+const MAX_COMMENT_PAGES = 50;
 const WIQL_MAX_IDS = 200;
 
 function isRetriable(err: AxiosError): boolean {
@@ -138,13 +144,29 @@ export class AdoClient {
     return res.data;
   }
 
-  /** Fetch comments for a work item (preview API). */
+  /**
+   * Fetch every comment on a work item (preview API).
+   *
+   * The endpoint pages: it returns at most `count` of `totalCount` comments
+   * and a `continuationToken` when more remain. Reading only the first page
+   * silently truncated the mirror on any busy work item. The loop is bounded
+   * by the token going away, plus a page cap so a server that always returns
+   * a token cannot spin forever.
+   */
   async getWorkItemComments(id: number): Promise<AdoWorkItemComment[]> {
-    const url =
+    const base =
       `${this.projBase}/_apis/wit/workItems/${id}/comments` +
       `?api-version=${API_VERSION_PREVIEW_COMMENTS}`;
-    const data = await this.request<AdoWorkItemCommentsResponse>(() => this.http.get(url));
-    return data.comments;
+    const all: AdoWorkItemComment[] = [];
+    let token: string | undefined;
+    for (let page = 0; page < MAX_COMMENT_PAGES; page++) {
+      const url = token ? `${base}&continuationToken=${encodeURIComponent(token)}` : base;
+      const data = await this.request<AdoWorkItemCommentsResponse>(() => this.http.get(url));
+      all.push(...data.comments);
+      token = data.continuationToken;
+      if (!token || data.comments.length === 0) return all;
+    }
+    return all;
   }
 
   /**
