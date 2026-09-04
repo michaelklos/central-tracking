@@ -89,6 +89,8 @@ export interface AdoWorkItemCommentsResponse {
   totalCount: number;
   count: number;
   comments: AdoWorkItemComment[];
+  /** Present only while further pages remain. */
+  continuationToken?: string;
 }
 
 export interface JsonPatchOp {

@@ -183,4 +183,32 @@ describe('refresh — full-mirror gate', () => {
       /not found/,
     );
   });
+
+  /**
+   * ADO comment bodies are HTML, same as System.Description. The description
+   * went through turndown; comments did not, so the renderer -- which prints a
+   * comment body as text -- showed raw markup.
+   */
+  it('converts mirrored comment bodies from HTML to markdown', async () => {
+    const task = makeCtTask();
+    const upsertExternalComment = vi.fn().mockResolvedValue(undefined);
+    const ct = {
+      getTaskById: vi.fn().mockResolvedValue(task),
+      upsertExternalTask: vi.fn().mockResolvedValue(task),
+      upsertExternalComment,
+    } as unknown as CtClient;
+    const ado = {
+      getWorkItem: vi.fn().mockResolvedValue(makeWorkItem()),
+      getWorkItemComments: vi.fn().mockResolvedValue([
+        { id: 7, text: '<p>Deployed to <b>staging</b></p>' },
+      ]),
+    } as unknown as AdoClient;
+
+    const res = await refresh(ado, ct, makeConfig(), 'ct-1');
+
+    expect(res.commentsMirrored).toBe(1);
+    expect(upsertExternalComment).toHaveBeenCalledWith(
+      expect.objectContaining({ externalId: '7', body: 'Deployed to **staging**' }),
+    );
+  });
 });

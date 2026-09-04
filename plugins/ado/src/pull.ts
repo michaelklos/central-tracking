@@ -102,6 +102,7 @@ function buildTaskInput(
 async function mirrorComments(
   ado: AdoClient,
   ct: CtClient,
+  turndown: TurndownService,
   workItemId: number,
   task: CtTask,
 ): Promise<number> {
@@ -111,7 +112,9 @@ async function mirrorComments(
     const input: UpsertExternalCommentInput = {
       taskId: task.id,
       externalId: String(c.id),
-      body: c.text,
+      // ADO comment bodies are HTML, same as System.Description. The renderer
+      // prints a comment body as text, so mirroring it raw showed the markup.
+      body: htmlToMd(turndown, c.text),
     };
     await ct.upsertExternalComment(input);
     count++;
@@ -151,7 +154,7 @@ export async function pull(
   for (const wi of workItems) {
     const input = buildTaskInput(config, turndown, wi, unmappedStates);
     const task = await ct.upsertExternalTask(input);
-    commentsMirrored += await mirrorComments(ado, ct, wi.id, task);
+    commentsMirrored += await mirrorComments(ado, ct, turndown, wi.id, task);
   }
 
   for (const u of unmappedStates) {
@@ -199,7 +202,7 @@ export async function refresh(
   for (const u of unmapped) {
     warnings.push(`[ado] unmapped state "${u.state}" on #${u.id}, defaulting to todo`);
   }
-  const commentsMirrored = await mirrorComments(ado, ct, workItemId, task);
+  const commentsMirrored = await mirrorComments(ado, ct, turndown, workItemId, task);
   return { task, commentsMirrored, warnings };
 }
 

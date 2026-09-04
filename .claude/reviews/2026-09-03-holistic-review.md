@@ -1,6 +1,7 @@
 # Holistic codebase review — 2026-09-03
 
-> **Status (updated as work landed).** Tier 1 (1-4) and tier 2 (5-8) are fixed.
+> **Status (updated as work landed).** Tier 1 (1-4), tier 2 (5-8) and all of
+> tier 3's correctness items are fixed.
 > From tier 3: `batchUpdateTasks` FSM/state_dirty, `setExternalTaskState`
 > clearing state_dirty, the category DELETE outside its transaction, migration
 > atomicity, the `datetime('now')` timestamp format, and all four CLAUDE.md
@@ -20,8 +21,8 @@
 > soft-delete filtering, the `linkTaskToPlugin` duplicate external id and the
 > TimeEntryEditor overlap are fixed.
 >
-> Still open from tier 3: ADO comment HTML and pagination, all performance
-> items, all simplification items, and the entire addendum.
+> **Tier 3 correctness is now closed.** Still open: all performance items, all
+> simplification items, and the entire addendum.
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -186,11 +187,14 @@ Correctness:
   every unreported row including the running one, so the CLI and the UI's
   "mark reported" had the same hole. Both mark functions now require
   `end_time IS NOT NULL`; clearing is deliberately left unrestricted.
-- `plugins/ado/src/pull.ts:114` — mirrored comments keep raw ADO HTML. The
+- ~~`plugins/ado/src/pull.ts:114` — mirrored comments keep raw ADO HTML. The
   description goes through turndown; comments do not, and the renderer prints
-  the body as text.
-- `plugins/ado/src/ado-client.ts:147` — comment pagination ignored, only the
-  first page is mirrored.
+  the body as text.~~ **Fixed.** Both callers of `mirrorComments` already had
+  a turndown instance; it is now threaded through.
+- ~~`plugins/ado/src/ado-client.ts:147` — comment pagination ignored, only the
+  first page is mirrored.~~ **Fixed.** The response carries a
+  `continuationToken` while pages remain; `getWorkItemComments` now follows it,
+  under a page cap so a server that always returns a token cannot spin.
 - ~~`Sidebar.tsx:430` — "Reset filters" sets `{}` and drops `searchIn`, so search
   silently reverts to title-only while the dropdown still says "All".~~
   **Fixed.** Confirmed the mechanism: the effect that pushes `searchIn` into
