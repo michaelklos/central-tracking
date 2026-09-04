@@ -218,3 +218,25 @@
   cursor: default;
   color: var(--color-text-secondary, var(--color-text));
 }
+
+/* The category name is an input that reads as plain text until focused. */
+input.options-menu__cat-name {
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+input.options-menu__cat-name:hover {
+  border-color: var(--color-border);
+}
+
+input.options-menu__cat-name:focus {
+  border-color: var(--color-primary);
+  background: var(--color-bg);
+  outline: none;
+}
