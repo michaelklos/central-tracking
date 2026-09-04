@@ -14,6 +14,8 @@ import type {
   ImportPreviewItem,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
+  LinkTaskInput,
+  BatchMarkReportedOptions,
 } from '../shared/types';
 
 const api = {
@@ -46,7 +48,7 @@ const api = {
     upsertExternal: (input: UpsertExternalTaskInput) => ipcRenderer.invoke('tasks:upsertExternal', input),
     setExternalState: (id: string, externalState: string, pushedStatus?: string) =>
       ipcRenderer.invoke('tasks:setExternalState', id, externalState, pushedStatus),
-    link: (id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>
+    link: (id: string, input: LinkTaskInput) =>
       ipcRenderer.invoke('tasks:link', id, input),
     unlink: (id: string) => ipcRenderer.invoke('tasks:unlink', id),
   },
@@ -74,7 +76,7 @@ const api = {
       ipcRenderer.invoke('timeEntries:markTaskReported', taskId, reportedAt),
     batchMarkReported: (
       taskIds: string[],
-      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+      opts: BatchMarkReportedOptions,
     ) => ipcRenderer.invoke('timeEntries:batchMarkReported', taskIds, opts),
   },
 

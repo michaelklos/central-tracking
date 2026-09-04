@@ -374,6 +374,28 @@ export interface PluginManifest {
 }
 
 /**
+ * Input for `tasks:link`. `mode: 'link'` just stores plugin_id/external_id and
+ * leaves the task user-editable; `mode: 'mirror'` also flips `source` to the
+ * plugin's source key so the task behaves as a pulled mirror (locked, FSM
+ * enforced, refreshable).
+ */
+export interface LinkTaskInput {
+  pluginId: string;
+  externalId: string;
+  mode: 'link' | 'mirror';
+}
+
+/**
+ * Options for `timeEntries:batchMarkReported`. `dateStart`/`dateEnd` are
+ * YYYY-MM-DD with an inclusive end-of-day bound; `reportedAt: null` clears.
+ */
+export interface BatchMarkReportedOptions {
+  reportedAt: string | null;
+  dateStart?: string;
+  dateEnd?: string;
+}
+
+/**
  * Row returned by `plugins:getCapabilities`. The `capabilities` field is the
  * manifest-declared map verbatim; consumers cast it to the shape they expect.
  */
@@ -478,7 +500,7 @@ export interface CentralTrackingAPI {
      * `mode: 'mirror'` also flips `source` to the plugin's source key so the
      * task behaves as a pulled mirror (locked, FSM enforced, refreshable).
      */
-    link(id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }): Promise<Task>;
+    link(id: string, input: LinkTaskInput): Promise<Task>;
     /** Reverse of link. For mirror-mode tasks, also resets source to 'ad-hoc'. */
     unlink(id: string): Promise<Task>;
   };
@@ -508,7 +530,7 @@ export interface CentralTrackingAPI {
      */
     batchMarkReported(
       taskIds: string[],
-      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+      opts: BatchMarkReportedOptions,
     ): Promise<{ changed: number }>;
   };
   comments: {

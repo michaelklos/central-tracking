@@ -1,4 +1,5 @@
 import type { Database } from '../database/database';
+import type { LinkTaskInput, BatchMarkReportedOptions } from '../../shared/types';
 
 import {
   getAllTasks, getTaskById, getActiveTasks, getActiveTaskIds, getDoneTasks,
@@ -76,7 +77,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'tasks/deleteAll',        ipcChannel: 'tasks:deleteAll',        mutates: true,  event: 'task.deleted',   handler: (db) => deleteAllTasks(db) },
   { route: 'tasks/upsertExternal',   ipcChannel: 'tasks:upsertExternal',   mutates: true,  event: 'task.updated',   handler: (db, input) => upsertExternalTask(db, input as never) },
   { route: 'tasks/setExternalState', ipcChannel: 'tasks:setExternalState', mutates: true,  event: 'task.updated',   handler: (db, id, externalState, pushedStatus) => setExternalTaskState(db, id as string, externalState as string, pushedStatus as string | undefined) },
-  { route: 'tasks/link',             ipcChannel: 'tasks:link',             mutates: true,  event: 'task.updated',   handler: (db, id, input) => linkTaskToPlugin(db, id as string, input as { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) },
+  { route: 'tasks/link',             ipcChannel: 'tasks:link',             mutates: true,  event: 'task.updated',   handler: (db, id, input) => linkTaskToPlugin(db, id as string, input as LinkTaskInput) },
   { route: 'tasks/unlink',           ipcChannel: 'tasks:unlink',           mutates: true,  event: 'task.updated',   handler: (db, id) => unlinkTaskFromPlugin(db, id as string) },
 
   // Time entries
@@ -93,7 +94,7 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'timeEntries/getSummaryReport',        ipcChannel: 'timeEntries:getSummaryReport',        mutates: false, handler: (db, start, end) => getSummaryReport(db, start as string, end as string) },
   { route: 'timeEntries/getByDateRangeWithTasks', ipcChannel: 'timeEntries:getByDateRangeWithTasks', mutates: false, handler: (db, start, end) => getTimeEntriesByDateRangeWithTasks(db, start as string, end as string) },
   { route: 'timeEntries/markTaskReported',        ipcChannel: 'timeEntries:markTaskReported',        mutates: true,  event: 'timeEntry.updated', handler: (db, taskId, reportedAt) => markTaskEntriesReported(db, taskId as string, reportedAt as string | null) },
-  { route: 'timeEntries/batchMarkReported',       ipcChannel: 'timeEntries:batchMarkReported',       mutates: true,  event: 'timeEntry.updated', handler: (db, taskIds, opts) => batchMarkTaskEntriesReported(db, taskIds as string[], opts as { reportedAt: string | null; dateStart?: string; dateEnd?: string }) },
+  { route: 'timeEntries/batchMarkReported',       ipcChannel: 'timeEntries:batchMarkReported',       mutates: true,  event: 'timeEntry.updated', handler: (db, taskIds, opts) => batchMarkTaskEntriesReported(db, taskIds as string[], opts as BatchMarkReportedOptions) },
 
   // Comments
   { route: 'comments/getByTask', ipcChannel: 'comments:getByTask', mutates: false, handler: (db, taskId) => getCommentsByTask(db, taskId as string) },

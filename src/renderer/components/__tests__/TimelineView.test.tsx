@@ -5,9 +5,11 @@ import { TimelineView } from '../TimelineView';
 import type { TimeEntryWithTask } from '../../../shared/types';
 
 const mockSetSearchParams = vi.fn();
+// Mutable so a test can navigate between days and re-render.
+let mockSearchParams = new URLSearchParams();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
-  useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
+  useSearchParams: () => [mockSearchParams, mockSetSearchParams],
 }));
 
 vi.mock('../../context/TaskContext', () => ({
@@ -25,6 +27,7 @@ function localTime(hours: number, minutes: number = 0): string {
 describe('TimelineView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date(2026, 2, 6, 12, 0, 0, 0));
 
@@ -64,6 +67,51 @@ describe('TimelineView', () => {
     });
 
     expect(screen.getByText(/Tracked: 1h/)).toBeInTheDocument();
+  });
+
+  it('ignores a slow load for a day the user already navigated away from', async () => {
+    // CLAUDE.md recurring footgun 3: `await ipc(); setState(result)` with no
+    // staleness guard. Switching days mid-fetch let the old day's entries
+    // overwrite the new day's timeline.
+    const makeEntry = (title: string, day: number): TimeEntryWithTask => ({
+      id: `e-${title}`,
+      taskId: `t-${title}`,
+      startTime: new Date(2026, 2, day, 9, 0, 0, 0).toISOString(),
+      endTime: new Date(2026, 2, day, 10, 0, 0, 0).toISOString(),
+      durationSeconds: 3600,
+      note: '',
+      reportedAt: null,
+      createdAt: new Date(2026, 2, day, 9, 0, 0, 0).toISOString(),
+      taskTitle: title,
+      taskSource: 'ad-hoc',
+    });
+
+    let resolveFirst: (v: TimeEntryWithTask[]) => void = () => {};
+    const firstLoad = new Promise<TimeEntryWithTask[]>((r) => {
+      resolveFirst = r;
+    });
+
+    const api = window.api.timeEntries.getByDateRangeWithTasks as ReturnType<typeof vi.fn>;
+    api.mockReturnValueOnce(firstLoad).mockResolvedValue([makeEntry('Newer day', 6)]);
+
+    mockSearchParams = new URLSearchParams({ date: '2026-03-05' });
+    const { rerender } = render(<TimelineView />);
+
+    // Navigate to another day; its (fast) load resolves first.
+    mockSearchParams = new URLSearchParams({ date: '2026-03-06' });
+    rerender(<TimelineView />);
+    await waitFor(() => {
+      expect(screen.getByText(/Newer day/)).toBeInTheDocument();
+    });
+
+    // The abandoned day's fetch now lands.
+    resolveFirst([makeEntry('Older day', 5)]);
+    await Promise.resolve();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Newer day/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Older day/)).not.toBeInTheDocument();
   });
 
   it('shows empty message when no entries', async () => {

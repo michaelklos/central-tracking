@@ -29,6 +29,8 @@ import type {
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
   PendingSyncComment,
+  LinkTaskInput,
+  BatchMarkReportedOptions,
 } from '../shared/types';
 
 export type RawRequest = <T = unknown>(endpoint: string, args?: unknown[]) => Promise<T>;
@@ -55,7 +57,7 @@ export interface ApiClient {
     deleteAll(): Promise<{ deletedCount: number }>;
     upsertExternal(input: UpsertExternalTaskInput): Promise<Task>;
     setExternalState(id: string, externalState: string): Promise<{ ok: true }>;
-    link(id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }): Promise<Task>;
+    link(id: string, input: LinkTaskInput): Promise<Task>;
     unlink(id: string): Promise<Task>;
   };
   timeEntries: {
@@ -74,7 +76,7 @@ export interface ApiClient {
     markTaskReported(taskId: string, reportedAt: string | null): Promise<{ changed: number }>;
     batchMarkReported(
       taskIds: string[],
-      opts: { reportedAt: string | null; dateStart?: string; dateEnd?: string },
+      opts: BatchMarkReportedOptions,
     ): Promise<{ changed: number }>;
   };
   comments: {

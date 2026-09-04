@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '../database/database';
-import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput } from '../../shared/types';
+import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput, BatchUpdateInput, PaginationParams, PaginatedResponse, TaskSortBy, TaskQueryParams, UpsertExternalTaskInput, LinkTaskInput } from '../../shared/types';
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { isAllowedAdoTransition } from '../../shared/adoFsm';
@@ -744,7 +744,7 @@ export function setExternalTaskState(
 export function linkTaskToPlugin(
   db: Database,
   taskId: string,
-  input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' },
+  input: LinkTaskInput,
 ): Task {
   const externalId = input.externalId.trim();
   if (!externalId) {
@@ -844,7 +844,7 @@ export function registerTaskHandlers(ipcMain: IpcMain, db: Database): void {
   ipcMain.handle('tasks:setExternalState', (_event, id: string, externalState: string, pushedStatus?: string) => setExternalTaskState(db, id, externalState, pushedStatus));
   ipcMain.handle(
     'tasks:link',
-    (_event, id: string, input: { pluginId: string; externalId: string; mode: 'link' | 'mirror' }) =>
+    (_event, id: string, input: LinkTaskInput) =>
       linkTaskToPlugin(db, id, input),
   );
   ipcMain.handle('tasks:unlink', (_event, id: string) => unlinkTaskFromPlugin(db, id));
