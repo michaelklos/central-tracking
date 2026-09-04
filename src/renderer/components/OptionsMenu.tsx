@@ -4,6 +4,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { PluginsSettings } from './PluginsSettings';
 import { useTaskContext } from '../context/TaskContext';
 import type { Category } from '../../shared/types';
+import { getStringSetting, PAGE_SIZE_SETTING, DEFAULT_PAGE_SIZE } from '../utils/settings';
 import './OptionsMenu.css';
 
 const REPO_URL = 'https://github.com/michaelklos/central-tracking';
@@ -26,9 +27,7 @@ function getOption(key: string, defaultValue: boolean): boolean {
   return stored === 'true';
 }
 
-export function getStringSetting(key: string, defaultValue: string): string {
-  return localStorage.getItem(key) ?? defaultValue;
-}
+
 
 interface StringSetting {
   key: string;
@@ -41,6 +40,7 @@ interface StringSetting {
 
 const GENERAL_SETTINGS: StringSetting[] = [
   { key: 'ct-option-default-duration-min', label: 'Default entry duration (min)', type: 'number', defaultValue: '30', min: 1, max: 480 },
+  { key: PAGE_SIZE_SETTING, label: 'Tasks per page', type: 'number', defaultValue: String(DEFAULT_PAGE_SIZE), min: 10, max: 500 },
 ];
 
 const TIMELINE_SETTINGS: StringSetting[] = [

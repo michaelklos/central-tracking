@@ -9,7 +9,7 @@ import { TimeEntryEditor } from './TimeEntryEditor';
 import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
-import { getStringSetting } from './OptionsMenu';
+import { getStringSetting } from '../utils/settings';
 import type { TimeEntry, Comment, TaskStatus } from '../../shared/types';
 import { allowedAdoStatusTargets } from '../../shared/adoFsm';
 import './TaskDetail.css';
