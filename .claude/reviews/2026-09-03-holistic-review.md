@@ -52,9 +52,10 @@
 >   count it up to now. `src/main/sql/duration.ts` names both rather than
 >   merging them, and every call site kept the one it had.
 >
-> Still open: A8 (page size as a setting) and the two feature requests,
-> A9 and A10. A11 stays deferred (see its section — the premise, not the
-> effort).
+> **A8, A9 and A10 are done too** (2026-09-04, at the user's request).
+> Everything in this report is now either closed or explicitly deferred:
+> A11 stays deferred (see its section — the premise, not the effort), and
+> A2's list-visibility half is the one thing knowingly left open.
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -383,7 +384,7 @@ and `UpdateCategoryInput` carries the name. The only consumer is
 a text input next to that color input calling the same function. No backend,
 IPC, or CLI work.
 
-### A8. Page size is hardcoded
+### A8. Page size is hardcoded — **fixed**
 `TaskContext.tsx:4-6` — **grounded**
 
 `ACTIVE_TASKS_LIMIT`, `DONE_TASKS_LIMIT` and `DELETED_TASKS_LIMIT` are module
@@ -393,12 +394,16 @@ already accept an arbitrary `limit`.
 
 ## Feature requests
 
-### A9. To-Do section always visible, remembering collapsed state
+### A9. To-Do section always visible, remembering collapsed state — **done**
 Two parts. Pin the group so it renders even when empty, and persist the
 expanded flag. Other UI state is already persisted to localStorage, so follow
 that pattern.
 
-### A10. Right-click context menu for common task actions
+### A10. Right-click context menu for common task actions — **done**
+Status, categories and delete, in `TaskContextMenu.tsx`. It goes through
+`updateTask`, so the ADO transition check still runs and a rejection is shown
+on the menu rather than closing it silently. Suppressed in batch mode, where
+a right-click is not a selection.
 Delete, categorize, set status. The actions all exist on `TaskContext`; this is
 a presentation layer over them.
 

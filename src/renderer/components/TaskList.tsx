@@ -5,6 +5,7 @@ import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePlugin
 import { formatDuration } from '../utils/time';
 import { SplitButton } from './SplitButton';
 import { ConfirmDialog } from './ConfirmDialog';
+import { TaskContextMenu, type TaskContextMenuTarget } from './TaskContextMenu';
 import type { Task, TaskStatus, TaskSource, TaskSortBy } from '../../shared/types';
 import './TaskList.css';
 
@@ -105,6 +106,7 @@ export function TaskList() {
   const [emptyBinConfirm, setEmptyBinConfirm] = useState(false);
   const [restoreAllConfirm, setRestoreAllConfirm] = useState(false);
   const [purgeConfirmId, setPurgeConfirmId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<TaskContextMenuTarget | null>(null);
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
 
@@ -439,6 +441,11 @@ export function TaskList() {
                         isRunningForTask(task.id) ? 'task-item--timing' : ''
                       } ${batchMode && selectedTaskIds.has(task.id) ? 'task-item--batch-selected' : ''}`}
                       onClick={() => batchMode ? toggleTaskSelection(task.id) : selectTask(task.id)}
+                      onContextMenu={(e) => {
+                        if (batchMode) return;
+                        e.preventDefault();
+                        setContextMenu({ task, x: e.clientX, y: e.clientY });
+                      }}
                       draggable={!batchMode && sortBy === 'manual'}
                       onDragStart={() => handleDragStart(task.id)}
                       onDragOver={(e) => handleDragOver(e, task.id)}
@@ -650,6 +657,10 @@ export function TaskList() {
           onConfirm={() => handlePurge(purgeConfirmId)}
           onCancel={() => setPurgeConfirmId(null)}
         />
+      )}
+
+      {contextMenu && (
+        <TaskContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
       )}
     </div>
   );
