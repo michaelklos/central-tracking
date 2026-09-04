@@ -95,6 +95,23 @@ describe('OptionsMenu - renaming a category', () => {
     expect((screen.getByLabelText('Rename Bug') as HTMLInputElement).value).toBe('Bug');
   });
 
+  it('follows a rename that lands from elsewhere without clobbering a live edit', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<OptionsMenu />);
+
+    // A rename from the CLI or another window arrives as a new prop value.
+    mockCategories[0] = { ...mockCategories[0], name: 'Defect' };
+    rerender(<OptionsMenu />);
+    expect((screen.getByLabelText('Rename Defect') as HTMLInputElement).value).toBe('Defect');
+
+    // Typing is not disturbed by an unrelated re-render.
+    const input = screen.getByLabelText('Rename Defect');
+    await user.clear(input);
+    await user.type(input, 'Regression');
+    rerender(<OptionsMenu />);
+    expect((screen.getByLabelText('Rename Defect') as HTMLInputElement).value).toBe('Regression');
+  });
+
   it('still recolors from the swatch', async () => {
     render(<OptionsMenu />);
     expect(screen.getByLabelText('Color for Bug')).toBeInTheDocument();

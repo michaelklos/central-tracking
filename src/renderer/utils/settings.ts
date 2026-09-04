@@ -11,10 +11,16 @@ export function getStringSetting(key: string, defaultValue: string): string {
   }
 }
 
-/** A numeric setting, falling back whenever the stored text isn't a number. */
+/**
+ * A numeric setting, falling back whenever the stored text isn't a whole
+ * positive number. `Number` rather than `parseInt`, which would read "75abc"
+ * as 75 and silently accept a corrupted value.
+ */
 export function getNumberSetting(key: string, defaultValue: number): number {
-  const parsed = parseInt(getStringSetting(key, ''), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+  const stored = getStringSetting(key, '').trim();
+  if (stored === '') return defaultValue;
+  const parsed = Number(stored);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
 /** How many tasks each list page loads. Configurable in the options menu. */

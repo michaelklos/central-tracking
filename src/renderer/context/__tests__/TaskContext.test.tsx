@@ -128,6 +128,13 @@ describe('TaskContext page size setting', () => {
     ));
   });
 
+  it('falls back to 50 for a partially-numeric value rather than reading its prefix', async () => {
+    localStorage.setItem('ct-option-page-size', '75abc');
+    await renderProvider();
+
+    await waitFor(() => expect(screen.getByTestId('active-count').textContent).toBe('50'));
+  });
+
   it('falls back to 50 when the stored value is not a usable number', async () => {
     localStorage.setItem('ct-option-page-size', 'lots');
     await renderProvider();

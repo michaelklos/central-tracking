@@ -36,13 +36,14 @@ type GroupBy = 'none' | 'status' | 'source';
 const COLLAPSED_GROUPS_KEY = 'ct-collapsed-groups';
 
 /**
- * Today's time for one row. The live counter is read here rather than in
- * TaskList so a running timer re-renders this one cell each second instead
- * of the whole list.
+ * Today's time for the row whose timer is running. Only this component
+ * subscribes to the tick, and it is only mounted for the running task, so a
+ * running timer re-renders exactly one cell each second — not the row's
+ * siblings, and not TaskList itself.
  */
-function TaskTimeToday({ baseSeconds, running }: { baseSeconds: number; running: boolean }) {
+function RunningTaskTime({ baseSeconds }: { baseSeconds: number }) {
   const elapsedSeconds = useElapsedSeconds();
-  return <>{formatDuration(running ? baseSeconds + elapsedSeconds : baseSeconds)}</>;
+  return <>{formatDuration(baseSeconds + elapsedSeconds)}</>;
 }
 
 export function TaskList() {
@@ -507,7 +508,9 @@ export function TaskList() {
                       </div>
                       <div className="task-item__right">
                         <span className="task-item__time">
-                          <TaskTimeToday baseSeconds={task.todayTimeSeconds} running={isRunningForTask(task.id)} />
+                          {isRunningForTask(task.id)
+                            ? <RunningTaskTime baseSeconds={task.todayTimeSeconds} />
+                            : formatDuration(task.todayTimeSeconds)}
                         </span>
                         {task.status !== 'done' && !batchMode && (
                           <button
