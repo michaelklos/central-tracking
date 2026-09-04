@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useTaskContext } from '../context/TaskContext';
-import { useTimerContext } from '../context/TimerContext';
+import { useTimerContext, useElapsedSeconds } from '../context/TimerContext';
 import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { formatDuration } from '../utils/time';
 import { SplitButton } from './SplitButton';
@@ -31,6 +31,16 @@ const STATUS_ORDER: Record<string, number> = {
 };
 
 type GroupBy = 'none' | 'status' | 'source';
+
+/**
+ * Today's time for one row. The live counter is read here rather than in
+ * TaskList so a running timer re-renders this one cell each second instead
+ * of the whole list.
+ */
+function TaskTimeToday({ baseSeconds, running }: { baseSeconds: number; running: boolean }) {
+  const elapsedSeconds = useElapsedSeconds();
+  return <>{formatDuration(running ? baseSeconds + elapsedSeconds : baseSeconds)}</>;
+}
 
 export function TaskList() {
   const {
@@ -69,7 +79,7 @@ export function TaskList() {
     sortBy,
     setSortBy,
   } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds } = useTimerContext();
+  const { startTimer, stopTimer, isRunningForTask } = useTimerContext();
   const pluginCaps = usePluginCapabilities();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [addAsTodo, setAddAsTodo] = useState(false);
@@ -88,14 +98,11 @@ export function TaskList() {
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
 
-  // Filters are now applied server-side; use loaded tasks directly
-  const filteredActiveTasks = activeTasks;
-  const filteredDoneTasks = doneTasks;
-
-  // For non-grouped and source-grouped views, combine active + done
+  // For non-grouped and source-grouped views, combine active + done.
+  // Filtering is server-side, so the loaded pages are used as they come back.
   const allFilteredTasks = useMemo(
-    () => [...filteredActiveTasks, ...filteredDoneTasks],
-    [filteredActiveTasks, filteredDoneTasks]
+    () => [...activeTasks, ...doneTasks],
+    [activeTasks, doneTasks]
   );
 
   // Group tasks — special handling for status grouping
@@ -103,13 +110,13 @@ export function TaskList() {
     if (groupBy === 'status') {
       // Build groups from active tasks (non-done statuses)
       const groups: Record<string, Task[]> = {};
-      for (const task of filteredActiveTasks) {
+      for (const task of activeTasks) {
         const key = STATUS_LABELS[task.status] ?? task.status;
         if (!groups[key]) groups[key] = [];
         groups[key].push(task);
       }
       // Always add a Done group (even if empty, so the header shows)
-      groups['Done'] = filteredDoneTasks;
+      groups['Done'] = doneTasks;
 
       // Sort group keys so "Done" is last
       const sortedEntries = Object.entries(groups).sort(
@@ -132,7 +139,7 @@ export function TaskList() {
       groups[key].push(task);
     }
     return groups;
-  }, [filteredActiveTasks, filteredDoneTasks, allFilteredTasks, groupBy]);
+  }, [activeTasks, doneTasks, allFilteredTasks, groupBy]);
 
   const toggleGroupCollapse = async (group: string) => {
     const willExpand = collapsedGroups.has(group);
@@ -159,9 +166,11 @@ export function TaskList() {
     const title = newTaskTitle.trim();
     if (!title) return;
     if (addAsTodo) {
-      await createTask({ title });
+      const task = await createTask({ title });
+      selectTask(task.id);
     } else {
       const task = await createTask({ title, status: 'in-progress' });
+      selectTask(task.id);
       await startTimer(task.id);
     }
     setNewTaskTitle('');
@@ -173,7 +182,8 @@ export function TaskList() {
     setAddAsTodo(true);
     const title = newTaskTitle.trim();
     if (title) {
-      await createTask({ title });
+      const task = await createTask({ title });
+      selectTask(task.id);
       setNewTaskTitle('');
     }
     newTaskInputRef.current?.focus();
@@ -185,6 +195,7 @@ export function TaskList() {
     const title = newTaskTitle.trim();
     if (title) {
       const task = await createTask({ title, status: 'in-progress' });
+      selectTask(task.id);
       await startTimer(task.id);
       setNewTaskTitle('');
     }
@@ -203,7 +214,7 @@ export function TaskList() {
   const handleDrop = async () => {
     if (!dragItemRef.current || !dragOverRef.current || dragItemRef.current === dragOverRef.current) return;
 
-    const ids = filteredActiveTasks.map((t) => t.id);
+    const ids = activeTasks.map((t) => t.id);
     const fromIdx = ids.indexOf(dragItemRef.current);
     const toIdx = ids.indexOf(dragOverRef.current);
     if (fromIdx === -1 || toIdx === -1) return;
@@ -229,11 +240,6 @@ export function TaskList() {
     await updateTask(taskId, { status: 'done' });
   };
 
-  const getTaskTimeDisplay = (task: Task) => {
-    const running = isRunningForTask(task.id);
-    const todaySeconds = running ? task.todayTimeSeconds + elapsedSeconds : task.todayTimeSeconds;
-    return formatDuration(todaySeconds);
-  };
 
   const getCategoryDots = (task: Task) => {
     return task.categoryIds
@@ -294,8 +300,8 @@ export function TaskList() {
 
   // All visible task IDs (for Select All)
   const allVisibleIds = useMemo(
-    () => [...filteredActiveTasks, ...filteredDoneTasks].map((t) => t.id),
-    [filteredActiveTasks, filteredDoneTasks]
+    () => [...activeTasks, ...doneTasks].map((t) => t.id),
+    [activeTasks, doneTasks]
   );
 
   const allSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedTaskIds.has(id));
@@ -320,7 +326,7 @@ export function TaskList() {
     return undefined;
   };
 
-  const totalVisible = filteredActiveTasks.length + filteredDoneTasks.length;
+  const totalVisible = activeTasks.length + doneTasks.length;
 
   return (
     <div className="task-list">
@@ -478,7 +484,9 @@ export function TaskList() {
                         </div>
                       </div>
                       <div className="task-item__right">
-                        <span className="task-item__time">{getTaskTimeDisplay(task)}</span>
+                        <span className="task-item__time">
+                          <TaskTimeToday baseSeconds={task.todayTimeSeconds} running={isRunningForTask(task.id)} />
+                        </span>
                         {task.status !== 'done' && !batchMode && (
                           <button
                             className="task-item__check-btn"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
-import { useTimerContext } from '../context/TimerContext';
+import { useTimerContext, useElapsedSeconds } from '../context/TimerContext';
 import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { formatDuration, startOfDay, endOfDay } from '../utils/time';
 import { useMarkdownTextarea } from '../hooks/useMarkdownTextarea';
@@ -24,7 +24,8 @@ const AUTO_LOAD_MAX_BATCHES = 3;
 export function TaskDetail() {
   const navigate = useNavigate();
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask, categories, refreshActiveTasks, pendingTimeEntry, setPendingTimeEntry } = useTaskContext();
-  const { startTimer, stopTimer, isRunningForTask, elapsedSeconds, refreshTodayTotal, refreshActiveEntry, activeEntry } = useTimerContext();
+  const { startTimer, stopTimer, isRunningForTask, refreshTodayTotal, refreshActiveEntry, activeEntry } = useTimerContext();
+  const elapsedSeconds = useElapsedSeconds();
   const pluginCaps = usePluginCapabilities();
 
   const [activeTab, setActiveTab] = useState<DetailTab>('details');

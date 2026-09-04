@@ -61,6 +61,7 @@ vi.mock('../../context/TaskContext', () => ({
 
 vi.mock('../../context/TimerContext', () => ({
   useTimerContext: () => mockTimerContext,
+  useElapsedSeconds: () => mockTimerContext.elapsedSeconds,
 }));
 
 describe('TaskList - Validation', () => {

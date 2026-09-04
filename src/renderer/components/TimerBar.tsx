@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useTimerContext } from '../context/TimerContext';
+import { useTimerContext, useElapsedSeconds } from '../context/TimerContext';
 import { useTaskContext } from '../context/TaskContext';
 import { formatDuration } from '../utils/time';
 import type { Task } from '../../shared/types';
 import './TimerBar.css';
 
 export function TimerBar() {
-  const { activeEntry, elapsedSeconds, totalTodaySeconds, stopTimer } = useTimerContext();
+  const { activeEntry, totalTodaySeconds, stopTimer } = useTimerContext();
+  const elapsedSeconds = useElapsedSeconds();
   const { tasks } = useTaskContext();
   const [pinned, setPinned] = useState(false);
   // Fallback fetch by id: the active timer may be on a task that's filtered
