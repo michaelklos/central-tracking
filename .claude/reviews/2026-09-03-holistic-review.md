@@ -28,9 +28,33 @@
 > instead of clearing it. Now `!= null`. A good catch: the finding was filed
 > as latent (the only in-repo caller always passes a status) and it was.
 >
-> **Tier 3 correctness is now closed.** Still open: all performance items, all
-> simplification items, and the addendum except A11, which is deferred (see
-> its section for why — the premise, not the effort).
+> **Tier 3 correctness is now closed.**
+>
+> **2026-09-04: performance, simplification and the addendum's bugs are
+> closed too.** Notes on what that did and did not settle:
+> - The perf item at `TaskContext.tsx:293` did not hold as written. The local
+>   mutation paths were already selective; the blanket refetch is the
+>   `ct:data-changed` handler, and that event carries no payload, so an
+>   external change of unknown scope has to refresh everything. Left as is.
+> - **A2 is only half closed.** The created task now resolves through
+>   `tasks`, so it can be selected and edited — the unusable part. It is
+>   still not *in* `activeTasks` until the user pages to it, because a new
+>   task sorts to the tail and no sort order guarantees otherwise
+>   (`recent` puts a task with no entries after every task that has one;
+>   `most-time-today` sorts it to zero). List visibility is unsolved.
+> - A4 needed a second pass. The entry is already running when the status
+>   promotion fires, so letting a rejection propagate would skip the refresh
+>   and leave the UI drawing "no timer running" over a live entry — tier 1
+>   finding 1's shape again. It is caught and logged.
+> - The seven duration-CASE copies were **two variants, both correct**:
+>   a task's own totals count a running entry as zero (the renderer adds the
+>   live counter, so the number doesn't jump between refreshes); reports
+>   count it up to now. `src/main/sql/duration.ts` names both rather than
+>   merging them, and every call site kept the one it had.
+>
+> Still open: A8 (page size as a setting) and the two feature requests,
+> A9 and A10. A11 stays deferred (see its section — the premise, not the
+> effort).
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -248,27 +272,36 @@ CLAUDE.md violations, each against a rule the file states explicitly:
   substring-match "not found" to pick a status code.
 
 Performance:
-- `taskHandlers.ts:45` — `rowToTask` runs four queries per task, so every list
-  call is 4N+1. A 50-row page is roughly 200 SQLite round trips, repeated on
-  every `ct:data-changed`.
-- `plugins/_shared/src/ct-client.ts:131` — `getTasks` pulls every task and
-  filters in JS, though the server supports `pluginId` and `hasUnreportedTime`
-  as SQL. Each `ado sync` does this twice.
-- `TaskList.tsx:72` — reads `elapsedSeconds` from TimerContext, so the whole
-  list re-renders every second while a timer runs. Neither context memoizes its
-  value object.
-- `TaskContext.tsx:293` — every mutation refetches active, done, deleted and
-  categories regardless of what changed.
+- ~~`taskHandlers.ts:45` — `rowToTask` runs four queries per task.~~ **Fixed.**
+  Categories and the three totals are fetched for a whole page at once (two
+  queries per 400 ids); `rowToTask` is the one-row case. A test pins the query
+  count against page size rather than the wall clock.
+- ~~`plugins/_shared/src/ct-client.ts:131` — `getTasks` pulls every task.~~
+  **Fixed.** `tasks/getAll` takes the same filter params the other task routes
+  do, with `state_dirty` added to the filter builder. One client-side pass
+  survives, for the empty-`pluginId`-array case the SQL does not express.
+- ~~`TaskList.tsx:72` — reads `elapsedSeconds` from TimerContext.~~ **Fixed.**
+  The ticking value moved to its own context, so a running timer re-renders
+  the one cell that shows it. Both context values are memoized.
+- ~~`TaskContext.tsx:293` — every mutation refetches everything.~~ **Did not
+  hold.** The mutation paths were already selective. The blanket refetch is
+  the `ct:data-changed` handler, and that event carries no payload — an
+  external change of unknown scope has to refresh everything.
 
-Simplification:
-- `TaskContext.tsx:319` — the refresh block is copy-pasted nine times and has
-  already drifted at line 427, leaving the Done badge stale after a batch report.
-- `taskHandlers.ts:278` — `getActiveTasks` and `getDoneTasks` are 30-line
-  duplicates; the duration CASE expression appears in seven places in two
-  variants, one counting the running entry and one not.
-- `TaskDetail.tsx:351` — eight handlers hand-roll the same catch block, and
-  three of them lack it entirely.
-- `TaskList.tsx:91` — dead client-side filtering scaffolding left behind.
+Simplification: **all fixed.**
+- ~~`TaskContext.tsx:319` — the refresh block is copy-pasted nine times.~~
+  One helper each for done and deleted. The drift at 427 was real: a batch
+  report left the Done badge stale, and there is now a test for it.
+- ~~`taskHandlers.ts:278` — `getActiveTasks`/`getDoneTasks` duplication, and
+  the duration CASE in seven places.~~ One `getTasksPage(db, done, params)`.
+  The two CASE variants are both correct and stayed distinct — see
+  `src/main/sql/duration.ts` for why — with every call site keeping its own.
+- ~~`TaskDetail.tsx:351` — eight hand-rolled catch blocks, three missing.~~
+  One `guard(where, label, fn)`. Creating and editing a time entry stay
+  outside it on purpose: `TimeEntryEditor` catches those itself so the message
+  lands beside the fields and the draft survives, instead of the form closing
+  as though it had saved.
+- ~~`TaskList.tsx:91` — dead client-side filtering scaffolding.~~ Removed.
 
 ---
 
@@ -280,7 +313,10 @@ against the source; notes below say what is grounded and what is a design call.
 ## Bugs
 
 ### A1. Any refresh collapses the list back to 50, discarding "load more"
-`src/renderer/context/TaskContext.tsx:183` and `:191` — **grounded**
+`src/renderer/context/TaskContext.tsx:183` and `:191` — **grounded. Fixed.**
+The loaded count lives in refs, not state: the refresh fires from the
+debounced `ct:data-changed` handler, where a closed-over `activeTasks.length`
+is stale.
 
 `loadMoreActiveTasks` appends with `offset: activeTasks.length`, but
 `refreshActiveTasks` always refetches `offset: 0, limit: ACTIVE_TASKS_LIMIT`.
@@ -294,7 +330,11 @@ everything on every mutation. Fix both together: the refresh should refetch
 loaded rather than the first page.
 
 ### A2. Timeline gap click creates a hidden blank to-do past 50 tasks
-**grounded, same root cause as A1**
+**grounded. Half fixed** — see the status note at the top. The task is now
+selectable and editable; it is still not in the list until you page to it.
+The root cause was not only A1: `TimelineView` already selected by returned
+id, and `TaskDetail` resolves the selection out of `tasks`, so the id pointed
+at something the array could not resolve.
 
 With more than 50 tasks loaded, the new task falls outside the refetched first
 page, so the UI cannot select what it just created. The task does exist in the
@@ -302,23 +342,28 @@ database; it is invisible, not missing. Fixing A1 likely fixes this, but the
 create-then-select path should also select by returned id rather than by
 searching the loaded list.
 
-### A3. Creating a task leaves the previously running task selected
+### A3. Creating a task leaves the previously running task selected — **fixed**
 The new task's id is returned by `tasks:create` but never promoted to the
 selection. Related to A2: both are the create path failing to select its own
 result. Worth fixing in one change.
 
-### A4. Starting a timer on a to-do does not move it to in progress
-Design call, with one constraint. For ADO mirror tasks the change has to go
+### A4. Starting a timer on a to-do does not move it to in progress — **done**
+Confirmed `todo → in-progress` is legal, and there is now one shared copy of
+the table plus the plugin's. The status goes through `updateTask`, and a
+rejected promotion is caught so it cannot hide a timer that is already
+running.
+
+Original note — design call, with one constraint. For ADO mirror tasks the change has to go
 through `updateTask` so the FSM check runs and `state_dirty = 1` is set,
 otherwise the status never pushes and the next pull reverts it. Do not write
 the status directly from the timer handler. Confirm `todo → in-progress` is a
 legal transition in all three copies of the table, per tier-2 finding 8.
 
-### A5. Batch mode exits automatically after Apply
+### A5. Batch mode exits automatically after Apply — **fixed**
 The selection dialog closes on apply, so applying a second change means
 reselecting everything. Should stay open with the selection intact.
 
-### A6. Batch mode applies only one category at a time
+### A6. Batch mode applies only one category at a time — **fixed**
 `assignCategoriesToTask` already takes `categoryIds: string[]`, so the backend
 supports this today. The gap is renderer-only.
 
@@ -328,7 +373,7 @@ in a multi-category apply wipes every category off the task. Fix that first.
 
 ## Missing UI over existing backend
 
-### A7. Categories cannot be renamed
+### A7. Categories cannot be renamed — **fixed**
 `src/main/ipc/categoryHandlers.ts:43`, `apiManifest.ts:109`,
 `TaskContext.tsx:358` — **grounded**
 
