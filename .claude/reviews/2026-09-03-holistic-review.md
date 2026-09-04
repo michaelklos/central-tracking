@@ -180,6 +180,12 @@ Correctness:
   tasks were `getTodayTotal` (TimerBar, `ct status`, `ct time`), which did not
   join `tasks` at all, the `timeEntries/getReport` route, and the CSV export.
   All three now filter, so every surface agrees with the recycle bin.
+  A fourth, `getTimeEntriesByDateRange`, was missed on the first pass and
+  fixed after: grepping for `deleted_at` finds the queries that *already*
+  filter, not the ones with no join to `tasks` at all. It backs
+  `TaskDetail`'s smart default start time, so a deleted task's entry could
+  set the default. When auditing this class of bug, enumerate the queries
+  that touch `time_entries`, not the ones that mention `deleted_at`.
 - ~~`plugins/ado/src/push-time.ts:146` — push-time stamps the running entry as
   reported although its duration was never summed, so that time never reaches
   ADO.~~ **Fixed**, but in `timeEntryHandlers.ts`, not in the plugin: the
@@ -187,14 +193,25 @@ Correctness:
   every unreported row including the running one, so the CLI and the UI's
   "mark reported" had the same hole. Both mark functions now require
   `end_time IS NOT NULL`; clearing is deliberately left unrestricted.
+
+  Known consequence: a task with a running timer stays in
+  `hasUnreportedTime`, so every `ado sync` while a timer runs picks it up,
+  sums 0, and logs `push-time: #NNN rounded delta is 0 (0s, ...), skipping`.
+  That is correct — the time genuinely is not final yet — but it is new
+  recurring warning noise, not a regression.
 - ~~`plugins/ado/src/pull.ts:114` — mirrored comments keep raw ADO HTML. The
   description goes through turndown; comments do not, and the renderer prints
   the body as text.~~ **Fixed.** Both callers of `mirrorComments` already had
-  a turndown instance; it is now threaded through.
+  a turndown instance; it is now threaded through. A comment also carries a
+  `format` of `markdown` or `html` — a detail the finding missed — so only the
+  HTML ones are converted; turndown would escape and mangle a markdown one.
 - ~~`plugins/ado/src/ado-client.ts:147` — comment pagination ignored, only the
   first page is mirrored.~~ **Fixed.** The response carries a
   `continuationToken` while pages remain; `getWorkItemComments` now follows it,
   under a page cap so a server that always returns a token cannot spin.
+  Checked against the 7.1-preview.4 reference rather than inferred: the token
+  is a `CommentList` body field (alongside `nextPage`), not a response header,
+  and the query parameter is `continuationToken`.
 - ~~`Sidebar.tsx:430` — "Reset filters" sets `{}` and drops `searchIn`, so search
   silently reverts to title-only while the dropdown still says "All".~~
   **Fixed.** Confirmed the mechanism: the effect that pushes `searchIn` into
