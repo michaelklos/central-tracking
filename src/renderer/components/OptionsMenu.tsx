@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HelpPopover } from './HelpPopover';
 import { ConfirmDialog } from './ConfirmDialog';
 import { PluginsSettings } from './PluginsSettings';
 import { useTaskContext } from '../context/TaskContext';
+import type { Category } from '../../shared/types';
 import './OptionsMenu.css';
 
 const REPO_URL = 'https://github.com/michaelklos/central-tracking';
@@ -48,6 +49,87 @@ const TIMELINE_SETTINGS: StringSetting[] = [
   { key: 'ct-option-min-gap-minutes', label: 'Min gap (minutes)', type: 'number', defaultValue: '15' },
   { key: 'ct-option-gap-label', label: 'Gap label', type: 'text', defaultValue: 'gap' },
 ];
+
+/**
+ * One row of the category list: colour swatch, editable name, delete.
+ * The name commits on Enter or blur and reverts on Escape or when emptied —
+ * `updateCategory` has always accepted a name, only the input was missing.
+ */
+function CategoryRow({
+  category,
+  onRename,
+  onRecolor,
+  onDelete,
+}: {
+  category: Category;
+  onRename(name: string): void;
+  onRecolor(color: string): void;
+  onDelete(): void;
+}) {
+  const [draft, setDraft] = useState(category.name);
+
+  // Follow the stored name when it changes elsewhere (CLI, another window),
+  // but never clobber what the user is part-way through typing.
+  const [committed, setCommitted] = useState(category.name);
+  if (committed !== category.name) {
+    setCommitted(category.name);
+    setDraft(category.name);
+  }
+
+  // Escape blurs to leave the field, which would otherwise fire commit with
+  // the pre-revert draft still in the closure.
+  const revertingRef = useRef(false);
+
+  const commit = () => {
+    if (revertingRef.current) {
+      revertingRef.current = false;
+      return;
+    }
+    const name = draft.trim();
+    if (!name || name === category.name) {
+      setDraft(category.name);
+      return;
+    }
+    onRename(name);
+  };
+
+  return (
+    <li className="options-menu__cat-item">
+      <input
+        type="color"
+        value={category.color}
+        onChange={(e) => onRecolor(e.target.value)}
+        className="options-menu__cat-color"
+        title="Change color"
+        aria-label={`Color for ${category.name}`}
+      />
+      <input
+        type="text"
+        className="options-menu__cat-name"
+        value={draft}
+        aria-label={`Rename ${category.name}`}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            revertingRef.current = true;
+            setDraft(category.name);
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      <button
+        className="options-menu__cat-delete"
+        onClick={onDelete}
+        title="Delete category"
+      >
+        &times;
+      </button>
+    </li>
+  );
+}
 
 export function OptionsMenu() {
   const isMac = window.api?.platform === 'darwin';
@@ -223,23 +305,13 @@ ct task --help`}</pre>
       <div className="options-menu__list">
         <ul className="options-menu__cat-list">
           {categories.map((cat) => (
-            <li key={cat.id} className="options-menu__cat-item">
-              <input
-                type="color"
-                value={cat.color}
-                onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                className="options-menu__cat-color"
-                title="Change color"
-              />
-              <span className="options-menu__cat-name">{cat.name}</span>
-              <button
-                className="options-menu__cat-delete"
-                onClick={() => deleteCategory(cat.id)}
-                title="Delete category"
-              >
-                &times;
-              </button>
-            </li>
+            <CategoryRow
+              key={cat.id}
+              category={cat}
+              onRename={(name) => updateCategory(cat.id, { name })}
+              onRecolor={(color) => updateCategory(cat.id, { color })}
+              onDelete={() => deleteCategory(cat.id)}
+            />
           ))}
         </ul>
         <div className="options-menu__cat-form">

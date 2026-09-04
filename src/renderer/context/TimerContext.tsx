@@ -113,9 +113,17 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     // direct write: that is what runs the ADO transition check and sets
     // state_dirty, so the change is pushed instead of being reverted by the
     // next pull.
-    const task = await window.api.tasks.getById(taskId);
-    if (task?.status === 'todo') {
-      await updateTask(taskId, { status: 'in-progress' });
+    // The entry is already running at this point, so a rejected promotion
+    // must not propagate: it would skip the refresh below and leave the UI
+    // drawing "no timer running" over a live entry — the same shape as the
+    // tier-1 finding about a failed `timer start` killing the running timer.
+    try {
+      const task = await window.api.tasks.getById(taskId);
+      if (task?.status === 'todo') {
+        await updateTask(taskId, { status: 'in-progress' });
+      }
+    } catch (err) {
+      window.api.log.warn(`Timer started but the status promotion failed: ${String(err)}`);
     }
     await Promise.all([refreshTodayTotal(), refreshActiveTasks()]);
   }, [refreshTodayTotal, refreshActiveTasks, updateTask]);

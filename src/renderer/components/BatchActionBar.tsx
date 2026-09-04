@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTaskContext } from '../context/TaskContext';
 import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { ConfirmDialog } from './ConfirmDialog';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
 import type { TaskStatus, TaskSource } from '../../shared/types';
 import './BatchActionBar.css';
 
@@ -50,7 +51,7 @@ export function BatchActionBar() {
 
   const [status, setStatus] = useState<'' | TaskStatus>('');
   const [source, setSource] = useState<'' | TaskSource>('');
-  const [categoryId, setCategoryId] = useState<string>('');
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [reportedDateStart, setReportedDateStart] = useState<string>('');
   const [reportedDateEnd, setReportedDateEnd] = useState<string>('');
@@ -62,10 +63,15 @@ export function BatchActionBar() {
     const input: { status?: TaskStatus; source?: TaskSource; categoryIds?: string[] } = {};
     if (status) input.status = status;
     if (source) input.source = source;
-    if (categoryId) input.categoryIds = [categoryId];
+    if (categoryIds.length > 0) input.categoryIds = categoryIds;
 
     if (Object.keys(input).length === 0) return;
+    // Batch mode stays open so a second change doesn't mean reselecting
+    // everything; clear the pickers so the next Apply is deliberate.
     await batchUpdateTasks(input);
+    setStatus('');
+    setSource('');
+    setCategoryIds([]);
   };
 
   const handleDelete = async () => {
@@ -83,7 +89,7 @@ export function BatchActionBar() {
     setTimeout(() => setReportedNotice(null), 4000);
   };
 
-  const hasChanges = status !== '' || source !== '' || categoryId !== '';
+  const hasChanges = status !== '' || source !== '' || categoryIds.length > 0;
 
   return (
     <div className="batch-bar">
@@ -112,15 +118,15 @@ export function BatchActionBar() {
           </select>
         </label>
 
-        <label className="batch-bar__field">
-          <span>Add category:</span>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">{'\u2014'} No change {'\u2014'}</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-        </label>
+        <div className="batch-bar__field">
+          <span>Add categories:</span>
+          <MultiSelectDropdown
+            label="No change"
+            options={categories.map((cat) => ({ value: cat.id, label: cat.name, color: cat.color }))}
+            selected={categoryIds}
+            onChange={setCategoryIds}
+          />
+        </div>
 
         <button
           className="batch-bar__apply"

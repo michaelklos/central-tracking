@@ -5,12 +5,14 @@ import userEvent from '@testing-library/user-event';
 import { OptionsMenu } from '../OptionsMenu';
 
 const mockCreateCategory = vi.fn().mockResolvedValue({ id: 'cat-1', name: 'Test' });
+const mockUpdateCategory = vi.fn();
+const mockCategories: { id: string; name: string; color: string }[] = [];
 
 vi.mock('../../../renderer/context/TaskContext', () => ({
   useTaskContext: () => ({
-    categories: [],
+    categories: mockCategories,
     createCategory: mockCreateCategory,
-    updateCategory: vi.fn(),
+    updateCategory: mockUpdateCategory,
     deleteCategory: vi.fn(),
     resetApp: vi.fn(),
   }),
@@ -19,6 +21,8 @@ vi.mock('../../../renderer/context/TaskContext', () => ({
 describe('OptionsMenu', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
+    mockCategories.length = 0;
   });
 
   it('renders settings options', () => {
@@ -45,5 +49,54 @@ describe('OptionsMenu', () => {
     await user.click(screen.getByText('+'));
 
     expect(mockCreateCategory).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Cat' }));
+  });
+});
+
+describe('OptionsMenu - renaming a category', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    mockCategories.length = 0;
+    mockCategories.push({ id: 'cat-1', name: 'Bug', color: '#ff0000' });
+  });
+
+  it('commits a new name on Enter', async () => {
+    const user = userEvent.setup();
+    render(<OptionsMenu />);
+
+    const input = screen.getByLabelText('Rename Bug');
+    await user.clear(input);
+    await user.type(input, 'Defect{Enter}');
+
+    expect(mockUpdateCategory).toHaveBeenCalledWith('cat-1', { name: 'Defect' });
+  });
+
+  it('reverts on Escape and saves nothing', async () => {
+    const user = userEvent.setup();
+    render(<OptionsMenu />);
+
+    const input = screen.getByLabelText('Rename Bug');
+    await user.clear(input);
+    await user.type(input, 'Defect{Escape}');
+
+    expect(mockUpdateCategory).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Rename Bug') as HTMLInputElement).value).toBe('Bug');
+  });
+
+  it('does not save an emptied name', async () => {
+    const user = userEvent.setup();
+    render(<OptionsMenu />);
+
+    const input = screen.getByLabelText('Rename Bug');
+    await user.clear(input);
+    await user.tab();
+
+    expect(mockUpdateCategory).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Rename Bug') as HTMLInputElement).value).toBe('Bug');
+  });
+
+  it('still recolors from the swatch', async () => {
+    render(<OptionsMenu />);
+    expect(screen.getByLabelText('Color for Bug')).toBeInTheDocument();
   });
 });

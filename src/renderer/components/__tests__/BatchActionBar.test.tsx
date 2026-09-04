@@ -18,6 +18,7 @@ const mockContext = {
   batchMarkSelectedReported: vi.fn().mockResolvedValue({ changed: 0 }),
   categories: [
     { id: 'cat-1', name: 'Bug', color: '#ff0000', createdAt: '2026-01-01' },
+    { id: 'cat-2', name: 'Chore', color: '#00ff00', createdAt: '2026-01-01' },
   ],
 };
 
@@ -36,10 +37,30 @@ describe('BatchActionBar', () => {
     expect(screen.getByText('2 tasks selected')).toBeInTheDocument();
   });
 
-  it('renders status, source, and category dropdowns', () => {
+  it('renders status and source dropdowns beside the category picker', () => {
     render(<BatchActionBar />);
-    const selects = screen.getAllByRole('combobox');
-    expect(selects.length).toBe(3); // status, source, category
+    expect(screen.getAllByRole('combobox').length).toBe(2); // status, source
+    expect(screen.getByText('Add categories:')).toBeInTheDocument();
+  });
+
+  it('applies several categories in one go', async () => {
+    render(<BatchActionBar />);
+    await userEvent.click(screen.getByText('No change'));
+    await userEvent.click(screen.getByLabelText('Bug'));
+    await userEvent.click(screen.getByLabelText('Chore'));
+    await userEvent.click(screen.getByText('Apply Changes'));
+
+    expect(mockContext.batchUpdateTasks).toHaveBeenCalledWith({ categoryIds: ['cat-1', 'cat-2'] });
+  });
+
+  it('leaves batch mode open after Apply so a second change needs no reselecting', async () => {
+    render(<BatchActionBar />);
+    const statusSelect = screen.getAllByRole('combobox')[0];
+    await userEvent.selectOptions(statusSelect, 'done');
+    await userEvent.click(screen.getByText('Apply Changes'));
+
+    expect(mockContext.exitBatchMode).not.toHaveBeenCalled();
+    expect(screen.getByText('2 tasks selected')).toBeInTheDocument();
   });
 
   it('calls exitBatchMode when Cancel clicked', async () => {
