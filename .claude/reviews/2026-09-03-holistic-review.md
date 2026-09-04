@@ -22,7 +22,8 @@
 > TimeEntryEditor overlap are fixed.
 >
 > **Tier 3 correctness is now closed.** Still open: all performance items, all
-> simplification items, and the entire addendum.
+> simplification items, and the addendum except A11, which is deferred (see
+> its section for why — the premise, not the effort).
 
 Salvaged from an 8-agent review of `src/**` and `plugins/**` that ran out of
 budget before its verification pass. Findings below are **finder candidates**,
@@ -349,8 +350,34 @@ that pattern.
 Delete, categorize, set status. The actions all exist on `TaskContext`; this is
 a presentation layer over them.
 
-### A11. Link task effort to a local repository and specific commits
-The largest item, and the only one needing schema work. Sketch:
+### A11. Link task effort to a local repository and specific commits — DEFERRED
+
+**Deferred 2026-09-03, not scheduled.** Not a scoping or effort call: the
+premise does not hold against the way the work actually happens.
+
+Every design for this rests on a commit being correlatable with tracked
+effort, and the two candidate models differ only in how they establish that:
+
+- **Pull** (the original sketch below): ct scans git and reconstructs the
+  association after the fact from author + timestamp against time entry
+  ranges. Needs a repo pointer on tasks, a matching heuristic, and a plugin.
+- **Push**: a `post-commit` hook calls `ct`, attaching the commit to whatever
+  timer is running. Much smaller — the repo becomes a property of the commit
+  rather than the task, so the whole "where does `repo_path` live" question
+  disappears, along with the heuristic and the plugin.
+
+Push is clearly the better shape *if* the timer is running at commit time. It
+often isn't. That breaks both models rather than just one: push silently
+records nothing, and pull is left guessing from a time window — inventing an
+association that no one asserted, which is the failure class the rest of this
+review was spent removing.
+
+So the blocker is not "which schema". It is that **commit time and tracked
+effort are not reliably correlated in this workflow**, and no schema fixes
+that. Revisit only if that changes, or if a different anchor than the timer
+turns out to be the right one.
+
+Original sketch, kept for whoever picks this up:
 
 - A new migration for the link. Storing the repo path on the category is the
   weaker option, because effort is per task and one category can span repos. A
@@ -362,4 +389,7 @@ The largest item, and the only one needing schema work. Sketch:
   to hang off `time_entries` instead. Decide that before writing the migration.
 - The plugin webhook system is a plausible home for the git reading, which
   keeps `child_process` calls out of the main process and reuses the existing
-  enable/disable and config machinery.
+  enable/disable and config machinery. (Note: plugins are out-of-process,
+  reached over the loopback HTTP API via `CtClient`, so a plugin could shell
+  out to git freely — but it could not own the schema. ct core would still
+  need the tables and routes.)
