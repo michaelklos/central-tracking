@@ -9,6 +9,7 @@ import type {
 } from '../../shared/types';
 import * as secretStorage from '../secretStorage';
 import { DomainError } from '../errors';
+import { sqliteTimeToIso } from '../sqliteTime';
 
 interface PluginRow {
   id: string;
@@ -33,7 +34,7 @@ function rowToPlugin(row: PluginRow): Plugin {
     version: row.version,
     enabled: row.enabled === 1,
     manifest,
-    installedAt: row.installed_at,
+    installedAt: sqliteTimeToIso(row.installed_at),
     source: row.source === 'bundled' ? 'bundled' : 'sideloaded',
   };
 }

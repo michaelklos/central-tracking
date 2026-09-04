@@ -5,6 +5,7 @@ import type { CreateTimeEntryInput, TimeEntry, UpdateTimeEntryInput, PaginationP
 import { toIsoStartOfDay, toIsoEndOfDay } from '../../shared/dateRange';
 import { DomainError } from '../errors';
 import { resolveTaskId } from './taskLookup';
+import { sqliteTimeToIso } from '../sqliteTime';
 
 interface TimeEntryRow {
   id: string;
@@ -26,7 +27,7 @@ function rowToTimeEntry(row: TimeEntryRow): TimeEntry {
     durationSeconds: row.duration_seconds,
     note: row.note,
     reportedAt: row.reported_at,
-    createdAt: row.created_at,
+    createdAt: sqliteTimeToIso(row.created_at),
   };
 }
 
