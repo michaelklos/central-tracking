@@ -55,7 +55,7 @@ src/
     main.ts          # Entry point, yargs command tree
     client.ts        # HTTP client (reads ct-server.json, auth)
     formatters.ts    # Human-readable output (tables, durations, report text)
-    commands/        # Command modules: task, timer, time, report, comment, category, import, status, plugin
+    commands/        # Command modules: task, timer, time, report, comment, category, journal, import, status, plugin
     __tests__/       # CLI unit + integration tests
   renderer/          # React frontend (webpack-bundled)
     App.tsx          # Root component, wraps providers + HashRouter
@@ -96,7 +96,7 @@ The CLI enables programmatic interaction with the running app. All changes made 
 ```bash
 ct [--json] [--debug] [--timeout=SECONDS] <command> [subcommand] [args]
 
-Commands: task, timer, time, report, comment, category, import, status, version, plugin
+Commands: task, timer, time, report, comment, category, journal, import, status, version, plugin
 Global flags: --json (machine-readable output), --debug (log HTTP traffic), --timeout (default 10s)
 ```
 
@@ -271,6 +271,10 @@ actioned.
   and `appendSelectionToTask` do the task write and the body rewrite in one
   transaction. Split into two calls, a failure between them leaves a task with
   no marker — the duplicate-on-reread bug the marker exists to prevent.
+- **The CLI addresses lines, not offsets.** `ct journal todo <id> --line N`
+  fetches the body, converts the line to offsets, and calls the same route the
+  UI does. Character offsets are the server's contract because the editor has
+  them for free; nobody types them.
 - **The app never rewrites prose after the fact.** Deleting a task leaves its
   marker in the note; unresolvable markers are a rendering concern, not a
   reason to edit what the user wrote.
