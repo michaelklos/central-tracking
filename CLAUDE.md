@@ -40,7 +40,7 @@ src/
     secretStorage.ts # OS-keychain encryption wrapper (safeStorage; enc:v1:<base64> format)
     errors.ts        # DomainError class for structured IPC/HTTP error serialization
     database/        # SQLite database class + migrations
-    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, reports, import, cli, plugins
+    ipc/             # IPC handlers: tasks, timeEntries, comments, categories, journals, reports, import, cli, plugins
     server/          # Local HTTP server for CLI communication
       httpServer.ts  # HTTP server; delegates routing to apiManifest
       apiManifest.ts # Route table (route, ipcChannel, handler, mutates, event) — shared by IPC + HTTP
@@ -73,6 +73,7 @@ src/
   shared/
     types.ts         # Shared TypeScript types (Task, TimeEntry, Comment, etc.)
     dateRange.ts     # Date range helpers (toIsoStartOfDay, toIsoEndOfDay)
+    journalMarkers.ts # `[tsk:xxxxxxxx]` marker format + selection→line helpers
   test/              # Test infrastructure
     setup.ts         # Global test setup
     mocks/           # Mock factories (api, electron, database)
@@ -203,7 +204,7 @@ npm run start:debug      # Launches with --debug flag
 ## Database
 
 - Located at `{userData}/central-tracking.db` (Electron's `app.getPath('userData')`)
-- Tables: `tasks`, `time_entries`, `comments`, `categories`, `task_categories`, `plugin_config`, `plugins`, `schema_version`
+- Tables: `tasks`, `time_entries`, `comments`, `categories`, `task_categories`, `journals`, `journal_tasks`, `plugin_config`, `plugins`, `schema_version`
 - Migrations are sequential SQL strings in `src/main/database/migrations.ts`
 - **Migration 001**: Initial schema (all tables)
 - **Migration 002**: `ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT '';`
@@ -212,6 +213,9 @@ npm run start:debug      # Launches with --debug flag
 - **Migration 005**: Plugin registry (`plugins` table for installed plugin metadata)
 - **Migration 006**: `ALTER TABLE time_entries ADD COLUMN reported_at TEXT DEFAULT NULL;` (tracks when time was marked as reported to an external system)
 - **Migration 007**: External sync fields on tasks (`external_url`, `external_state`, `external_completed_hours`, `external_refreshed_at`, `state_dirty`) and `external_id` on comments; unique index on `(source, external_id)`
+- **Migration 008**: `source` column on `plugins` (bundled vs sideloaded)
+- **Migration 009**: Table rebuild of `tasks` — FK on `plugin_id`, `source` tightened to a CHECK enum, `ado` rows backfilled to `source='plugin'`
+- **Migration 010**: Journals (`journals` table plus the `journal_tasks` index; see **Journals** below)
 
 ## IPC API Surface
 
@@ -228,6 +232,8 @@ npm run start:debug      # Launches with --debug flag
 | `comments:*` | Comment CRUD |
 | `comments:upsertExternal`, `comments:getPendingSync` | Mirror external comments; query syncable comments needing push |
 | `categories:*` | Category CRUD + assignToTask |
+| `journals:*` | Journal CRUD + soft delete/restore, search, getByTask |
+| `journals:createTaskFromSelection`, `journals:appendSelectionToTask` | Transactional selection actions — task write plus journal marker in one call |
 | `plugins:list`, `plugins:setEnabled` | Plugin registry queries and enable/disable |
 | `plugins:getConfig`, `plugins:listConfig`, `plugins:setConfig`, `plugins:deleteConfig`, `plugins:schema` | Per-plugin config management (secrets encrypted via `secretStorage.ts`) |
 | `reports:exportCsv` | CSV export with save dialog |
@@ -243,6 +249,31 @@ Response: `{ "ok": true, "data": <result> }` or `{ "ok": false, "error": { "code
 The route table is in `src/main/server/apiManifest.ts` and maps 1:1 to the extracted handler functions. Each route declares:
 - `mutates: boolean` — triggers `ct:data-changed` renderer refresh on `true`
 - `event?: string` — event name dispatched to plugin webhooks on mutation (e.g. `task.updated`, `comment.created`)
+
+## Journals
+
+Free-form markdown notes (meeting notes), separate from `Task.notes`. The point
+of the feature is mining notes for to-dos without re-reading prose you already
+actioned.
+
+- **The marker is the source of truth.** Creating a task from a selection
+  rewrites the originating line to `- [x] [tsk:<8 hex>] ...`. That marker is
+  the only thing that knows *which line* produced which task, and it moves with
+  the text when the note is edited above it. Format lives in
+  `src/shared/journalMarkers.ts` (shared with the renderer).
+- **The id is an 8-char UUID prefix** so a marker copied out of a note works
+  verbatim in the CLI (`ct task show a1b2c3d4`) — `resolveTaskId` already
+  resolves prefixes.
+- **`journal_tasks` is a derived index**, rebuilt from the body on every
+  journal write. Hand-deleting a marker is self-healing; a marker whose task is
+  gone simply isn't indexed. Never write to it as a primary record.
+- **Selection actions are single routes on purpose.** `createTaskFromSelection`
+  and `appendSelectionToTask` do the task write and the body rewrite in one
+  transaction. Split into two calls, a failure between them leaves a task with
+  no marker — the duplicate-on-reread bug the marker exists to prevent.
+- **The app never rewrites prose after the fact.** Deleting a task leaves its
+  marker in the note; unresolvable markers are a rendering concern, not a
+  reason to edit what the user wrote.
 
 ## Testing
 

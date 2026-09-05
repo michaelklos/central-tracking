@@ -30,6 +30,7 @@ function collectRegisteredIpcChannels(): string[] {
     'src/main/ipc/timeEntryHandlers.ts',
     'src/main/ipc/commentHandlers.ts',
     'src/main/ipc/categoryHandlers.ts',
+    'src/main/ipc/journalHandlers.ts',
     'src/main/ipc/reportHandlers.ts',
     'src/main/ipc/importHandlers.ts',
     'src/main/ipc/pluginHandlers.ts',

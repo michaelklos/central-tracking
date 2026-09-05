@@ -6,6 +6,7 @@ import { registerTaskHandlers } from './ipc/taskHandlers';
 import { registerTimeEntryHandlers } from './ipc/timeEntryHandlers';
 import { registerCommentHandlers } from './ipc/commentHandlers';
 import { registerCategoryHandlers } from './ipc/categoryHandlers';
+import { registerJournalHandlers } from './ipc/journalHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerImportHandlers } from './ipc/importHandlers';
 import { registerCliHandlers, refreshCliWrapper, maybePromptCliInstall } from './ipc/cliHandlers';
@@ -116,6 +117,7 @@ app.whenReady().then(() => {
   registerTimeEntryHandlers(ipcMain, database);
   registerCommentHandlers(ipcMain, database);
   registerCategoryHandlers(ipcMain, database);
+  registerJournalHandlers(ipcMain, database);
   registerReportHandlers(ipcMain, database);
   registerImportHandlers(ipcMain, database);
   registerCliHandlers(ipcMain);

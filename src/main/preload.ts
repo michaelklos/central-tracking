@@ -11,6 +11,11 @@ import type {
   UpdateCommentInput,
   CreateCategoryInput,
   UpdateCategoryInput,
+  CreateJournalInput,
+  UpdateJournalInput,
+  JournalQueryParams,
+  CreateTaskFromSelectionInput,
+  AppendSelectionToTaskInput,
   ImportPreviewItem,
   UpsertExternalTaskInput,
   UpsertExternalCommentInput,
@@ -97,6 +102,24 @@ const api = {
     delete: (id: string) => ipcRenderer.invoke('categories:delete', id),
     assignToTask: (taskId: string, categoryIds: string[]) =>
       ipcRenderer.invoke('categories:assignToTask', taskId, categoryIds),
+  },
+
+  // Journals (free-form meeting notes). The two selection calls are single
+  // round trips by design: each returns the rewritten journal alongside the
+  // affected task, so the renderer replaces its textarea value from
+  // `journal.body` rather than patching its own copy.
+  journals: {
+    getAll: (params?: JournalQueryParams) => ipcRenderer.invoke('journals:getAll', params),
+    getById: (id: string) => ipcRenderer.invoke('journals:getById', id),
+    getByTask: (taskId: string) => ipcRenderer.invoke('journals:getByTask', taskId),
+    create: (input?: CreateJournalInput | null) => ipcRenderer.invoke('journals:create', input),
+    update: (id: string, updates: UpdateJournalInput) => ipcRenderer.invoke('journals:update', id, updates),
+    delete: (id: string) => ipcRenderer.invoke('journals:delete', id),
+    restore: (id: string) => ipcRenderer.invoke('journals:restore', id),
+    createTaskFromSelection: (input: CreateTaskFromSelectionInput) =>
+      ipcRenderer.invoke('journals:createTaskFromSelection', input),
+    appendSelectionToTask: (input: AppendSelectionToTaskInput) =>
+      ipcRenderer.invoke('journals:appendSelectionToTask', input),
   },
 
   // Window management
