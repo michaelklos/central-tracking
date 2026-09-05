@@ -96,13 +96,27 @@ describe('Journal handlers', () => {
     });
 
     it('lists entries newest first', () => {
+      const older = createJournal(db, { title: 'Older' });
+      const newer = createJournal(db, { title: 'Newer' });
+      updateJournal(db, older.id, { createdAt: '2026-08-01T09:00:00.000Z' });
+      updateJournal(db, newer.id, { createdAt: '2026-08-02T09:00:00.000Z' });
+
+      expect(getJournals(db).map((j) => j.title)).toEqual(['Newer', 'Older']);
+    });
+
+    // Backdating two entries to the same day is easy to do by hand, and
+    // `ORDER BY created_at` alone leaves SQLite free to pick an order.
+    it('breaks a created_at tie deterministically', () => {
       const a = createJournal(db, { title: 'A' });
       const b = createJournal(db, { title: 'B' });
-      // created_at has one-second resolution, so order by id when they collide.
-      const ids = getJournals(db).map((j) => j.id);
-      expect(ids).toHaveLength(2);
-      expect(ids).toContain(a.id);
-      expect(ids).toContain(b.id);
+      const sameInstant = '2026-08-01T09:00:00.000Z';
+      updateJournal(db, a.id, { createdAt: sameInstant });
+      updateJournal(db, b.id, { createdAt: sameInstant });
+
+      const expected = [a.id, b.id].sort().reverse();
+      expect(getJournals(db).map((j) => j.id)).toEqual(expected);
+      // Stable across repeated reads, not just once.
+      expect(getJournals(db).map((j) => j.id)).toEqual(expected);
     });
 
     it('throws NOT_FOUND for an unknown id', () => {

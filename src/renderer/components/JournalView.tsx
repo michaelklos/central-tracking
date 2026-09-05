@@ -177,6 +177,8 @@ export function JournalView() {
   // param so it fires once per link rather than on every render. A dirty draft
   // wins: arriving here mid-edit must not discard what is being typed.
   const entryParam = searchParams.get('entry');
+  const entryParamRef = useRef(entryParam);
+  entryParamRef.current = entryParam;
   useEffect(() => {
     if (!entryParam || entryParam === selectedIdRef.current || dirtyRef.current) return;
     void openEntry(entryParam);
@@ -206,6 +208,10 @@ export function JournalView() {
   const handleNew = useCallback(async () => {
     await flushSave();
     const created = await window.api.journals.create({ title: '', body: '' });
+    // Drop a stale ?entry=, as selecting an entry from the list does: leaving
+    // it would let the deep-link effect reopen the linked note over the new
+    // blank one the moment it re-ran.
+    if (entryParamRef.current) setSearchParams({}, { replace: true });
     // Claim the new entry before awaiting anything else: the create fires
     // `ct:data-changed`, and a refresh landing while the ref still points at
     // the previous entry would re-read that one over the blank draft.
@@ -216,7 +222,7 @@ export function JournalView() {
     setCreatedAt(created.createdAt);
     dirtyRef.current = false;
     await loadList(search);
-  }, [flushSave, loadList, search]);
+  }, [flushSave, loadList, search, setSearchParams]);
 
   const handleSaveDate = useCallback(async () => {
     const id = selectedIdRef.current;
