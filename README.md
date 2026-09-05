@@ -10,6 +10,7 @@ A desktop task and time tracking application built with Electron, React, and Typ
 - **Manual time entries** — Add completed time entries manually, edit existing entries with validation
 - **Reported time** — Mark time entries as reported to an external system; unreported-time badges per task; batch mark across multiple tasks with optional date range
 - **Notes** — Free-form notes per task with indicator badges and dedicated tab
+- **Journals** — Markdown notes for meetings, kept alongside your tasks. Select text (or right-click a line) to turn it into a to-do or append it to an existing task; the line is marked with the task it produced, so re-reading a note is a scan for what you haven't actioned yet. Search across notes shows the matching lines, and a task links back to the note it came from
 - **Categories & labels** — Color-coded categories that can be assigned to tasks for filtering; pie chart breakdown in report view
 - **Comments** — Add notes to tasks, with optional sync-to-external-system flag; external comments can be mirrored in (read-only)
 - **Reporting** — Date range picker, stacked bar chart and timeline visualization (recharts), category pie charts, CSV export
@@ -56,6 +57,9 @@ ct task create "New task"           # Create a task (appears in UI)
 ct task update "deploy" --status done  # Update by name (or ID prefix)
 ct timer start <task-id>            # Start timer (UI updates)
 ct timer stop                       # Stop timer
+ct journal list --search "SLA"       # Search notes; prints the matching lines
+ct journal show <id>                # Print a note with numbered lines
+ct journal todo <id> --line 3       # Turn line 3 into a task, and mark that line
 ct report summary --from 2026-04-01 --to 2026-04-11  # Text report
 ct report export --from 2026-04-01 --to 2026-04-11 --out report.csv
 ct task list --json                 # Machine-readable output
