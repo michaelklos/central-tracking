@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { JournalView } from '../JournalView';
@@ -387,16 +387,40 @@ describe('JournalView', () => {
     });
   });
 
-  it('offers an undo after deleting an entry', async () => {
-    renderView();
-    await userEvent.click(await screen.findByText('Vendor sync'));
-    await expectEditorValue(BODY);
+  describe('delete', () => {
+    // Losing a meeting's notes is worse than losing a task, so it takes a
+    // confirm on the way out as well as the undo afterwards.
+    it('confirms before deleting, then offers an undo', async () => {
+      renderView();
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      await expectEditorValue(BODY);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(api.journals.delete).toHaveBeenCalledWith('journal-1');
+      await userEvent.click(screen.getByTitle('Delete entry'));
+      expect(api.journals.delete).not.toHaveBeenCalled();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
-    await waitFor(() => expect(api.journals.restore).toHaveBeenCalledWith('journal-1'));
+      // Scoped to the dialog: the header button is also named "Delete".
+      const dialog = (await screen.findByText('Delete note')).closest('.confirm-dialog') as HTMLElement;
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+      await waitFor(() => expect(api.journals.delete).toHaveBeenCalledWith('journal-1'));
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+      await waitFor(() => expect(api.journals.restore).toHaveBeenCalledWith('journal-1'));
+    });
+
+    it('deletes nothing when the confirm is cancelled', async () => {
+      renderView();
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      await expectEditorValue(BODY);
+
+      await userEvent.click(screen.getByTitle('Delete entry'));
+      const dialog = (await screen.findByText('Delete note')).closest('.confirm-dialog') as HTMLElement;
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      expect(api.journals.delete).not.toHaveBeenCalled();
+      expect(screen.queryByText('Delete note')).not.toBeInTheDocument();
+      // The entry is still open.
+      await expectEditorValue(BODY);
+    });
   });
 
   it('lists the tasks a note produced', async () => {

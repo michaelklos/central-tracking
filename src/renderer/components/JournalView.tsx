@@ -4,6 +4,7 @@ import { useTaskContext } from '../context/TaskContext';
 import { useMarkdownTextarea } from '../hooks/useMarkdownTextarea';
 import { extractTaskMarkers, lineBoundsForSelection } from '../../shared/journalMarkers';
 import { JournalContextMenu, type JournalMenuTarget } from './JournalContextMenu';
+import { ConfirmDialog } from './ConfirmDialog';
 import type { JournalActionResult, JournalListItem, Task } from '../../shared/types';
 import './JournalView.css';
 
@@ -63,6 +64,7 @@ export function JournalView() {
   const [dateDraft, setDateDraft] = useState('');
   const [timeDraft, setTimeDraft] = useState('');
   const [dateError, setDateError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Which entry the draft belongs to. Mirrored in a ref so an async load or
@@ -249,6 +251,7 @@ export function JournalView() {
     // Soft delete, so an undo is one call away — losing a meeting's notes to a
     // stray click is worse than losing a task.
     setUndoDeleted(id);
+    setConfirmDelete(false);
     await loadList(search);
   }, [cancelPendingSave, loadList, search]);
 
@@ -426,7 +429,7 @@ export function JournalView() {
               <span className="journal-view__status">{saving ? 'Saving…' : ''}</span>
               <button
                 className="journal-view__delete"
-                onClick={() => void handleDelete()}
+                onClick={() => setConfirmDelete(true)}
                 title="Delete entry"
               >
                 Delete
@@ -474,6 +477,17 @@ export function JournalView() {
             ✕
           </button>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete note"
+          message={`Move "${title.trim() || 'this untitled note'}" to the recycle bin? Undo is offered afterwards, and "ct journal restore" brings it back later.`}
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={() => void handleDelete()}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
 
       {menu && selectedId && (
