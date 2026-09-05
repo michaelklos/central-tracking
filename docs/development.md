@@ -103,7 +103,7 @@ src/
     secretStorage.ts # OS-keychain encryption wrapper for plugin secrets
     errors.ts        # DomainError class for structured IPC/HTTP errors
     database/        # SQLite database + migrations
-    ipc/             # IPC handlers by domain (tasks, timeEntries, comments, categories, reports, plugins)
+    ipc/             # IPC handlers by domain (tasks, timeEntries, comments, categories, journals, reports, plugins)
     server/          # Local HTTP server for CLI communication
       apiManifest.ts # Route table shared by IPC registration and HTTP server
     reports/         # Pure report generation (CSV)
@@ -112,14 +112,14 @@ src/
     main.ts          # Entry point, yargs command tree
     client.ts        # Server discovery and HTTP client
     formatters.ts    # Human-readable output formatting
-    commands/        # Command modules (task, timer, time, report, comment, category, import, status, plugin)
+    commands/        # Command modules (task, timer, time, report, comment, category, journal, import, status, plugin)
   renderer/          # React UI
     App.tsx          # Root component with HashRouter
     components/      # Layout, Sidebar, TaskList, TaskDetail, TimerBar,
                      # ReportView, DateRangePicker, SplitButton, OptionsMenu,
                      # TimeEntryEditor, BatchActionBar, LinkPluginDialog,
                      # PluginsSettings, CategoryPieCharts, TimelineView,
-                     # MultiSelectDropdown
+                     # MultiSelectDropdown, JournalView, JournalContextMenu
     context/         # TaskContext, TimerContext
     hooks/           # useMarkdownTextarea, useIntersectionObserver, usePluginCapabilities
     utils/           # Helpers (time, duration, validation, adoFsm)

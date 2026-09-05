@@ -22,6 +22,8 @@
 - [x] **Task lifecycle** — Complete/reactivate with auto timer stop/start
 - [x] **Collapsible groups** — "Done" group collapsed by default
 - [x] **Notes feature** — Notes tab, notes indicator, auto-save
+- [x] **Journals** — Markdown meeting notes with right-click selection actions; `[tsk:…]` markers record which line produced which task
+- [ ] **Mouse back/forward navigation** — App-wide navigation history driven by the mouse side buttons (`button === 3`/`4`). Needs a decision on whether selection state (open task, open journal entry) lives in the URL, as `TimelineView` already does with `?date=`, or in history state — router history alone would go back to a view with nothing selected
 - [x] **Manual time entries** — Create and edit completed entries
 - [x] **Reporting** — Date range picker, bar chart, CSV export
 - [x] **Split action button** — Add + Start / Add as To-Do
