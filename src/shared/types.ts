@@ -170,6 +170,92 @@ export interface PendingSyncComment extends Comment {
   taskSource: TaskSource;
 }
 
+// ─── Journal ─────────────────────────────────────────────────────────────────
+
+/**
+ * A free-form markdown note — typically what you type during a meeting.
+ * Distinct from `Task.notes`, which is per-task scratch space.
+ *
+ * Tasks created from a journal selection leave a `[tsk:xxxxxxxx]` marker on
+ * the originating line (see `TASK_MARKER_RE`). The marker in the body is the
+ * source of truth for that link; `journal_tasks` is an index rebuilt from it.
+ */
+export interface Journal {
+  id: string;
+  title: string;
+  /** Markdown body, including any `[tsk:...]` markers. */
+  body: string;
+  /** Soft-delete timestamp (null = active). */
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateJournalInput {
+  title?: string;
+  body?: string;
+}
+
+export interface UpdateJournalInput {
+  title?: string;
+  body?: string;
+}
+
+export interface JournalQueryParams {
+  /** Case-insensitive substring over title and body. */
+  search?: string;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/** A body line matching a search, so results can show context, not just a title. */
+export interface JournalMatch {
+  /** 1-based line number within the body. */
+  lineNumber: number;
+  text: string;
+}
+
+/** Journal as returned by list queries; `matches` is empty unless searching. */
+export interface JournalListItem extends Journal {
+  matches: JournalMatch[];
+}
+
+/**
+ * Turn a selected range of a journal body into a task. The range is expanded
+ * to whole lines; the first line of the block gets the marker.
+ */
+export interface CreateTaskFromSelectionInput {
+  journalId: string;
+  /** Character offsets into the journal body. */
+  selectionStart: number;
+  selectionEnd: number;
+  /** Defaults to the selected text, collapsed to a single line. */
+  title?: string;
+  status?: TaskStatus;
+  source?: TaskSource;
+  categoryIds?: string[];
+}
+
+/** Append a selected range of a journal body to an existing task's notes. */
+export interface AppendSelectionToTaskInput {
+  journalId: string;
+  selectionStart: number;
+  selectionEnd: number;
+  /** UUID, prefix, or name substring — resolved via `resolveTaskId`. */
+  taskId: string;
+}
+
+/**
+ * Result of a selection action. Both the rewritten journal and the affected
+ * task come back from the one transaction, so the renderer replaces its
+ * textarea value from `journal.body` instead of patching its own copy.
+ */
+export interface JournalActionResult {
+  journal: Journal;
+  task: Task;
+}
+
 // ─── Category / Label ────────────────────────────────────────────────────────
 
 export interface Category {
