@@ -17,6 +17,7 @@ export function App() {
                 <Route path="/" element={<Layout />} />
                 <Route path="/reports" element={<Layout view="reports" />} />
                 <Route path="/timeline" element={<Layout view="timeline" />} />
+                <Route path="/journal" element={<Layout view="journal" />} />
               </Routes>
             </HashRouter>
           </ReportProvider>

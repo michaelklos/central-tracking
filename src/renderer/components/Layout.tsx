@@ -5,6 +5,7 @@ import { TaskDetail } from './TaskDetail';
 import { TimerBar } from './TimerBar';
 import { ReportView } from './ReportView';
 import { TimelineView } from './TimelineView';
+import { JournalView } from './JournalView';
 import { useTaskContext } from '../context/TaskContext';
 import './Layout.css';
 
@@ -25,7 +26,7 @@ function getInitialWidth(): number {
 }
 
 interface LayoutProps {
-  view?: 'tasks' | 'reports' | 'timeline';
+  view?: 'tasks' | 'reports' | 'timeline' | 'journal';
 }
 
 export function Layout({ view = 'tasks' }: LayoutProps) {
@@ -77,6 +78,8 @@ export function Layout({ view = 'tasks' }: LayoutProps) {
             <ReportView />
           ) : view === 'timeline' ? (
             <TimelineView />
+          ) : view === 'journal' ? (
+            <JournalView />
           ) : (
             <>
               <TaskList />

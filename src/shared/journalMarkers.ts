@@ -12,9 +12,8 @@
  * prefixes (with a proper `AMBIGUOUS_ID` error), so a marker copied straight
  * out of a note works verbatim in `ct task show a1b2c3d4`.
  *
- * Only the `[tsk:...]` token is a marker. The `- [x] ` checkbox the create
- * action also writes is cosmetic — a line the user ticked by hand carries no
- * marker and is correctly read as "not linked to anything".
+ * Only the `[tsk:...]` token is a marker. A line the user ticked by hand
+ * (`- [x] ...` with no marker) is correctly read as "not linked to anything".
  *
  * Shared with the renderer, which needs the same regex to render markers.
  */
@@ -71,13 +70,18 @@ export function lineBoundsForSelection(
 const LINE_PREFIX_RE = /^(\s*)(?:[-*+]\s+|\d+\.\s+)?(.*)$/;
 
 /**
- * Rewrite a line as a completed checkbox carrying the marker, preserving
- * indentation and replacing any existing list bullet.
+ * Prefix a line with its marker, preserving indentation and normalising any
+ * existing list bullet to `-`.
+ *
+ * No `[x]` checkbox: the marker already says a task was created from this
+ * line, and the two together were redundant. A hand-ticked `- [x]` with no
+ * marker still reads as what it is — something the user checked off
+ * themselves, linked to nothing.
  */
 export function applyCreateMarker(line: string, taskId: string): string {
   const [, indent, rest] = line.match(LINE_PREFIX_RE) as RegExpMatchArray;
   const marker = taskMarker(taskId);
-  return rest ? `${indent}- [x] ${marker} ${rest}` : `${indent}- [x] ${marker}`;
+  return rest ? `${indent}- ${marker} ${rest}` : `${indent}- ${marker}`;
 }
 
 /**

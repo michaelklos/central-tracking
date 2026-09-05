@@ -143,7 +143,8 @@ export function Sidebar() {
 
   const isOnReports = location.pathname.includes('/reports');
   const isOnTimeline = location.pathname.includes('/timeline');
-  const isOnSubpage = isOnReports || isOnTimeline;
+  const isOnJournal = location.pathname.includes('/journal');
+  const isOnSubpage = isOnReports || isOnTimeline || isOnJournal;
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -194,6 +195,10 @@ export function Sidebar() {
     navigate('/timeline');
   };
 
+  const handleJournalClick = () => {
+    navigate('/journal');
+  };
+
   const handleImportClick = async () => {
     const preview = await window.api.import.selectAndParse();
     if (preview) {
@@ -240,6 +245,7 @@ export function Sidebar() {
   const tasksTabActive = !isOnSubpage && activeTab === 'tasks';
   const reportsTabActive = isOnReports;
   const timelineTabActive = isOnTimeline;
+  const journalTabActive = isOnJournal;
   const settingsTabActive = !isOnSubpage && activeTab === 'settings';
 
   return (
@@ -267,6 +273,13 @@ export function Sidebar() {
           title="Timeline"
         >
           {'\u23F1'}
+        </button>
+        <button
+          className={`sidebar__tab ${journalTabActive ? 'sidebar__tab--active' : ''}`}
+          onClick={handleJournalClick}
+          title="Journal"
+        >
+          {'\u270E'}
         </button>
         <button
           className={`sidebar__tab ${reportsTabActive ? 'sidebar__tab--active' : ''}`}

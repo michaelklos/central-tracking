@@ -257,7 +257,7 @@ of the feature is mining notes for to-dos without re-reading prose you already
 actioned.
 
 - **The marker is the source of truth.** Creating a task from a selection
-  rewrites the originating line to `- [x] [tsk:<8 hex>] ...`. That marker is
+  rewrites the originating line to `- [tsk:<8 hex>] ...`. That marker is
   the only thing that knows *which line* produced which task, and it moves with
   the text when the note is edited above it. Format lives in
   `src/shared/journalMarkers.ts` (shared with the renderer).

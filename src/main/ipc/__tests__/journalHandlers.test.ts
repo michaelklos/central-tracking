@@ -165,7 +165,7 @@ describe('Journal handlers', () => {
 
       expect(result.task.title).toBe('Chase the SLA numbers');
       expect(result.journal.body).toContain(
-        `- [x] ${taskMarker(result.task.id)} Chase the SLA numbers`,
+        `- ${taskMarker(result.task.id)} Chase the SLA numbers`,
       );
       // Untouched lines stay untouched.
       expect(result.journal.body).toContain('- Draft the summary');
@@ -182,7 +182,7 @@ describe('Journal handlers', () => {
       expect(result.task.title).toBe('Get SLA numbers from vendor');
       // The line still carries the marker, not the new title.
       expect(result.journal.body).toContain(
-        `- [x] ${taskMarker(result.task.id)} Chase the SLA numbers`,
+        `- ${taskMarker(result.task.id)} Chase the SLA numbers`,
       );
     });
 
@@ -262,7 +262,7 @@ describe('Journal handlers', () => {
 
       expect(result.task.title).toBe('Chase the SLA numbers Draft the summary');
       const lines = result.journal.body.split('\n');
-      expect(lines[2]).toBe(`- [x] ${taskMarker(result.task.id)} Chase the SLA numbers`);
+      expect(lines[2]).toBe(`- ${taskMarker(result.task.id)} Chase the SLA numbers`);
       expect(lines[3]).toBe('- Draft the summary');
       expect(indexedTaskIds(db, journal.id)).toHaveLength(1);
     });
@@ -416,7 +416,7 @@ describe('Journal handlers', () => {
 
     it('indexes markers present in a body pasted at creation time', () => {
       const task = createTask(db, { title: 'Pre-existing' });
-      const journal = createJournal(db, { body: `- [x] ${taskMarker(task.id)} Pre-existing` });
+      const journal = createJournal(db, { body: `- ${taskMarker(task.id)} Pre-existing` });
       expect(indexedTaskIds(db, journal.id)).toEqual([task.id]);
     });
 
@@ -462,7 +462,7 @@ describe('Journal handlers', () => {
       const edited = `Extra context\nMore context\n${result.journal.body}`;
       const after = updateJournal(db, journal.id, { body: edited });
 
-      expect(after.body).toContain(`- [x] ${taskMarker(result.task.id)} Chase the SLA numbers`);
+      expect(after.body).toContain(`- ${taskMarker(result.task.id)} Chase the SLA numbers`);
       expect(indexedTaskIds(db, journal.id)).toEqual([result.task.id]);
     });
   });
