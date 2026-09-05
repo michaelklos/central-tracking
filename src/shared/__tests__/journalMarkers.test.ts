@@ -72,18 +72,18 @@ describe('lineBoundsForSelection', () => {
 });
 
 describe('applyCreateMarker', () => {
-  it('turns a plain line into a marked checkbox', () => {
+  it('prefixes the line with the marker and no checkbox', () => {
     expect(applyCreateMarker('Chase the SLA numbers', TASK_ID)).toBe(
-      '- [x] [tsk:a1b2c3d4] Chase the SLA numbers',
+      '- [tsk:a1b2c3d4] Chase the SLA numbers',
     );
   });
 
   it('replaces an existing bullet and preserves indentation', () => {
     expect(applyCreateMarker('    - Chase the SLA numbers', TASK_ID)).toBe(
-      '    - [x] [tsk:a1b2c3d4] Chase the SLA numbers',
+      '    - [tsk:a1b2c3d4] Chase the SLA numbers',
     );
     expect(applyCreateMarker('  1. Chase the SLA numbers', TASK_ID)).toBe(
-      '  - [x] [tsk:a1b2c3d4] Chase the SLA numbers',
+      '  - [tsk:a1b2c3d4] Chase the SLA numbers',
     );
   });
 });
