@@ -991,6 +991,8 @@ Options:
       --stdin    Replace the body with stdin          [boolean] [default: false]
       --append   Add text to the end of the body (use --append="- item" for
                  markdown)                                              [string]
+      --date     When the note was taken, e.g. 2026-09-04 or 2026-09-04T14:30
+                                                                        [string]
   -h, --help     Show help                                             [boolean]
 ```
 

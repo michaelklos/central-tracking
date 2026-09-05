@@ -153,6 +153,52 @@
   border-color: var(--color-border);
 }
 
+.journal-view__date {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.journal-view__date:hover {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.journal-view__date-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.journal-view__date-edit input {
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+.journal-view__date-edit button {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+
+.journal-view__date-edit button:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.journal-view__date-error {
+  font-size: 11px;
+  color: var(--color-danger);
+}
+
 .journal-view__status {
   flex-shrink: 0;
   font-size: 11px;

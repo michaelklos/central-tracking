@@ -199,6 +199,15 @@ export interface CreateJournalInput {
 export interface UpdateJournalInput {
   title?: string;
   body?: string;
+  /**
+   * When the note was taken. Editable because the default (now) is only right
+   * if you write the note during the meeting — and it is what the list is
+   * ordered and dated by, so moving it re-files the note.
+   *
+   * Must be an ISO 8601 timestamp; `createJournal` writes the same shape, and
+   * ordering is a string compare that would break on a mixed one.
+   */
+  createdAt?: string;
 }
 
 export interface JournalQueryParams {

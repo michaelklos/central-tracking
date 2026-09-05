@@ -10,7 +10,7 @@ import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
 import { getStringSetting } from '../utils/settings';
-import type { TimeEntry, Comment, TaskStatus } from '../../shared/types';
+import type { TimeEntry, Comment, TaskStatus, Journal } from '../../shared/types';
 import { allowedAdoStatusTargets } from '../../shared/adoFsm';
 import './TaskDetail.css';
 
@@ -83,6 +83,8 @@ export function TaskDetail() {
     }
   }, []);
 
+  const [sourceJournals, setSourceJournals] = useState<Journal[]>([]);
+
   const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   // Track which task is currently selected via a ref so async loaders can
@@ -133,6 +135,24 @@ export function TaskDetail() {
     setComments(cmts);
   }, [selectedTaskId]);
 
+  /**
+   * The journal entries whose body still carries this task's marker — "where
+   * did this come from", answered without a navigation history.
+   *
+   * A task can appear in more than one note (mined from one meeting, mentioned
+   * again in the next), so this is a list, not a single link.
+   */
+  const loadSourceJournals = useCallback(async () => {
+    const taskId = selectedTaskId;
+    if (!taskId) {
+      setSourceJournals([]);
+      return;
+    }
+    const journals = await window.api.journals.getByTask(taskId);
+    if (currentTaskIdRef.current !== taskId) return;
+    setSourceJournals(journals);
+  }, [selectedTaskId]);
+
   const prevActiveIdRef = useRef<string | null>(activeEntry?.id ?? null);
   useEffect(() => {
     const cur = activeEntry?.id ?? null;
@@ -165,12 +185,13 @@ export function TaskDetail() {
     }
     loadTimeEntries();
     loadComments();
+    loadSourceJournals();
     // Only load smart defaults if there's no pending time entry (gap click)
     // to avoid the async overwrite race condition
     if (!pendingTimeEntryRef.current) {
       loadSmartDefaults();
     }
-  }, [task?.id, loadTimeEntries, loadComments, loadSmartDefaults]);
+  }, [task?.id, loadTimeEntries, loadComments, loadSourceJournals, loadSmartDefaults]);
 
   useEffect(() => {
     if (pendingTimeEntry && selectedTaskId) {
@@ -612,6 +633,28 @@ export function TaskDetail() {
                 </button>
               )}
             </div>
+
+            {sourceJournals.length > 0 && (
+              <div className="task-detail__field">
+                <label>From note</label>
+                <div className="task-detail__journal-list">
+                  {sourceJournals.map((journal) => (
+                    <button
+                      key={journal.id}
+                      type="button"
+                      className="task-detail__journal-link"
+                      title="Open the note this came from"
+                      onClick={() => navigate(`/journal?entry=${journal.id}`)}
+                    >
+                      {journal.title.trim() || '(untitled)'}
+                      <span className="task-detail__journal-date">
+                        {new Date(journal.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="task-detail__field">
               <label>
