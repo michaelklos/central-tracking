@@ -58,6 +58,17 @@ export function createMockApi(): CentralTrackingAPI {
       delete: vi.fn().mockResolvedValue(undefined),
       assignToTask: vi.fn().mockResolvedValue(undefined),
     },
+    journals: {
+      getAll: vi.fn().mockResolvedValue([]),
+      getById: vi.fn().mockResolvedValue(null),
+      getByTask: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue(undefined),
+      restore: vi.fn().mockResolvedValue({}),
+      createTaskFromSelection: vi.fn().mockResolvedValue({}),
+      appendSelectionToTask: vi.fn().mockResolvedValue({}),
+    },
     cli: {
       isInstalled: vi.fn().mockResolvedValue(false),
       install: vi.fn().mockResolvedValue({ ok: true }),

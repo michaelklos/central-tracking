@@ -29,6 +29,11 @@ import {
   getAllCategories, createCategory, updateCategory, deleteCategory, assignCategoriesToTask,
 } from '../ipc/categoryHandlers';
 
+import {
+  getJournals, getJournalById, getJournalsByTask, createJournal, updateJournal,
+  deleteJournal, restoreJournal, createTaskFromSelection, appendSelectionToTask,
+} from '../ipc/journalHandlers';
+
 import { generateCsvContent } from '../reports/csvGenerator';
 import { parseImportContent, executeImport } from '../import/importExecutor';
 
@@ -110,6 +115,23 @@ export const apiManifest: readonly ApiRoute[] = [
   { route: 'categories/update',       ipcChannel: 'categories:update',       mutates: true,  event: 'category.updated',  handler: (db, id, updates) => updateCategory(db, id as string, updates as never) },
   { route: 'categories/delete',       ipcChannel: 'categories:delete',       mutates: true,  event: 'category.deleted',  handler: (db, id) => deleteCategory(db, id as string) },
   { route: 'categories/assignToTask', ipcChannel: 'categories:assignToTask', mutates: true,  event: 'category.assigned', handler: (db, taskId, catIds) => assignCategoriesToTask(db, taskId as string, catIds as string[]) },
+
+  // Journals
+  //
+  // The two selection routes are single routes on purpose: each does the task
+  // write and the journal body rewrite in one transaction, so a task can never
+  // exist without the marker that records where it came from. They emit the
+  // task event rather than a journal one — the task appearing is what the rest
+  // of the app (and any plugin webhook) cares about.
+  { route: 'journals/getAll',    ipcChannel: 'journals:getAll',    mutates: false, handler: (db, params) => getJournals(db, params as never) },
+  { route: 'journals/getById',   ipcChannel: 'journals:getById',   mutates: false, handler: (db, id) => getJournalById(db, id as string) },
+  { route: 'journals/getByTask', ipcChannel: 'journals:getByTask', mutates: false, handler: (db, taskId) => getJournalsByTask(db, taskId as string) },
+  { route: 'journals/create',    ipcChannel: 'journals:create',    mutates: true,  event: 'journal.created', handler: (db, input) => createJournal(db, input as never) },
+  { route: 'journals/update',    ipcChannel: 'journals:update',    mutates: true,  event: 'journal.updated', handler: (db, id, updates) => updateJournal(db, id as string, updates as never) },
+  { route: 'journals/delete',    ipcChannel: 'journals:delete',    mutates: true,  event: 'journal.deleted', handler: (db, id) => deleteJournal(db, id as string) },
+  { route: 'journals/restore',   ipcChannel: 'journals:restore',   mutates: true,  event: 'journal.updated', handler: (db, id) => restoreJournal(db, id as string) },
+  { route: 'journals/createTaskFromSelection', ipcChannel: 'journals:createTaskFromSelection', mutates: true, event: 'task.created', handler: (db, input) => createTaskFromSelection(db, input as never) },
+  { route: 'journals/appendSelectionToTask',   ipcChannel: 'journals:appendSelectionToTask',   mutates: true, event: 'task.updated', handler: (db, input) => appendSelectionToTask(db, input as never) },
 
   // Reports — HTTP serves the pure content generator; the `reports:exportCsv` IPC wraps it in a save dialog (UI-only, no CLI route).
   { route: 'reports/generateCsv', ipcChannel: null, mutates: false, handler: (db, start, end) => generateCsvContent(db, start as string, end as string) },

@@ -12,6 +12,14 @@ import type {
   UpdateCommentInput,
   CreateCategoryInput,
   UpdateCategoryInput,
+  Journal,
+  JournalListItem,
+  JournalQueryParams,
+  CreateJournalInput,
+  UpdateJournalInput,
+  CreateTaskFromSelectionInput,
+  AppendSelectionToTaskInput,
+  JournalActionResult,
   PaginatedResponse,
   PaginationParams,
   TaskQueryParams,
@@ -93,6 +101,17 @@ export interface ApiClient {
     update(id: string, input: UpdateCategoryInput): Promise<Category>;
     delete(id: string): Promise<void>;
     assignToTask(taskId: string, categoryIds: string[]): Promise<void>;
+  };
+  journals: {
+    getAll(params?: JournalQueryParams): Promise<JournalListItem[]>;
+    getById(id: string): Promise<Journal | null>;
+    getByTask(taskId: string): Promise<Journal[]>;
+    create(input?: CreateJournalInput): Promise<Journal>;
+    update(id: string, input: UpdateJournalInput): Promise<Journal>;
+    delete(id: string): Promise<void>;
+    restore(id: string): Promise<Journal>;
+    createTaskFromSelection(input: CreateTaskFromSelectionInput): Promise<JournalActionResult>;
+    appendSelectionToTask(input: AppendSelectionToTaskInput): Promise<JournalActionResult>;
   };
   reports: {
     generateCsv(start: string, end: string): Promise<string>;
@@ -192,6 +211,19 @@ export function createApiClient(request: RawRequest): ApiClient {
       delete: (id) => request<void>('categories/delete', [id]),
       assignToTask: (taskId, categoryIds) =>
         request<void>('categories/assignToTask', [taskId, categoryIds]),
+    },
+    journals: {
+      getAll: (params) => request<JournalListItem[]>('journals/getAll', [params]),
+      getById: (id) => request<Journal | null>('journals/getById', [id]),
+      getByTask: (taskId) => request<Journal[]>('journals/getByTask', [taskId]),
+      create: (input) => request<Journal>('journals/create', [input]),
+      update: (id, input) => request<Journal>('journals/update', [id, input]),
+      delete: (id) => request<void>('journals/delete', [id]),
+      restore: (id) => request<Journal>('journals/restore', [id]),
+      createTaskFromSelection: (input) =>
+        request<JournalActionResult>('journals/createTaskFromSelection', [input]),
+      appendSelectionToTask: (input) =>
+        request<JournalActionResult>('journals/appendSelectionToTask', [input]),
     },
     reports: {
       generateCsv: (start, end) => request<string>('reports/generateCsv', [start, end]),

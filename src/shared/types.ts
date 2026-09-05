@@ -635,6 +635,25 @@ export interface CentralTrackingAPI {
     delete(id: string): Promise<void>;
     assignToTask(taskId: string, categoryIds: string[]): Promise<void>;
   };
+  journals: {
+    getAll(params?: JournalQueryParams): Promise<JournalListItem[]>;
+    getById(id: string): Promise<Journal | null>;
+    /** Journals whose body carries a `[tsk:...]` marker for this task. */
+    getByTask(taskId: string): Promise<Journal[]>;
+    create(input?: CreateJournalInput): Promise<Journal>;
+    update(id: string, input: UpdateJournalInput): Promise<Journal>;
+    /** Soft delete — `restore` brings the entry back with its body intact. */
+    delete(id: string): Promise<void>;
+    restore(id: string): Promise<Journal>;
+    /**
+     * Create a task from a selection and mark the originating line, in one
+     * transaction. Returns the rewritten journal, so the caller replaces its
+     * editor value from `journal.body` instead of patching its own copy.
+     */
+    createTaskFromSelection(input: CreateTaskFromSelectionInput): Promise<JournalActionResult>;
+    /** As above, but appends the selection to an existing task's notes. */
+    appendSelectionToTask(input: AppendSelectionToTaskInput): Promise<JournalActionResult>;
+  };
   window: {
     setAlwaysOnTop(flag: boolean): Promise<void>;
     getAlwaysOnTop(): Promise<boolean>;
