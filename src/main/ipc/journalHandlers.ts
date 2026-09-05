@@ -182,7 +182,7 @@ export function getJournals(db: Database, params?: JournalQueryParams | null): J
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  let sql = `SELECT * FROM journals ${where} ORDER BY created_at DESC`;
+  let sql = `SELECT * FROM journals ${where} ORDER BY created_at DESC, id DESC`;
   if (params?.limit !== undefined || params?.offset !== undefined) {
     // SQLite has no bare OFFSET — `LIMIT -1` is its "all rows" sentinel, so an
     // offset with no limit still pages correctly.
@@ -226,7 +226,7 @@ export function getJournalsByTask(db: Database, taskId: string): Journal[] {
       `SELECT j.* FROM journals j
        JOIN journal_tasks jt ON jt.journal_id = j.id
        WHERE jt.task_id = ? AND j.deleted_at IS NULL
-       ORDER BY j.created_at DESC`,
+       ORDER BY j.created_at DESC, j.id DESC`,
     )
     .all(fullId) as JournalRow[];
   return rows.map(rowToJournal);

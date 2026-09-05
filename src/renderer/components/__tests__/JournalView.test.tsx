@@ -376,6 +376,23 @@ describe('JournalView', () => {
       expect(api.journals.getById).toHaveBeenCalledWith('journal-1');
     });
 
+    // Starting a new entry has to drop the param, exactly as selecting one
+    // from the list does — otherwise the effect can reopen the linked note
+    // over the blank draft the moment it re-runs.
+    it('clears the param when a new entry is started', async () => {
+      api.journals.create = vi.fn().mockResolvedValue(makeJournal({ id: 'journal-2', title: '', body: '' }));
+
+      renderAt('/journal?entry=journal-1');
+      await expectEditorValue(BODY);
+
+      await userEvent.click(screen.getByTitle('New entry'));
+      await expectEditorValue('');
+
+      // The linked entry is not re-read over the new blank one.
+      const idsRead = (api.journals.getById as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+      expect(idsRead.filter((id) => id === 'journal-1')).toHaveLength(1);
+    });
+
     // Arriving from a task link must not discard an in-progress note.
     it('leaves a dirty draft alone', async () => {
       renderAt('/journal');
