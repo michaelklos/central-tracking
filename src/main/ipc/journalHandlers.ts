@@ -62,9 +62,53 @@ function requireJournalRow(db: Database, id: string): JournalRow {
   return row;
 }
 
+/**
+ * Resolve a user-supplied journal reference to a full id: a UUID passes
+ * through, otherwise an exact id, then an id prefix, then a case-insensitive
+ * title substring.
+ *
+ * Mirrors `resolveTaskId`, because the CLI advertises "UUID, prefix, or title
+ * substring" everywhere else and a journal id copied out of `ct journal list`
+ * is an 8-character prefix.
+ */
+export function resolveJournalId(db: Database, id: string): string {
+  if (id.length >= 36) return id;
+
+  const exact = db.instance
+    .prepare('SELECT id FROM journals WHERE id = ?')
+    .all(id) as { id: string }[];
+  if (exact.length === 1) return exact[0].id;
+
+  const escaped = escapeLike(id);
+
+  const byId = db.instance
+    .prepare("SELECT id FROM journals WHERE id LIKE ? ESCAPE '\\'")
+    .all(`${escaped}%`) as { id: string }[];
+  if (byId.length === 1) return byId[0].id;
+  if (byId.length > 1) {
+    throw new DomainError(
+      'AMBIGUOUS_ID',
+      `Ambiguous ID prefix "${id}" matches ${byId.length} journal entries. Use more characters.`,
+    );
+  }
+
+  const byTitle = db.instance
+    .prepare("SELECT id FROM journals WHERE title LIKE ? ESCAPE '\\' AND deleted_at IS NULL")
+    .all(`%${escaped}%`) as { id: string }[];
+  if (byTitle.length === 1) return byTitle[0].id;
+  if (byTitle.length > 1) {
+    throw new DomainError(
+      'AMBIGUOUS_ID',
+      `Ambiguous title "${id}" matches ${byTitle.length} journal entries. Be more specific.`,
+    );
+  }
+
+  throw new DomainError('NOT_FOUND', `No journal entry with id "${id}"`, 404);
+}
+
 /** As above, but refuses an entry in the recycle bin. */
 function requireLiveJournalRow(db: Database, id: string): JournalRow {
-  const row = requireJournalRow(db, id);
+  const row = requireJournalRow(db, resolveJournalId(db, id));
   if (row.deleted_at !== null) {
     throw new DomainError('JOURNAL_DELETED', `Journal entry "${id}" is deleted`, 404);
   }
@@ -160,9 +204,17 @@ export function getJournals(db: Database, params?: JournalQueryParams | null): J
 }
 
 export function getJournalById(db: Database, id: string): Journal | null {
+  // Lenient: an unresolvable reference is "no such entry", not an error, so
+  // the renderer's `getById(selectedId)` still returns null after a purge.
+  let fullId: string;
+  try {
+    fullId = resolveJournalId(db, id);
+  } catch {
+    return null;
+  }
   const row = db.instance
     .prepare('SELECT * FROM journals WHERE id = ?')
-    .get(id) as JournalRow | undefined;
+    .get(fullId) as JournalRow | undefined;
   return row ? rowToJournal(row) : null;
 }
 
@@ -205,6 +257,7 @@ export function createJournal(db: Database, input?: CreateJournalInput | null): 
 }
 
 export function updateJournal(db: Database, id: string, updates: UpdateJournalInput): Journal {
+  id = resolveJournalId(db, id);
   requireJournalRow(db, id);
 
   db.instance.transaction(() => {
@@ -237,6 +290,7 @@ export function updateJournal(db: Database, id: string, updates: UpdateJournalIn
  * a task, so the row survives for `restoreJournal` to bring back.
  */
 export function deleteJournal(db: Database, id: string): void {
+  id = resolveJournalId(db, id);
   requireJournalRow(db, id);
   db.instance
     .prepare("UPDATE journals SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL")
@@ -244,6 +298,9 @@ export function deleteJournal(db: Database, id: string): void {
 }
 
 export function restoreJournal(db: Database, id: string): Journal {
+  // Resolves by prefix, but not by title: a deleted entry is excluded from the
+  // title lookup, and restore is the one operation that must reach one.
+  id = resolveJournalId(db, id);
   requireJournalRow(db, id);
   db.instance.prepare('UPDATE journals SET deleted_at = NULL WHERE id = ?').run(id);
   return rowToJournal(requireJournalRow(db, id));

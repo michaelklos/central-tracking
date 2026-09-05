@@ -1,5 +1,5 @@
 import { formatDurationHuman } from '../shared/duration';
-import type { Task, TimeEntry, Comment, Category, SummaryReportEntry } from '../shared/types';
+import type { Task, TimeEntry, Comment, Category, SummaryReportEntry, JournalListItem } from '../shared/types';
 
 export { formatDurationHuman as formatDuration };
 
@@ -127,4 +127,35 @@ export function formatCategoryList(categories: CategoryRow[]): string {
   return categories.map((c) =>
     `${padRight(c.id.slice(0, 8), 10)}${padRight(c.name, 20)}${c.color}`
   ).join('\n');
+}
+
+type JournalRow = Pick<JournalListItem, 'id' | 'title' | 'body' | 'createdAt'> &
+  Partial<Pick<JournalListItem, 'matches'>>;
+
+/** Title, falling back to the first non-blank body line, as the pane does. */
+function journalLabel(journal: Pick<JournalRow, 'title' | 'body'>): string {
+  if (journal.title.trim()) return journal.title;
+  const firstLine = journal.body.split('\n').find((line) => line.trim());
+  return firstLine ? firstLine.trim() : '(untitled)';
+}
+
+export function formatJournalList(journals: JournalRow[]): string {
+  if (journals.length === 0) return 'No journal entries.';
+
+  return journals
+    .map((j) => {
+      const head = `${padRight(j.id.slice(0, 8), 10)}${padRight(formatDate(j.createdAt), 12)}${truncate(journalLabel(j), 44)}`;
+      // Search hits carry the matching lines — a body match shown as a bare
+      // title is close to useless when the body is long.
+      const hits = (j.matches ?? []).slice(0, 3).map((m) => `  ${padLeft(String(m.lineNumber), 4)}: ${truncate(m.text.trim(), 60)}`);
+      return [head, ...hits].join('\n');
+    })
+    .join('\n');
+}
+
+/** One entry's body, numbered so `--line` can address it. */
+export function formatJournalBody(body: string): string {
+  const lines = body.split('\n');
+  const width = String(lines.length).length;
+  return lines.map((line, i) => `${padLeft(String(i + 1), width)}  ${line}`).join('\n');
 }

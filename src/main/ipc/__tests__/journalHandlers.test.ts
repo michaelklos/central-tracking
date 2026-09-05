@@ -110,6 +110,40 @@ describe('Journal handlers', () => {
     });
   });
 
+  describe('id resolution', () => {
+    it('accepts an id prefix, the way one copied out of `ct journal list` is', () => {
+      const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });
+      expect(getJournalById(db, journal.id.slice(0, 8))?.id).toBe(journal.id);
+      expect(updateJournal(db, journal.id.slice(0, 8), { title: 'Renamed' }).title).toBe('Renamed');
+    });
+
+    it('accepts a case-insensitive title substring', () => {
+      const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });
+      expect(getJournalById(db, 'vendor')?.id).toBe(journal.id);
+    });
+
+    it('refuses an ambiguous title rather than guessing', () => {
+      createJournal(db, { title: 'Vendor sync 1' });
+      createJournal(db, { title: 'Vendor sync 2' });
+      expect(() => updateJournal(db, 'Vendor sync', { title: 'x' })).toThrow(/Ambiguous title/);
+    });
+
+    it('returns null rather than throwing for an unresolvable reference', () => {
+      expect(getJournalById(db, 'nothing-like-this')).toBeNull();
+    });
+
+    it('reaches a deleted entry by prefix but not by title', () => {
+      const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });
+      deleteJournal(db, journal.id);
+
+      // Restore has to be able to find it; the title lookup skips deleted rows
+      // so a live entry is never shadowed by one in the bin.
+      expect(restoreJournal(db, journal.id.slice(0, 8)).deletedAt).toBeNull();
+      deleteJournal(db, journal.id);
+      expect(() => restoreJournal(db, 'Vendor sync')).toThrow(/No journal entry/);
+    });
+  });
+
   describe('soft delete', () => {
     it('hides deleted entries from the default listing and restores them', () => {
       const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });

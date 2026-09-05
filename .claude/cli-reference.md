@@ -17,6 +17,7 @@ Commands:
   ct report    Generate reports
   ct comment   Manage comments
   ct category  Manage categories
+  ct journal   Meeting notes and the to-dos mined from them
   ct import    Import tasks from file
   ct status    Show app status
   ct version   Show version
@@ -876,6 +877,210 @@ Assign categories to a task
 Positionals:
   task-id       UUID, prefix, or name substring              [string] [required]
   category-ids                                  [array] [required] [default: []]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+#### `ct journal`
+
+```
+ct journal
+
+Meeting notes and the to-dos mined from them
+
+Commands:
+  ct journal list                List journal entries, newest first
+  ct journal show <id>           Print an entry with numbered lines (the numbers
+                                 `--line` takes)
+  ct journal new [title]         Create an entry; body from --body or stdin
+  ct journal edit <id>           Change an entry title or body
+  ct journal delete <id>         Move an entry to the recycle bin (restore
+                                 brings it back)
+  ct journal restore <id>        Restore a deleted entry
+  ct journal todo <id>           Turn a line into a task and mark that line
+  ct journal attach <id>         Append a line to an existing task's notes and
+                                 mark that line
+  ct journal for-task <task-id>  List the entries a task was mined from
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal list`
+
+```
+ct journal list
+
+List journal entries, newest first
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+      --search   Match title or body; prints the matching lines         [string]
+      --limit    Maximum entries to return                              [number]
+      --all      Include deleted entries              [boolean] [default: false]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal show`
+
+```
+ct journal show <id>
+
+Print an entry with numbered lines (the numbers `--line` takes)
+
+Positionals:
+  id  UUID, prefix, or title substring                       [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal new`
+
+```
+ct journal new [title]
+
+Create an entry; body from --body or stdin
+
+Positionals:
+  title                                                                 [string]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+      --body                                                            [string]
+      --stdin    Read the body from stdin             [boolean] [default: false]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal edit`
+
+```
+ct journal edit <id>
+
+Change an entry title or body
+
+Positionals:
+  id  UUID, prefix, or title substring                       [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+      --title                                                           [string]
+      --body     Replace the whole body                                 [string]
+      --stdin    Replace the body with stdin          [boolean] [default: false]
+      --append   Add text to the end of the body (use --append="- item" for
+                 markdown)                                              [string]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal delete`
+
+```
+ct journal delete <id>
+
+Move an entry to the recycle bin (restore brings it back)
+
+Positionals:
+  id  UUID, prefix, or title substring                       [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal restore`
+
+```
+ct journal restore <id>
+
+Restore a deleted entry
+
+Positionals:
+  id  UUID or prefix                                         [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal todo`
+
+```
+ct journal todo <id>
+
+Turn a line into a task and mark that line
+
+Positionals:
+  id  UUID, prefix, or title substring                       [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+      --line     Line number from "ct journal show"          [number] [required]
+      --title    Task title (defaults to the line text)                 [string]
+      --status      [string] [choices: "todo", "in-progress", "done", "blocked"]
+      --source             [string] [choices: "ad-hoc", "email", "meeting-prep"]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal attach`
+
+```
+ct journal attach <id>
+
+Append a line to an existing task's notes and mark that line
+
+Positionals:
+  id  UUID, prefix, or title substring                       [string] [required]
+
+Options:
+      --version  Show version number                                   [boolean]
+      --json     Output in JSON format                [boolean] [default: false]
+      --debug    Log HTTP request/response to stderr  [boolean] [default: false]
+      --timeout  Request timeout in seconds               [number] [default: 10]
+      --line     Line number from "ct journal show"          [number] [required]
+      --task     Task: UUID, prefix, or name substring       [string] [required]
+  -h, --help     Show help                                             [boolean]
+```
+
+##### `ct journal for-task`
+
+```
+ct journal for-task <task-id>
+
+List the entries a task was mined from
+
+Positionals:
+  task-id  UUID, prefix, or name substring                   [string] [required]
 
 Options:
       --version  Show version number                                   [boolean]
