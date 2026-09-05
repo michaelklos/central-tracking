@@ -102,11 +102,19 @@ export function registerJournalCommands(yargs: Argv): Argv {
             .option('title', { type: 'string', nargs: 1 })
             .option('body', { type: 'string', nargs: 1, describe: 'Replace the whole body' })
             .option('stdin', { type: 'boolean', default: false, describe: 'Replace the body with stdin' })
-            .option('append', { type: 'string', nargs: 1, describe: 'Add text to the end of the body (use --append="- item" for markdown)' }),
+            .option('append', { type: 'string', nargs: 1, describe: 'Add text to the end of the body (use --append="- item" for markdown)' })
+            .option('date', { type: 'string', nargs: 1, describe: 'When the note was taken, e.g. 2026-09-04 or 2026-09-04T14:30' }),
         (argv) =>
           runCommand(argv, async ({ client }) => {
-            const updates: { title?: string; body?: string } = {};
+            const updates: { title?: string; body?: string; createdAt?: string } = {};
             if (argv.title !== undefined) updates.title = argv.title as string;
+            if (argv.date !== undefined) {
+              // Parsed locally so a typo fails before a round trip; the server
+              // validates too, since HTTP callers skip this path.
+              const parsed = new Date(argv.date as string);
+              if (Number.isNaN(parsed.getTime())) fail(`"${argv.date}" is not a valid date`);
+              updates.createdAt = parsed.toISOString();
+            }
 
             if (argv.stdin) {
               updates.body = await readStdin();
@@ -122,7 +130,7 @@ export function registerJournalCommands(yargs: Argv): Argv {
               updates.body = trimmed ? `${trimmed}\n${argv.append as string}` : (argv.append as string);
             }
 
-            if (Object.keys(updates).length === 0) fail('Nothing to change. Pass --title, --body, --stdin, or --append.');
+            if (Object.keys(updates).length === 0) fail('Nothing to change. Pass --title, --body, --stdin, --append, or --date.');
 
             const journal = await client.journals.update(argv.id as string, updates);
             output(argv, journal, (j) => `Updated journal entry ${j.id.slice(0, 8)}`);

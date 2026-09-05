@@ -319,6 +319,74 @@ describe('JournalView', () => {
     await expectEditorValue(`${BODY} typing`);
   });
 
+  describe('entry date', () => {
+    it('saves a new date and re-files the entry in the list', async () => {
+      api.journals.update = vi
+        .fn()
+        .mockResolvedValue(makeJournal({ createdAt: '2026-08-01T09:30:00.000Z' }));
+
+      renderView();
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      await expectEditorValue(BODY);
+
+      await userEvent.click(screen.getByTitle('Change when this note was taken'));
+      const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+      fireEvent.change(dateInput, { target: { value: '2026-08-01' } });
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      // Changing only the date keeps the entry's original time of day, and the
+      // fields are local, so the expected instant is built the same way.
+      const original = new Date(makeJournal().createdAt);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const expected = new Date(
+        `2026-08-01T${pad(original.getHours())}:${pad(original.getMinutes())}:00`,
+      ).toISOString();
+
+      await waitFor(() =>
+        expect(api.journals.update).toHaveBeenCalledWith('journal-1', { createdAt: expected }),
+      );
+      // Moving the date changes the ordering, so the list is re-read.
+      expect(api.journals.getAll).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects an unparseable date without calling the server', async () => {
+      renderView();
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      await expectEditorValue(BODY);
+
+      await userEvent.click(screen.getByTitle('Change when this note was taken'));
+      const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+      fireEvent.change(dateInput, { target: { value: '' } });
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Not a valid date');
+      expect(api.journals.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('?entry= deep link', () => {
+    const renderAt = (url: string) =>
+      render(<JournalView />, {
+        wrapper: ({ children }) => <MemoryRouter initialEntries={[url]}>{children}</MemoryRouter>,
+      });
+
+    it('opens the linked entry on arrival', async () => {
+      renderAt('/journal?entry=journal-1');
+      await expectEditorValue(BODY);
+      expect(api.journals.getById).toHaveBeenCalledWith('journal-1');
+    });
+
+    // Arriving from a task link must not discard an in-progress note.
+    it('leaves a dirty draft alone', async () => {
+      renderAt('/journal');
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      const textarea = await expectEditorValue(BODY);
+      await userEvent.type(textarea, ' typing');
+
+      await expectEditorValue(`${BODY} typing`);
+    });
+  });
+
   it('offers an undo after deleting an entry', async () => {
     renderView();
     await userEvent.click(await screen.findByText('Vendor sync'));

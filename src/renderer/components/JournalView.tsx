@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
 import { useMarkdownTextarea } from '../hooks/useMarkdownTextarea';
 import { extractTaskMarkers, lineBoundsForSelection } from '../../shared/journalMarkers';
@@ -13,6 +13,26 @@ const SEARCH_DEBOUNCE_MS = 200;
 function formatEntryDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** Long form for the editor header, where the date is the thing you click. */
+function formatEntryDateTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+// Same split-field shape as TimeEntryEditor, so editing a date feels the same
+// wherever you do it.
+function toDateValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function toTimeValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function entryLabel(entry: JournalListItem): string {
@@ -38,6 +58,12 @@ export function JournalView() {
   const [linkedTasks, setLinkedTasks] = useState<Task[]>([]);
   const [undoDeleted, setUndoDeleted] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [dateEditing, setDateEditing] = useState(false);
+  const [dateDraft, setDateDraft] = useState('');
+  const [timeDraft, setTimeDraft] = useState('');
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Which entry the draft belongs to. Mirrored in a ref so an async load or
   // save can tell it finished for an entry the user has since navigated away
@@ -105,6 +131,8 @@ export function JournalView() {
       if (selectedIdRef.current !== id) return;
       setTitle(entry?.title ?? '');
       setBody(entry?.body ?? '');
+      setCreatedAt(entry?.createdAt ?? null);
+      setDateEditing(false);
       dirtyRef.current = false;
     },
     [flushSave],
@@ -136,10 +164,21 @@ export function JournalView() {
         if (selectedIdRef.current !== id || dirtyRef.current) return;
         setTitle(entry?.title ?? '');
         setBody(entry?.body ?? '');
+        setCreatedAt(entry?.createdAt ?? null);
       })();
     });
     return unsubscribe;
   }, [loadList]);
+
+  // Deep link from a task's "from this note" link. Routed through `openEntry`
+  // so the flush-before-switch and staleness guards apply, and keyed on the
+  // param so it fires once per link rather than on every render. A dirty draft
+  // wins: arriving here mid-edit must not discard what is being typed.
+  const entryParam = searchParams.get('entry');
+  useEffect(() => {
+    if (!entryParam || entryParam === selectedIdRef.current || dirtyRef.current) return;
+    void openEntry(entryParam);
+  }, [entryParam, openEntry]);
 
   // Save whatever is pending when the pane goes away.
   useEffect(() => () => { void flushSave(); }, [flushSave]);
@@ -172,9 +211,30 @@ export function JournalView() {
     setSelectedId(created.id);
     setTitle('');
     setBody('');
+    setCreatedAt(created.createdAt);
     dirtyRef.current = false;
     await loadList(search);
   }, [flushSave, loadList, search]);
+
+  const handleSaveDate = useCallback(async () => {
+    const id = selectedIdRef.current;
+    if (!id) return;
+    const parsed = new Date(`${dateDraft}T${timeDraft || '00:00'}:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      setDateError('Not a valid date');
+      return;
+    }
+    // Flush first: the date write is a separate update, and a pending body
+    // save would otherwise land after it with a stale draft.
+    await flushSave();
+    const updated = await window.api.journals.update(id, { createdAt: parsed.toISOString() });
+    if (selectedIdRef.current !== id) return;
+    setCreatedAt(updated.createdAt);
+    setDateEditing(false);
+    setDateError(null);
+    // Moving the date re-files the note, so the list order changes.
+    await loadList(search);
+  }, [dateDraft, timeDraft, flushSave, loadList, search]);
 
   const handleDelete = useCallback(async () => {
     const id = selectedIdRef.current;
@@ -252,6 +312,7 @@ export function JournalView() {
       if (selectedIdRef.current === result.journal.id) {
         setTitle(result.journal.title);
         setBody(result.journal.body);
+        setCreatedAt(result.journal.createdAt);
       }
       void loadList(search);
     },
@@ -289,7 +350,12 @@ export function JournalView() {
             <button
               key={entry.id}
               className={`journal-view__entry ${entry.id === selectedId ? 'journal-view__entry--active' : ''}`}
-              onClick={() => void openEntry(entry.id)}
+              onClick={() => {
+                // Drop a stale ?entry= or the deep-link effect would pull the
+                // user back to the linked note.
+                if (entryParam) setSearchParams({}, { replace: true });
+                void openEntry(entry.id);
+              }}
             >
               <div className="journal-view__entry-row">
                 <span className="journal-view__entry-title">{entryLabel(entry)}</span>
@@ -324,6 +390,39 @@ export function JournalView() {
                 onChange={(e) => { setTitle(e.target.value); scheduleSave(); }}
                 onBlur={() => void flushSave()}
               />
+              {createdAt !== null && (
+                dateEditing ? (
+                  <span className="journal-view__date-edit">
+                    <input
+                      type="date"
+                      value={dateDraft}
+                      onChange={(e) => setDateDraft(e.target.value)}
+                      autoFocus
+                    />
+                    <input
+                      type="time"
+                      value={timeDraft}
+                      onChange={(e) => setTimeDraft(e.target.value)}
+                    />
+                    <button onClick={() => void handleSaveDate()}>Save</button>
+                    <button onClick={() => { setDateEditing(false); setDateError(null); }}>Cancel</button>
+                    {dateError && <span className="journal-view__date-error" role="alert">{dateError}</span>}
+                  </span>
+                ) : (
+                  <button
+                    className="journal-view__date"
+                    title="Change when this note was taken"
+                    onClick={() => {
+                      setDateDraft(toDateValue(createdAt));
+                      setTimeDraft(toTimeValue(createdAt));
+                      setDateError(null);
+                      setDateEditing(true);
+                    }}
+                  >
+                    {formatEntryDateTime(createdAt)}
+                  </button>
+                )
+              )}
               <span className="journal-view__status">{saving ? 'Saving…' : ''}</span>
               <button
                 className="journal-view__delete"

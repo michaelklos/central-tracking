@@ -144,6 +144,52 @@ describe('Journal handlers', () => {
     });
   });
 
+  describe('editable date', () => {
+    it('moves the entry to the given date and re-files it in the listing', () => {
+      const older = createJournal(db, { title: 'Older' });
+      const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });
+
+      const moved = updateJournal(db, journal.id, { createdAt: '2026-08-01T09:30:00.000Z' });
+      expect(moved.createdAt).toBe('2026-08-01T09:30:00.000Z');
+
+      // Ordering is created_at DESC, so backdating drops it below the other.
+      expect(getJournals(db).map((j) => j.id)).toEqual([older.id, journal.id]);
+    });
+
+    it('stores ISO, the shape createJournal writes', () => {
+      const journal = createJournal(db, { title: 'Vendor sync' });
+      updateJournal(db, journal.id, { createdAt: '2026-08-01T09:30:00+02:00' });
+
+      const raw = db.instance
+        .prepare('SELECT created_at FROM journals WHERE id = ?')
+        .get(journal.id) as { created_at: string };
+      // A space-separated SQLite timestamp would sort wrong against these,
+      // because created_at ordering is a string compare.
+      expect(raw.created_at).toBe('2026-08-01T07:30:00.000Z');
+    });
+
+    it('rejects an unparseable date with a typed error', () => {
+      const journal = createJournal(db, { title: 'Vendor sync' });
+      expect(() => updateJournal(db, journal.id, { createdAt: 'last tuesday' })).toThrow(
+        /not a valid date/,
+      );
+      // And leaves the original date alone.
+      expect(getJournalById(db, journal.id)?.createdAt).toBe(journal.createdAt);
+    });
+
+    it('leaves the body and its index untouched', () => {
+      const journal = createJournal(db, { body: NOTES });
+      const result = createTaskFromSelection(db, {
+        journalId: journal.id,
+        ...selectionOf(NOTES, 'Chase the SLA numbers'),
+      });
+
+      updateJournal(db, journal.id, { createdAt: '2026-08-01T09:30:00.000Z' });
+      expect(getJournalById(db, journal.id)?.body).toBe(result.journal.body);
+      expect(indexedTaskIds(db, journal.id)).toEqual([result.task.id]);
+    });
+  });
+
   describe('soft delete', () => {
     it('hides deleted entries from the default listing and restores them', () => {
       const journal = createJournal(db, { title: 'Vendor sync', body: NOTES });

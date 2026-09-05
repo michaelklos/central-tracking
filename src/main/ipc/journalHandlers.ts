@@ -272,6 +272,19 @@ export function updateJournal(db: Database, id: string, updates: UpdateJournalIn
       sets.push('body = ?');
       values.push(updates.body);
     }
+    if (updates.createdAt !== undefined) {
+      // `new Date('garbage').toISOString()` throws a RangeError, which would
+      // surface as a generic INTERNAL over IPC and HTTP. The CLI and plugins
+      // reach this too, not just the date picker.
+      const parsed = new Date(updates.createdAt);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new DomainError('INVALID_DATE', `"${updates.createdAt}" is not a valid date`);
+      }
+      // ISO, to match what `createJournal` writes: `created_at` ordering is a
+      // string compare, and SQLite's `datetime('now')` shape sorts differently.
+      sets.push('created_at = ?');
+      values.push(parsed.toISOString());
+    }
 
     if (sets.length > 0) {
       sets.push("updated_at = datetime('now')");

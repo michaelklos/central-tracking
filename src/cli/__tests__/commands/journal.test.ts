@@ -138,6 +138,28 @@ describe('ct journal edit', () => {
     expect(stderr).toContain('not both');
   });
 
+  it('sends --date as an ISO timestamp', async () => {
+    const { calls } = await runCli(
+      registerJournalCommands,
+      ['journal', 'edit', '1c4b246e', '--date', '2026-08-01T09:30'],
+      { responses: { 'journals/update': sampleJournal } },
+    );
+    expect(calls[0].args[1]).toEqual({
+      createdAt: new Date('2026-08-01T09:30').toISOString(),
+    });
+  });
+
+  it('rejects an unparseable --date before making a request', async () => {
+    const { stderr, exitCode, calls } = await runCli(
+      registerJournalCommands,
+      ['journal', 'edit', '1c4b246e', '--date', 'last tuesday'],
+      { responses: {} },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('not a valid date');
+    expect(calls).toEqual([]);
+  });
+
   it('refuses a no-op edit rather than sending an empty update', async () => {
     const { stderr, exitCode } = await runCli(
       registerJournalCommands,
