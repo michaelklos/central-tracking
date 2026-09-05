@@ -186,6 +186,40 @@ export const MIGRATIONS: readonly string[] = [
 
   INSERT OR IGNORE INTO schema_version (version) VALUES (9);
   `,
+  // Migration 010: Journal entries (free-form meeting notes) plus the
+  // journal↔task index.
+  //
+  // `journal_tasks` is a DERIVED index, not a source of truth. The link lives
+  // in the journal body as a `[tsk:xxxxxxxx]` marker on the line the task came
+  // from — that is the only thing that knows *which line* maps to which task,
+  // and it moves with the text when the note is edited. Every journal write
+  // reparses the body and rebuilds this table's rows for that journal, so
+  // hand-editing or deleting a marker is self-healing rather than drift. The
+  // table exists purely so "which journals reference this task" is an index
+  // hit instead of a LIKE scan over every body.
+  `
+  CREATE TABLE IF NOT EXISTS journals (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    deleted_at TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS journal_tasks (
+    journal_id TEXT NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (journal_id, task_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_journals_created ON journals(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_journals_deleted_at ON journals(deleted_at);
+  CREATE INDEX IF NOT EXISTS idx_journal_tasks_task ON journal_tasks(task_id);
+
+  INSERT OR IGNORE INTO schema_version (version) VALUES (10);
+  `,
 ];
 
 /**
