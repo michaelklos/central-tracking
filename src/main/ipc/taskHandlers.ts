@@ -358,8 +358,12 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  const maxOrder = db.instance
-    .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM tasks')
+  // A task you just made is the one you want to look at, so it goes to the
+  // top of its group rather than the tail of a list you have to page to.
+  // Batch inserts (import, plugin pull) still append: taking the front one
+  // at a time would hand back the batch reversed.
+  const nextOrder = db.instance
+    .prepare('SELECT COALESCE(MIN(sort_order), 0) - 1 as next FROM tasks')
     .get() as { next: number };
 
   db.instance
@@ -375,7 +379,7 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
       input.source ?? 'ad-hoc',
       input.externalId ?? null,
       input.pluginId ?? null,
-      maxOrder.next,
+      nextOrder.next,
       now,
       now
     );

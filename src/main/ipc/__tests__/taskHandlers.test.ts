@@ -36,16 +36,14 @@ describe('Task IPC Handlers', () => {
     expect(task.source).toBe('ad-hoc');
   });
 
-  it('getAll returns tasks sorted by sort_order', async () => {
+  it('getAll returns tasks sorted by sort_order — newest first', async () => {
     await ipc.invoke('tasks:create', { title: 'First' });
     await ipc.invoke('tasks:create', { title: 'Second' });
     await ipc.invoke('tasks:create', { title: 'Third' });
 
     const tasks = await ipc.invoke('tasks:getAll');
     expect(tasks).toHaveLength(3);
-    expect(tasks[0].title).toBe('First');
-    expect(tasks[1].title).toBe('Second');
-    expect(tasks[2].title).toBe('Third');
+    expect(tasks.map((t: { title: string }) => t.title)).toEqual(['Third', 'Second', 'First']);
   });
 
   it('getById returns the correct task', async () => {

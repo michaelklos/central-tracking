@@ -31,15 +31,15 @@ describe('Task Sort Options', () => {
     db.close();
   });
 
-  it('defaults to manual sort order (sort_order ASC)', async () => {
+  // Manual order is sort_order ASC and a new task takes the front, so the
+  // newest sits at the top until the user drags it somewhere else.
+  it('defaults to manual sort order, newest first', async () => {
     await ipc.invoke('tasks:create', { title: 'C' });
     await ipc.invoke('tasks:create', { title: 'A' });
     await ipc.invoke('tasks:create', { title: 'B' });
 
     const result = await ipc.invoke('tasks:getActive');
-    expect(result.items[0].title).toBe('C');
-    expect(result.items[1].title).toBe('A');
-    expect(result.items[2].title).toBe('B');
+    expect(result.items.map((t: { title: string }) => t.title)).toEqual(['B', 'A', 'C']);
   });
 
   it('sorts by manual when explicitly requested', async () => {
@@ -48,9 +48,18 @@ describe('Task Sort Options', () => {
     await ipc.invoke('tasks:create', { title: 'B' });
 
     const result = await ipc.invoke('tasks:getActive', { sortBy: 'manual' });
-    expect(result.items[0].title).toBe('C');
-    expect(result.items[1].title).toBe('A');
-    expect(result.items[2].title).toBe('B');
+    expect(result.items.map((t: { title: string }) => t.title)).toEqual(['B', 'A', 'C']);
+  });
+
+  it('keeps a task where the user dragged it when a newer one arrives', async () => {
+    const c = await ipc.invoke('tasks:create', { title: 'C' });
+    const a = await ipc.invoke('tasks:create', { title: 'A' });
+    await ipc.invoke('tasks:reorder', [c.id, a.id]);
+
+    await ipc.invoke('tasks:create', { title: 'B' });
+
+    const result = await ipc.invoke('tasks:getActive');
+    expect(result.items.map((t: { title: string }) => t.title)).toEqual(['B', 'C', 'A']);
   });
 
   it('sorts alphabetically', async () => {
