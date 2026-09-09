@@ -10,7 +10,7 @@ import { TimeEntryScrollSentinel } from './TimeEntryScrollSentinel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkPluginDialog, type LinkSubmit } from './LinkPluginDialog';
 import { getStringSetting } from '../utils/settings';
-import type { TimeEntry, Comment, TaskStatus, Journal } from '../../shared/types';
+import type { Task, TimeEntry, Comment, TaskStatus, Journal } from '../../shared/types';
 import { allowedAdoStatusTargets } from '../../shared/adoFsm';
 import './TaskDetail.css';
 
@@ -85,7 +85,29 @@ export function TaskDetail() {
 
   const [sourceJournals, setSourceJournals] = useState<Journal[]>([]);
 
-  const task = tasks.find((t) => t.id === selectedTaskId) ?? null;
+  const listedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+
+  // A selected task the loaded pages don't hold — followed in from a note's
+  // marker, or sitting past the end of its section — would otherwise render
+  // an empty pane with no way to edit anything. Fetched by id instead, and
+  // re-fetched whenever the pages change so an edit made here can't leave a
+  // stale copy on screen.
+  const [unlistedTask, setUnlistedTask] = useState<Task | null>(null);
+  useEffect(() => {
+    if (!selectedTaskId || listedTask) {
+      setUnlistedTask(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const fetched = await window.api.tasks.getById(selectedTaskId);
+      if (!cancelled) setUnlistedTask(fetched);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedTaskId, listedTask, tasks]);
+
+  // Never show the previous selection's task while the fetch is in flight.
+  const task = listedTask ?? (unlistedTask?.id === selectedTaskId ? unlistedTask : null);
 
   // Track which task is currently selected via a ref so async loaders can
   // detect stale completions (user clicked a different task while a fetch was

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskDetail } from '../TaskDetail';
 import type { Task } from '../../../shared/types';
@@ -97,6 +97,27 @@ describe('TaskDetail - Lifecycle', () => {
     mockTimerContext.stopTimer = vi.fn().mockResolvedValue(undefined);
     mockTimerContext.startTimer = vi.fn().mockResolvedValue(undefined);
     mockUpdateTask.mockResolvedValue({});
+  });
+
+  // A task can be selected while sitting outside the loaded pages — followed
+  // in from a note's marker, or filtered out of every section. The pane used
+  // to render empty, with no way to edit the task at all.
+  it('fetches a selected task the loaded pages do not hold', async () => {
+    const unlisted = makeTask({ id: 'task-99', title: 'Straight from a note' });
+    mockTaskContext.tasks = [];
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.selectedTaskId = 'task-99';
+    window.api.tasks.getById = vi.fn().mockResolvedValue(unlisted);
+
+    render(<TaskDetail />);
+
+    await waitFor(() => expect(screen.getByText('Straight from a note')).toBeInTheDocument());
+    expect(window.api.tasks.getById).toHaveBeenCalledWith('task-99');
+  });
+
+  it('prefers the loaded page over a fetch, and never queries for one it has', () => {
+    render(<TaskDetail />);
+    expect(window.api.tasks.getById).not.toHaveBeenCalled();
   });
 
   it('shows Complete button when status is not done', () => {

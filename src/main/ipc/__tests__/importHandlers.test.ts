@@ -134,6 +134,19 @@ describe('Import IPC Handlers', () => {
     expect(entries).toHaveLength(3);
   });
 
+  // Interactive creation takes the front of the list; a batch must not, or
+  // the file's order would come back reversed.
+  it('execute keeps the file\'s order rather than reversing it', async () => {
+    const preview = await ipc.invoke('import:selectAndParse');
+    const titles = preview.items.map((i: { title: string }) => i.title);
+    await ipc.invoke('import:execute', preview.items);
+
+    const rows = db.instance
+      .prepare('SELECT title FROM tasks ORDER BY sort_order ASC')
+      .all() as { title: string }[];
+    expect(rows.map((r) => r.title)).toEqual(titles);
+  });
+
   it('execute respects skip action', async () => {
     const preview = await ipc.invoke('import:selectAndParse');
 
