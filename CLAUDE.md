@@ -171,6 +171,20 @@ npm start                # Launches Electron loading from dist/
 npm run start:debug      # Launches with --debug flag
 ```
 
+### Releasing
+
+```bash
+npm version patch      # writes package.json + lockfile, commits, tags vX.Y.Z
+git push --follow-tags # the tag fires .github/workflows/release.yml
+```
+
+The `v*` tag is what triggers the build, but `package.json` is bumped in the
+repo in the same commit so a locally built `ct` reports the same version as
+the released one. Each job still runs a `Sync version to tag` step, which is
+a no-op when the two agree and the backstop when they don't. A
+`workflow_dispatch` run builds artifacts but publishes nothing — the
+`release` job is gated on the ref being a tag.
+
 ### Key scripts
 
 | Script | What it does |
