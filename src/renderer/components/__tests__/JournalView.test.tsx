@@ -29,6 +29,7 @@ let api: CentralTrackingAPI;
 
 const navigate = vi.fn();
 const selectTask = vi.fn();
+const refreshTasks = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -36,7 +37,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../../context/TaskContext', () => ({
-  useTaskContext: () => ({ selectTask }),
+  useTaskContext: () => ({ selectTask, refreshTasks }),
 }));
 
 const renderView = () => render(<JournalView />, { wrapper: MemoryRouter });
@@ -120,6 +121,28 @@ describe('JournalView', () => {
         selectionStart: start,
         selectionEnd: end,
       });
+    });
+
+    // Only the HTTP server broadcasts `ct:data-changed`, so a task written
+    // over IPC from here leaves the task list stale: the new to-do was
+    // missing from the list, and following its marker landed on a task the
+    // list couldn't resolve, until something else happened to refresh.
+    it('refreshes the task list, which hears nothing about an IPC write', async () => {
+      const rewritten = makeJournal({ body: `${BODY} [tsk:abcd1234]` });
+      api.journals.createTaskFromSelection = vi
+        .fn()
+        .mockResolvedValue({ journal: rewritten, task: { id: 'abcd1234-0000', title: 'Chase' } });
+
+      renderView();
+      await userEvent.click(await screen.findByText('Vendor sync'));
+      await expectEditorValue(BODY);
+
+      await rightClickSelection('Chase the SLA numbers');
+      // The mock is module-level and outlives a test, so start from zero.
+      refreshTasks.mockClear();
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Create to-do' }));
+
+      await waitFor(() => expect(refreshTasks).toHaveBeenCalled());
     });
 
     it('replaces the editor value with the server-rewritten body', async () => {

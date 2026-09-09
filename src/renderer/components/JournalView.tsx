@@ -49,7 +49,7 @@ function entryLabel(entry: JournalListItem): string {
  */
 export function JournalView() {
   const navigate = useNavigate();
-  const { selectTask } = useTaskContext();
+  const { selectTask, refreshTasks } = useTaskContext();
   const [entries, setEntries] = useState<JournalListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -313,9 +313,9 @@ export function JournalView() {
       // The server rewrote the body. Drop any pending save — it holds the
       // pre-marker draft and would overwrite the marker that was just written.
       //
-      // Setting the draft here is only to avoid a flash of the pre-marker
-      // text: the mutation also fires `ct:data-changed`, and that refresh
-      // re-reads the entry. The server stays authoritative either way.
+      // The draft is set from the response because nothing else will: only
+      // the HTTP server broadcasts `ct:data-changed`, so a mutation made
+      // here, over IPC, produces no refresh of its own.
       cancelPendingSave();
       dirtyRef.current = false;
       if (selectedIdRef.current === result.journal.id) {
@@ -324,8 +324,13 @@ export function JournalView() {
         setCreatedAt(result.journal.createdAt);
       }
       void loadList(search);
+      // The action also wrote a task. For the same reason, the task list
+      // won't hear about it — it would stay stale until something else
+      // happened to refresh it, and following the marker's link would land
+      // on a task the list can't resolve.
+      void refreshTasks();
     },
-    [cancelPendingSave, loadList, search],
+    [cancelPendingSave, loadList, search, refreshTasks],
   );
 
   const md = useMarkdownTextarea({
