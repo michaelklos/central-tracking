@@ -23,7 +23,11 @@ export function getNumberSetting(key: string, defaultValue: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
-/** How many tasks each list page loads. Configurable in the options menu. */
+/**
+ * How many tasks each list section loads at a time. Each status section
+ * pages independently, so this is a per-section limit. The storage key still
+ * says "page-size": renaming it would silently reset everyone's setting.
+ */
 export const PAGE_SIZE_SETTING = 'ct-option-page-size';
 export const DEFAULT_PAGE_SIZE = 50;
 export const MIN_PAGE_SIZE = 10;
@@ -32,7 +36,7 @@ export const MAX_PAGE_SIZE = 500;
 /**
  * Clamped to the same bounds the settings input advertises. The `min`/`max`
  * attributes don't stop a typed value in every browser, and nothing validates
- * on write, so a stray `1` would otherwise mean one task per page.
+ * on write, so a stray `1` would otherwise mean one task per section.
  */
 export function getPageSize(): number {
   const stored = getNumberSetting(PAGE_SIZE_SETTING, DEFAULT_PAGE_SIZE);
