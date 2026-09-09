@@ -3,12 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskList } from '../TaskList';
+import { sectionsFromTasks, type MockSection } from '../../../test/mocks/statusSections';
 
 const mockTaskContext = {
   tasks: [] as Record<string, unknown>[],
   activeTasks: [] as Record<string, unknown>[],
   activeTasksTotal: 0,
   activeTasksHasMore: false,
+  // Left null so the mock derives sections from activeTasks; set it
+  // directly in a test that needs per-section totals or paging.
+  statusSections: null as Record<string, MockSection> | null,
+  loadMoreStatusTasks: vi.fn().mockResolvedValue(undefined),
   doneTasks: [] as Record<string, unknown>[],
   doneTasksTotal: 0,
   doneTasksHasMore: false,
@@ -56,8 +61,13 @@ const mockTimerContext = {
   isRunningForTask: vi.fn().mockReturnValue(false),
 };
 
+// The literal is inline because a vi.mock factory is hoisted above imports.
 vi.mock('../../context/TaskContext', () => ({
-  useTaskContext: () => mockTaskContext,
+  SECTION_STATUSES: ['todo', 'in-progress', 'blocked'],
+  useTaskContext: () => ({
+    ...mockTaskContext,
+    statusSections: mockTaskContext.statusSections ?? sectionsFromTasks(mockTaskContext.activeTasks),
+  }),
 }));
 
 vi.mock('../../context/TimerContext', () => ({
@@ -67,6 +77,7 @@ vi.mock('../../context/TimerContext', () => ({
 
 describe('TaskList - context menu', () => {
   beforeEach(() => {
+    mockTaskContext.statusSections = null;
     vi.clearAllMocks();
     localStorage.clear();
     mockTaskContext.activeTasks = [{ id: 't1', title: 'Right click me', status: 'todo', source: 'ad-hoc', categoryIds: [], pluginId: null }];
@@ -96,6 +107,7 @@ describe('TaskList - context menu', () => {
 
 describe('TaskList', () => {
   beforeEach(() => {
+    mockTaskContext.statusSections = null;
     mockTaskContext.batchMode = false;
     mockTaskContext.activeTasks = [];
     mockTaskContext.doneTasks = [];

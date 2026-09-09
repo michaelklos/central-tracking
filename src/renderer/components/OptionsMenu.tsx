@@ -40,7 +40,7 @@ interface StringSetting {
 
 const GENERAL_SETTINGS: StringSetting[] = [
   { key: 'ct-option-default-duration-min', label: 'Default entry duration (min)', type: 'number', defaultValue: '30', min: 1, max: 480 },
-  { key: PAGE_SIZE_SETTING, label: 'Tasks per page', type: 'number', defaultValue: String(DEFAULT_PAGE_SIZE), min: MIN_PAGE_SIZE, max: MAX_PAGE_SIZE },
+  { key: PAGE_SIZE_SETTING, label: 'Tasks per section', type: 'number', defaultValue: String(DEFAULT_PAGE_SIZE), min: MIN_PAGE_SIZE, max: MAX_PAGE_SIZE },
 ];
 
 const TIMELINE_SETTINGS: StringSetting[] = [

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskList } from '../TaskList';
+import { sectionsFromTasks, type MockSection } from '../../../test/mocks/statusSections';
 import type { Task } from '../../../shared/types';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
@@ -36,6 +37,10 @@ const mockTaskContext = {
   activeTasks: [] as Task[],
   activeTasksTotal: 0,
   activeTasksHasMore: false,
+  // Left null so the mock derives sections from activeTasks; set it
+  // directly in a test that needs per-section totals or paging.
+  statusSections: null as Record<string, MockSection> | null,
+  loadMoreStatusTasks: vi.fn().mockResolvedValue(undefined),
   doneTasks: [] as Task[],
   doneTasksTotal: 0,
   doneTasksHasMore: false,
@@ -82,8 +87,13 @@ const mockTimerContext = {
   isRunningForTask: vi.fn().mockReturnValue(false),
 };
 
+// The literal is inline because a vi.mock factory is hoisted above imports.
 vi.mock('../../context/TaskContext', () => ({
-  useTaskContext: () => mockTaskContext,
+  SECTION_STATUSES: ['todo', 'in-progress', 'blocked'],
+  useTaskContext: () => ({
+    ...mockTaskContext,
+    statusSections: mockTaskContext.statusSections ?? sectionsFromTasks(mockTaskContext.activeTasks),
+  }),
 }));
 
 vi.mock('../../context/TimerContext', () => ({
@@ -93,6 +103,7 @@ vi.mock('../../context/TimerContext', () => ({
 
 describe('TaskList - Groups', () => {
   beforeEach(() => {
+    mockTaskContext.statusSections = null;
     vi.clearAllMocks();
     // Collapse state persists now, so one test's expand would leak.
     localStorage.clear();
@@ -209,6 +220,7 @@ describe('TaskList - Groups', () => {
 
 describe('TaskList - To Do stays visible', () => {
   beforeEach(() => {
+    mockTaskContext.statusSections = null;
     vi.clearAllMocks();
     localStorage.clear();
     mockTaskContext.activeTasks = [];
@@ -240,5 +252,72 @@ describe('TaskList - To Do stays visible', () => {
     unmount();
     render(<TaskList />);
     expect(screen.queryByText('Todo Task')).not.toBeInTheDocument();
+  });
+});
+
+describe('TaskList - per-section paging', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockTaskContext.statusSections = null;
+    mockTaskContext.activeTasks = [];
+    mockTaskContext.doneTasks = [];
+    mockTaskContext.doneTasksTotal = 0;
+    mockTaskContext.doneTasksHasMore = false;
+    mockTaskContext.loadMoreStatusTasks = vi.fn().mockResolvedValue(undefined);
+  });
+
+  it('counts the whole status in the pill, not just the loaded rows', () => {
+    mockTaskContext.statusSections = {
+      'todo': { items: [makeTask({ id: '1', title: 'Todo Task' })], total: 40, hasMore: true },
+      'in-progress': { items: [], total: 0, hasMore: false },
+      'blocked': { items: [], total: 0, hasMore: false },
+    };
+
+    render(<TaskList />);
+
+    const todoHeader = screen.getAllByRole('heading', { level: 3 })
+      .find((h) => h.textContent?.includes('To Do'));
+    expect(todoHeader?.textContent).toContain('40');
+  });
+
+  it('offers a per-status load-more that pages only that section', async () => {
+    const user = userEvent.setup();
+    mockTaskContext.statusSections = {
+      'todo': { items: [makeTask({ id: '1', title: 'Todo Task' })], total: 40, hasMore: true },
+      'in-progress': {
+        items: [makeTask({ id: '2', title: 'Running', status: 'in-progress' })],
+        total: 1,
+        hasMore: false,
+      },
+      'blocked': { items: [], total: 0, hasMore: false },
+    };
+
+    render(<TaskList />);
+
+    expect(screen.queryByText('Load more In Progress')).not.toBeInTheDocument();
+    await user.click(screen.getByText('Load more To Do'));
+    expect(mockTaskContext.loadMoreStatusTasks).toHaveBeenCalledWith('todo');
+  });
+
+  it('hides the whole-list load-more when sections page themselves', () => {
+    mockTaskContext.activeTasksHasMore = true;
+    render(<TaskList />);
+    expect(screen.queryByText('Load more tasks...')).not.toBeInTheDocument();
+    mockTaskContext.activeTasksHasMore = false;
+  });
+
+  it('drops a status section with nothing in it, but always keeps To Do', () => {
+    mockTaskContext.statusSections = {
+      'todo': { items: [], total: 0, hasMore: false },
+      'in-progress': { items: [], total: 0, hasMore: false },
+      'blocked': { items: [], total: 0, hasMore: false },
+    };
+
+    render(<TaskList />);
+
+    const headers = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headers.some((t) => t?.includes('To Do'))).toBe(true);
+    expect(headers.some((t) => t?.includes('Blocked'))).toBe(false);
   });
 });

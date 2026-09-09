@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { useTaskContext } from '../context/TaskContext';
+import { useTaskContext, SECTION_STATUSES } from '../context/TaskContext';
 import { useTimerContext, useElapsedSeconds } from '../context/TimerContext';
 import { usePluginCapabilities, shouldShowReportedFor } from '../hooks/usePluginCapabilities';
 import { formatDuration } from '../utils/time';
@@ -23,15 +23,19 @@ const SOURCE_LABELS: Record<TaskSource, string> = {
   'plugin': 'Plugin',
 };
 
-// Sort order for status groups — "Done" last
-const STATUS_ORDER: Record<string, number> = {
-  'To Do': 0,
-  'In Progress': 1,
-  'Blocked': 2,
-  'Done': 3,
-};
-
 type GroupBy = 'none' | 'status' | 'source';
+
+/** A rendered group header plus the rows and paging state under it. */
+interface ListSection {
+  /** Header label; doubles as the collapse key and the load-more label. */
+  key: string;
+  tasks: Task[];
+  /** Shown in the pill — the section's overall count, not the loaded rows. */
+  count: number;
+  hasMore: boolean;
+  loadMore?: () => Promise<void>;
+  isDone: boolean;
+}
 
 const COLLAPSED_GROUPS_KEY = 'ct-collapsed-groups';
 
@@ -51,6 +55,8 @@ export function TaskList() {
     activeTasks,
     activeTasksTotal,
     activeTasksHasMore,
+    statusSections,
+    loadMoreStatusTasks,
     doneTasks,
     doneTasksTotal,
     doneTasksHasMore,
@@ -100,7 +106,8 @@ export function TaskList() {
   });
   const [loadingDone, setLoadingDone] = useState(false);
   const [loadingMoreActive, setLoadingMoreActive] = useState(false);
-  const [loadingMoreDone, setLoadingMoreDone] = useState(false);
+  // Which section's "load more" is in flight, by section key.
+  const [loadingMoreSection, setLoadingMoreSection] = useState<string | null>(null);
   const [recycleBinCollapsed, setRecycleBinCollapsed] = useState(true);
   const [loadingDeleted, setLoadingDeleted] = useState(false);
   const [loadingMoreDeleted, setLoadingMoreDeleted] = useState(false);
@@ -118,43 +125,50 @@ export function TaskList() {
     [activeTasks, doneTasks]
   );
 
-  // Group tasks — special handling for status grouping
-  const groupedTasks = useMemo(() => {
+  // Each rendered section: its rows, the pill count (the status total from
+  // the server, not just what is loaded), and how to page it.
+  const sections = useMemo<ListSection[]>(() => {
     if (groupBy === 'status') {
-      // Build groups from active tasks (non-done statuses)
-      const groups: Record<string, Task[]> = {};
-      for (const task of activeTasks) {
-        const key = STATUS_LABELS[task.status] ?? task.status;
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(task);
-      }
-      // To Do and Done keep their headers even when empty: To Do is where a
-      // new task lands, and both are places the user goes looking.
-      if (!groups[STATUS_LABELS['todo']]) groups[STATUS_LABELS['todo']] = [];
-      groups['Done'] = doneTasks;
-
-      // Sort group keys so "Done" is last
-      const sortedEntries = Object.entries(groups).sort(
-        ([a], [b]) => (STATUS_ORDER[a] ?? 99) - (STATUS_ORDER[b] ?? 99)
-      );
-      const sorted: Record<string, Task[]> = {};
-      for (const [key, val] of sortedEntries) {
-        sorted[key] = val;
-      }
-      return sorted;
+      const out: ListSection[] = SECTION_STATUSES
+        .map((status) => ({ status, section: statusSections[status] }))
+        // To Do keeps its header when empty — it is where a new task lands
+        // and where the user goes looking. The rest earn theirs.
+        .filter(({ status, section }) => status === 'todo' || (section?.total ?? 0) > 0)
+        .map(({ status, section }) => ({
+          key: STATUS_LABELS[status],
+          tasks: section?.items ?? [],
+          count: section?.total ?? 0,
+          hasMore: section?.hasMore ?? false,
+          loadMore: () => loadMoreStatusTasks(status),
+          isDone: false,
+        }));
+      out.push({
+        key: 'Done',
+        tasks: doneTasks,
+        count: doneTasksTotal,
+        hasMore: doneTasksHasMore,
+        loadMore: loadMoreDoneTasks,
+        isDone: true,
+      });
+      return out;
     }
 
-    if (groupBy === 'none') return { 'All Tasks': allFilteredTasks };
+    if (groupBy === 'none') {
+      return [{ key: 'All Tasks', tasks: allFilteredTasks, count: allFilteredTasks.length, hasMore: false, isDone: false }];
+    }
 
-    // Source grouping — use combined tasks
+    // Source grouping — use combined tasks. There is no per-source total to
+    // ask the server for, so the pill counts what is loaded.
     const groups: Record<string, Task[]> = {};
     for (const task of allFilteredTasks) {
       const key = SOURCE_LABELS[task.source] ?? task.source;
       if (!groups[key]) groups[key] = [];
       groups[key].push(task);
     }
-    return groups;
-  }, [activeTasks, doneTasks, allFilteredTasks, groupBy]);
+    return Object.entries(groups).map(([key, tasks]) => ({
+      key, tasks, count: tasks.length, hasMore: false, isDone: false,
+    }));
+  }, [statusSections, doneTasks, doneTasksTotal, doneTasksHasMore, loadMoreStatusTasks, loadMoreDoneTasks, allFilteredTasks, groupBy]);
 
   const toggleGroupCollapse = async (group: string) => {
     const willExpand = collapsedGroups.has(group);
@@ -271,12 +285,6 @@ export function TaskList() {
     setLoadingMoreActive(false);
   };
 
-  const handleLoadMoreDone = async () => {
-    setLoadingMoreDone(true);
-    await loadMoreDoneTasks();
-    setLoadingMoreDone(false);
-  };
-
   const handleToggleRecycleBin = async () => {
     const willExpand = recycleBinCollapsed;
     setRecycleBinCollapsed(!recycleBinCollapsed);
@@ -316,10 +324,11 @@ export function TaskList() {
     return `${days} days ago`;
   };
 
-  // All visible task IDs (for Select All)
+  // All visible task IDs (for Select All). Read off the rendered sections so
+  // it matches what is on screen in every grouping mode.
   const allVisibleIds = useMemo(
-    () => [...activeTasks, ...doneTasks].map((t) => t.id),
-    [activeTasks, doneTasks]
+    () => sections.flatMap((s) => s.tasks.map((t) => t.id)),
+    [sections]
   );
 
   const allSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedTaskIds.has(id));
@@ -336,15 +345,14 @@ export function TaskList() {
     await selectAllActiveTasks();
   };
 
-  // Determine the count to show on the Done group header
-  const getDoneGroupCount = (group: string) => {
-    if (group === 'Done' && groupBy === 'status') {
-      return doneTasksTotal;
-    }
-    return undefined;
+  const handleSectionLoadMore = async (section: ListSection) => {
+    if (!section.loadMore) return;
+    setLoadingMoreSection(section.key);
+    await section.loadMore();
+    setLoadingMoreSection(null);
   };
 
-  const totalVisible = activeTasks.length + doneTasks.length;
+  const totalVisible = allVisibleIds.length;
 
   return (
     <div className="task-list">
@@ -412,10 +420,11 @@ export function TaskList() {
       </div>
 
       <div className="task-list__body">
-        {Object.entries(groupedTasks).map(([group, groupTasks]) => {
+        {sections.map((section) => {
+          const group = section.key;
+          const groupTasks = section.tasks;
           const isCollapsed = collapsedGroups.has(group);
-          const doneCount = getDoneGroupCount(group);
-          const isDoneGroup = group === 'Done' && groupBy === 'status';
+          const isDoneGroup = section.isDone;
           return (
             <div key={group} className="task-list__group">
               {groupBy !== 'none' && (
@@ -425,9 +434,7 @@ export function TaskList() {
                 >
                   <span className="task-list__group-chevron">{isCollapsed ? '▸' : '▾'}</span>
                   {group}
-                  <span className="task-list__group-count">
-                    {doneCount !== undefined ? doneCount : groupTasks.length}
-                  </span>
+                  <span className="task-list__group-count">{section.count}</span>
                 </h3>
               )}
               {!isCollapsed && (
@@ -524,14 +531,18 @@ export function TaskList() {
                       </div>
                     </div>
                   ))}
-                  {/* Load more for done tasks */}
-                  {isDoneGroup && doneTasksHasMore && !loadingMoreDone && (
-                    <button className="task-list__load-more" onClick={handleLoadMoreDone}>
-                      Load more done tasks...
-                    </button>
-                  )}
-                  {isDoneGroup && loadingMoreDone && (
-                    <div className="task-list__loading">Loading...</div>
+                  {/* Each section pages on its own, up to the per-section limit */}
+                  {section.hasMore && section.loadMore && (
+                    loadingMoreSection === group ? (
+                      <div className="task-list__loading">Loading...</div>
+                    ) : (
+                      <button
+                        className="task-list__load-more"
+                        onClick={() => handleSectionLoadMore(section)}
+                      >
+                        Load more {group}
+                      </button>
+                    )
                   )}
                 </>
               )}
@@ -539,8 +550,8 @@ export function TaskList() {
           );
         })}
 
-        {/* Load more for active tasks (non-grouped or non-status views) */}
-        {activeTasksHasMore && (
+        {/* Load more for active tasks — status grouping pages per section */}
+        {groupBy !== 'status' && activeTasksHasMore && (
           <button
             className="task-list__load-more"
             onClick={handleLoadMoreActive}

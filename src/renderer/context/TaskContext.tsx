@@ -1,8 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react';
-import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy } from '../../shared/types';
+import type { Task, Category, CreateTaskInput, UpdateTaskInput, BatchUpdateInput, CreateCategoryInput, UpdateCategoryInput, TaskSortBy, TaskStatus } from '../../shared/types';
 // Page size is a setting, read per fetch so a change takes effect on the next
 // refresh rather than needing a reload.
 import { getPageSize } from '../utils/settings';
+
+/**
+ * The non-done statuses that get their own paginated section in the task
+ * list. Each one pages independently, so the page-size setting is a
+ * per-section limit rather than a budget shared across the whole list.
+ * "done" is missing on purpose: it already has its own lazy pagination.
+ */
+export const SECTION_STATUSES: TaskStatus[] = ['todo', 'in-progress', 'blocked'];
+
+/** One status section's loaded rows plus its server-side total. */
+export interface TaskSection {
+  items: Task[];
+  /** Total matching the current filter, not just what is loaded. */
+  total: number;
+  hasMore: boolean;
+}
+
+const EMPTY_SECTION: TaskSection = { items: [], total: 0, hasMore: false };
 
 interface TaskContextValue {
   // Legacy — combined view of all loaded tasks (for TaskDetail lookup)
@@ -12,6 +30,10 @@ interface TaskContextValue {
   activeTasks: Task[];
   activeTasksTotal: number;
   activeTasksHasMore: boolean;
+
+  /** Per-status pages, keyed by status. Used by the status-grouped list. */
+  statusSections: Record<string, TaskSection>;
+  loadMoreStatusTasks(status: string): Promise<void>;
 
   // Paginated done tasks
   doneTasks: Task[];
@@ -118,6 +140,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [activeTasksTotal, setActiveTasksTotal] = useState(0);
   const [activeTasksHasMore, setActiveTasksHasMore] = useState(false);
 
+  const [statusSections, setStatusSections] = useState<Record<string, TaskSection>>(
+    () => Object.fromEntries(SECTION_STATUSES.map((s) => [s, EMPTY_SECTION])),
+  );
+
   const [doneTasks, setDoneTasks] = useState<Task[]>([]);
   const [doneTasksTotal, setDoneTasksTotal] = useState(0);
   const [doneTasksHasMore, setDoneTasksHasMore] = useState(false);
@@ -160,6 +186,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // handler and from post-mutation callbacks, where the closure's
   // `activeTasks.length` is stale (CLAUDE.md footguns 2 and 3).
   const activeLoadedRef = useRef(0);
+  const sectionLoadedRef = useRef<Record<string, number>>(
+    Object.fromEntries(SECTION_STATUSES.map((s) => [s, 0])),
+  );
   const doneLoadedRef = useRef(0);
   const deletedLoadedRef = useRef(0);
 
@@ -205,7 +234,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // A refresh restores every page the user has loaded, not just the first
   // one. Refetching only the first page would throw away everything
   // "load more" paged in on every mutation and every `ct:data-changed`.
-  const refreshActiveTasks = useCallback(async () => {
+  const refreshActiveList = useCallback(async () => {
     const res = await window.api.tasks.getActive({
       offset: 0, limit: Math.max(getPageSize(), activeLoadedRef.current), sortBy,
       ...filterToParams(),
@@ -216,6 +245,56 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setActiveTasksHasMore(res.hasMore);
     clearJustCreatedIfPresent(res.items);
   }, [sortBy, filterToParams, clearJustCreatedIfPresent]);
+
+  // Each section is its own query, so its `total` is that status's total and
+  // its page is that status's page. The status filter is applied last: a
+  // sidebar filter narrows which sections exist, it never widens one.
+  const refreshStatusSections = useCallback(async () => {
+    const params = filterToParams();
+    const selected = filter.statuses;
+    const results = await Promise.all(SECTION_STATUSES.map(async (status) => {
+      if (selected && selected.length > 0 && !selected.includes(status)) {
+        sectionLoadedRef.current[status] = 0;
+        return [status, EMPTY_SECTION] as const;
+      }
+      const res = await window.api.tasks.getActive({
+        ...params,
+        status: [status],
+        offset: 0,
+        limit: Math.max(getPageSize(), sectionLoadedRef.current[status] ?? 0),
+        sortBy,
+      });
+      sectionLoadedRef.current[status] = res.items.length;
+      return [status, { items: res.items, total: res.total, hasMore: res.hasMore }] as const;
+    }));
+    setStatusSections((prev) => ({ ...prev, ...Object.fromEntries(results) }));
+  }, [sortBy, filterToParams, filter.statuses]);
+
+  const loadMoreStatusTasks = useCallback(async (status: string) => {
+    const res = await window.api.tasks.getActive({
+      ...filterToParams(),
+      status: [status],
+      offset: sectionLoadedRef.current[status] ?? 0,
+      limit: getPageSize(),
+      sortBy,
+    });
+    sectionLoadedRef.current[status] = (sectionLoadedRef.current[status] ?? 0) + res.items.length;
+    setStatusSections((prev) => ({
+      ...prev,
+      [status]: {
+        items: [...(prev[status]?.items ?? []), ...res.items],
+        total: res.total,
+        hasMore: res.hasMore,
+      },
+    }));
+  }, [sortBy, filterToParams]);
+
+  // Every caller that refreshed the active list wants the sections in step
+  // with it, so the two travel together rather than being wired at each of
+  // the fifteen mutation call sites.
+  const refreshActiveTasks = useCallback(async () => {
+    await Promise.all([refreshActiveList(), refreshStatusSections()]);
+  }, [refreshActiveList, refreshStatusSections]);
 
   const loadMoreActiveTasks = useCallback(async () => {
     const res = await window.api.tasks.getActive({
@@ -531,6 +610,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     activeTasks,
     activeTasksTotal,
     activeTasksHasMore,
+    statusSections,
+    loadMoreStatusTasks,
     doneTasks,
     doneTasksTotal,
     doneTasksHasMore,
@@ -582,6 +663,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setPendingTimeEntry,
   }), [
     tasks, activeTasks, activeTasksTotal, activeTasksHasMore,
+    statusSections, loadMoreStatusTasks,
     doneTasks, doneTasksTotal, doneTasksHasMore, doneTasksLoaded,
     deletedTasks, deletedTasksTotal, deletedTasksHasMore, deletedTasksLoaded,
     batchMode, selectedTaskIds, enterBatchMode, exitBatchMode,

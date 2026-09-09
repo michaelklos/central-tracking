@@ -53,6 +53,14 @@ function Consumer() {
       <span data-testid="selected">{Array.from(ctx.selectedTaskIds).join(',')}</span>
       <button data-testid="load-more" onClick={() => ctx.loadMoreActiveTasks()}>more</button>
       <button data-testid="refresh" onClick={() => ctx.refreshActiveTasks()}>refresh</button>
+      <span data-testid="todo-count">{ctx.statusSections['todo']?.items.length ?? 0}</span>
+      <span data-testid="todo-total">{ctx.statusSections['todo']?.total ?? 0}</span>
+      <button data-testid="load-more-todo" onClick={() => ctx.loadMoreStatusTasks('todo')}>more todo</button>
+      <span data-testid="wip-total">{ctx.statusSections['in-progress']?.total ?? 0}</span>
+      <button
+        data-testid="filter-wip"
+        onClick={() => ctx.setFilter((prev) => ({ ...prev, statuses: ['in-progress'] }))}
+      >filter</button>
       <button data-testid="create" onClick={() => ctx.createTask({ title: 'New' })}>create</button>
       <button data-testid="enter-batch" onClick={() => { ctx.enterBatchMode(); ctx.selectAllTasks(['a0', 'a1']); }}>batch</button>
       <button data-testid="batch-update" onClick={() => ctx.batchUpdateTasks({ status: 'done' })}>apply</button>
@@ -87,8 +95,10 @@ describe('TaskContext pagination window', () => {
 
     await user.click(screen.getByTestId('refresh'));
     expect(screen.getByTestId('active-count').textContent).toBe('100');
-    expect(window.api.tasks.getActive).toHaveBeenLastCalledWith(
-      expect.objectContaining({ offset: 0, limit: 100 })
+    // Not "last": a refresh also fetches each status section. `status:
+    // undefined` picks out the flat-list call from the per-status ones.
+    expect(window.api.tasks.getActive).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 0, limit: 100, status: undefined })
     );
   });
 
@@ -207,5 +217,86 @@ describe('TaskContext batch operations', () => {
     await waitFor(() => expect(window.api.tasks.getDone).toHaveBeenCalledWith(
       expect.objectContaining({ offset: 0, limit: 0 })
     ));
+  });
+});
+
+
+describe('TaskContext status sections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  /** Serves per-status pages; the flat call (no status) sees everything. */
+  function sectionedGetActive(byStatus: Record<string, Task[]>) {
+    const all = Object.values(byStatus).flat();
+    return vi.fn(async (
+      { offset = 0, limit = 50, status }: { offset?: number; limit?: number; status?: string[] },
+    ) => {
+      const pool = status?.length ? (byStatus[status[0]] ?? []) : all;
+      const items = pool.slice(offset, offset + limit);
+      return { items, total: pool.length, offset, limit, hasMore: offset + items.length < pool.length };
+    });
+  }
+
+  it('pages each status independently and reports that status\'s total', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('ct-option-page-size', '10');
+    const todos = Array.from({ length: 25 }, (_, i) => makeTask(`t${i}`));
+    window.api.tasks.getActive = sectionedGetActive({ todo: todos }) as never;
+
+    await renderProvider();
+
+    // The section holds one page, but its pill counts every matching task.
+    await waitFor(() => expect(screen.getByTestId('todo-count').textContent).toBe('10'));
+    expect(screen.getByTestId('todo-total').textContent).toBe('25');
+
+    await user.click(screen.getByTestId('load-more-todo'));
+    expect(screen.getByTestId('todo-count').textContent).toBe('20');
+    expect(window.api.tasks.getActive).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 10, limit: 10, status: ['todo'] })
+    );
+  });
+
+  it('restores every loaded section page on a refresh', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('ct-option-page-size', '10');
+    const todos = Array.from({ length: 25 }, (_, i) => makeTask(`t${i}`));
+    window.api.tasks.getActive = sectionedGetActive({ todo: todos }) as never;
+
+    await renderProvider();
+    await user.click(screen.getByTestId('load-more-todo'));
+    await user.click(screen.getByTestId('refresh'));
+
+    await waitFor(() => expect(screen.getByTestId('todo-count').textContent).toBe('20'));
+    expect(window.api.tasks.getActive).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 0, limit: 20, status: ['todo'] })
+    );
+  });
+
+  it('empties the sections a status filter excludes, without querying them', async () => {
+    const user = userEvent.setup();
+    const getActive = sectionedGetActive({
+      todo: Array.from({ length: 3 }, (_, i) => makeTask(`t${i}`)),
+      'in-progress': Array.from({ length: 2 }, (_, i) => makeTask(`w${i}`)),
+    });
+    window.api.tasks.getActive = getActive as never;
+
+    await renderProvider();
+    await waitFor(() => expect(screen.getByTestId('todo-total').textContent).toBe('3'));
+
+    const todoCallsBefore = getActive.mock.calls
+      .filter(([params]) => params.status?.[0] === 'todo').length;
+
+    await user.click(screen.getByTestId('filter-wip'));
+
+    // The filtered-out section is emptied rather than left showing stale rows.
+    await waitFor(() => expect(screen.getByTestId('todo-total').textContent).toBe('0'));
+    expect(screen.getByTestId('todo-count').textContent).toBe('0');
+    expect(screen.getByTestId('wip-total').textContent).toBe('2');
+    // An excluded section is emptied outright — no query goes out for it.
+    expect(getActive.mock.calls.filter(
+      ([params]) => params.status?.[0] === 'todo',
+    )).toHaveLength(todoCallsBefore);
   });
 });
